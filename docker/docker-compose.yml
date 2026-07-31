@@ -1,0 +1,45 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: fnt_erp_app
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+
+  db:
+    image: postgres:16-alpine
+    container_name: fnt_erp_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fnt
+      POSTGRES_PASSWORD: fnt_dev_only   # change before anything but local dev
+      POSTGRES_DB: fnt_erp
+    ports:
+      - "5432:5432"
+    volumes:
+      - fnt_pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fnt -d fnt_erp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fnt_erp_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@fnt.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["tools"]   # only starts with `docker compose --profile tools up`
+
+volumes:
+  fnt_pgdata:

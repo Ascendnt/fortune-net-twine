@@ -1,0 +1,327 @@
+import { useMemo, useState } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
+import {
+  Save,
+  Send,
+  CheckCircle2,
+  FileDown,
+  GitBranch,
+  MessageSquareReply,
+  ArrowRightCircle,
+  History,
+  ChevronLeft,
+} from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { PIDocumentPreview } from "@/components/domain/PIDocumentPreview";
+import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
+import { useStore } from "@/lib/store";
+import { CUSTOMERS } from "@/lib/mockData";
+import { formatMoney, formatDate } from "@/lib/format";
+
+type ModalKind = "revision" | "response" | "convert" | null;
+
+export function QuotationDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { quotations, role, updateQuotationStatus, createRevision, convertToSalesOrder, pushToast } = useStore();
+  const [modal, setModal] = useState<ModalKind>(null);
+  const [noteText, setNoteText] = useState("");
+  const [responseDecision, setResponseDecision] = useState<"accepted" | "rejected" | "under_negotiation">("accepted");
+
+  const q = quotations.find((x) => x.id === id);
+
+  const customer = q ? CUSTOMERS.find((c) => c.id === q.customerId) : undefined;
+  const canApprove = role === "sales_manager" || role === "management" || role === "admin";
+
+  const total = useMemo(() => {
+    if (!q) return 0;
+    return q.items.reduce((s, li) => s + li.totalPrice, 0) + q.freight - q.discount + q.tax;
+  }, [q]);
+
+  if (!q) {
+    return (
+      <div>
+        <PageHeader title="Quotation not found" breadcrumb={["Fortune Net & Twine ERP", "Quotations"]} />
+        <Button variant="secondary" onClick={() => navigate("/quotations")}>
+          <ChevronLeft className="mr-1 h-4 w-4" /> Back to Quotations
+        </Button>
+      </div>
+    );
+  }
+
+  function closeModal() {
+    setModal(null);
+    setNoteText("");
+  }
+
+  function handleSubmitForApproval() {
+    updateQuotationStatus(q!.id, "for_approval");
+    pushToast({ tone: "info", title: "Submitted for approval", description: `${q!.id} sent to Sales Manager.` });
+  }
+
+  function handleApprove() {
+    updateQuotationStatus(q!.id, "approved");
+    pushToast({ tone: "success", title: "Quotation approved", description: `${q!.id} is ready to send to the customer.` });
+  }
+
+  function handleMarkSent() {
+    updateQuotationStatus(q!.id, "sent");
+    pushToast({ tone: "info", title: "Marked as sent", description: `${q!.id} recorded as sent to customer.` });
+  }
+
+  function handleGeneratePdf() {
+    pushToast({
+      tone: "info",
+      title: "PDF export simulated",
+      description: "In production this generates a signed PDF for email delivery.",
+    });
+  }
+
+  function handleCreateRevision() {
+    if (!noteText.trim()) return;
+    createRevision(q!.id, noteText.trim());
+    pushToast({ tone: "info", title: "Revision created", description: `${q!.id} is now Revision ${q!.revisionNo + 1}.` });
+    closeModal();
+  }
+
+  function handleRecordResponse() {
+    updateQuotationStatus(q!.id, responseDecision, noteText.trim() || undefined);
+    pushToast({
+      tone: responseDecision === "accepted" ? "success" : responseDecision === "rejected" ? "danger" : "warning",
+      title: "Customer response recorded",
+      description: `${q!.id} marked as ${responseDecision.replace("_", " ")}.`,
+    });
+    closeModal();
+  }
+
+  function handleConvert() {
+    const soId = convertToSalesOrder(q!.id);
+    closeModal();
+    pushToast({ tone: "success", title: "Sales order created", description: `${soId} created from ${q!.id}.` });
+    navigate(`/orders/${soId}`);
+  }
+
+  return (
+    <div>
+      <PageHeader
+        breadcrumb={["Fortune Net & Twine ERP", "Quotations", q.id]}
+        eyebrow={`Revision ${q.revisionNo}`}
+        title={q.id}
+        description={`${customer?.name ?? q.consignee} · ${customer?.country ?? "—"}`}
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge status={q.status} />
+            <Button variant="secondary" size="sm" icon={<FileDown className="h-3.5 w-3.5" />} onClick={handleGeneratePdf}>
+              Generate PDF
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {q.status === "draft" && (
+          <Button variant="primary" size="sm" icon={<Send className="h-3.5 w-3.5" />} onClick={handleSubmitForApproval}>
+            Submit for Approval
+          </Button>
+        )}
+        {q.status === "for_approval" && canApprove && (
+          <Button variant="success" size="sm" icon={<CheckCircle2 className="h-3.5 w-3.5" />} onClick={handleApprove}>
+            Approve
+          </Button>
+        )}
+        {q.status === "for_approval" && !canApprove && (
+          <span className="flex items-center rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 border border-amber-200">
+            Awaiting Sales Manager approval
+          </span>
+        )}
+        {q.status === "approved" && (
+          <Button variant="primary" size="sm" icon={<Send className="h-3.5 w-3.5" />} onClick={handleMarkSent}>
+            Mark as Sent
+          </Button>
+        )}
+        {(q.status === "sent" || q.status === "under_negotiation") && (
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<MessageSquareReply className="h-3.5 w-3.5" />}
+            onClick={() => setModal("response")}
+          >
+            Record Customer Response
+          </Button>
+        )}
+        {q.status === "accepted" && !q.salesOrderId && (
+          <Button
+            variant="success"
+            size="sm"
+            icon={<ArrowRightCircle className="h-3.5 w-3.5" />}
+            onClick={() => setModal("convert")}
+          >
+            Convert to Sales Order
+          </Button>
+        )}
+        {q.salesOrderId && (
+          <Link to={`/orders/${q.salesOrderId}`}>
+            <Button variant="secondary" size="sm" icon={<ArrowRightCircle className="h-3.5 w-3.5" />}>
+              View Sales Order {q.salesOrderId}
+            </Button>
+          </Link>
+        )}
+        <Button variant="secondary" size="sm" icon={<GitBranch className="h-3.5 w-3.5" />} onClick={() => setModal("revision")}>
+          Create Revision
+        </Button>
+        <Button variant="ghost" size="sm" icon={<Save className="h-3.5 w-3.5" />} onClick={() => pushToast({ tone: "info", title: "Draft saved" })}>
+          Save Draft
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[380px_1fr]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader title="Commercial Summary" eyebrow="Terms" />
+            <KeyValue label="Currency" value={q.currency} />
+            <KeyValue label="Payment terms" value={q.paymentTerms} />
+            <KeyValue label="Deposit required" value={`${q.depositPercent}%`} />
+            <KeyValue label="MOQ" value={q.moq} />
+            <KeyValue label="Lead time" value={`${q.leadTimeWeeks} weeks`} />
+            <KeyValue label="Est. shipment" value={formatDate(q.estimatedShipmentDate)} />
+            <KeyValue label="Valid for" value={`${q.validityDays} days`} />
+            <div className="my-2 border-t border-paper-100" />
+            <KeyValue label="Total value" value={formatMoney(total, q.currency)} mono />
+            <KeyValue label="Assigned to" value={q.assignedSalesperson} />
+          </Card>
+
+          <Card>
+            <CardHeader title="Revision History" eyebrow="Audit" action={<History className="h-4 w-4 text-paper-300" />} />
+            <div className="space-y-3">
+              {[...q.revisions].reverse().map((r) => (
+                <div key={r.revisionNo} className="flex gap-2.5 text-xs">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pine-100 font-mono font-semibold text-pine-700">
+                    {r.revisionNo}
+                  </span>
+                  <div>
+                    <p className="text-paper-700">{r.note}</p>
+                    <p className="mt-0.5 text-[10.5px] text-paper-400">
+                      {r.changedBy} · {formatDate(r.date)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {q.customerResponseNote && (
+            <Card className="border-manifest-200 bg-manifest-50/40">
+              <CardHeader title="Customer Response" eyebrow="Latest note" />
+              <p className="text-sm text-paper-700">{q.customerResponseNote}</p>
+            </Card>
+          )}
+
+          <ProcessDiscoveryNote
+            items={[
+              "Is customer acceptance received as a signed PI, email confirmation, or separate PO?",
+              "Discount approval threshold above which Sales Manager sign-off is mandatory — to be confirmed.",
+              "PI validity auto-expiry: should the system auto-flag expired PIs, or is this manual today?",
+            ]}
+          />
+        </div>
+
+        <PIDocumentPreview q={q} customer={customer} />
+      </div>
+
+      <Modal
+        open={modal === "revision"}
+        onClose={closeModal}
+        title="Create New Revision"
+        subtitle={`This will create Revision ${q.revisionNo + 1} of ${q.id}.`}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleCreateRevision} disabled={!noteText.trim()}>
+              Create Revision
+            </Button>
+          </>
+        }
+      >
+        <label className="mb-1.5 block text-xs font-medium text-paper-600">Reason for revision</label>
+        <textarea
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          rows={3}
+          placeholder="e.g. Adjusted mesh depth per factory counter-offer"
+          className="w-full rounded-lg border border-paper-200 px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+        />
+      </Modal>
+
+      <Modal
+        open={modal === "response"}
+        onClose={closeModal}
+        title="Record Customer Response"
+        subtitle={`Log how ${customer?.name ?? "the customer"} responded to ${q.id}.`}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleRecordResponse}>
+              Save Response
+            </Button>
+          </>
+        }
+      >
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          {(["accepted", "under_negotiation", "rejected"] as const).map((d) => (
+            <button
+              key={d}
+              onClick={() => setResponseDecision(d)}
+              className={`rounded-lg border px-2 py-2 text-xs font-medium capitalize transition-colors ${
+                responseDecision === d
+                  ? "border-pine-700 bg-pine-700 text-white"
+                  : "border-paper-200 bg-white text-paper-600 hover:bg-paper-50"
+              }`}
+            >
+              {d.replace("_", " ")}
+            </button>
+          ))}
+        </div>
+        <label className="mb-1.5 block text-xs font-medium text-paper-600">Note (optional)</label>
+        <textarea
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          rows={3}
+          placeholder="e.g. Customer requests standard selvage length be guaranteed in writing"
+          className="w-full rounded-lg border border-paper-200 px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+        />
+      </Modal>
+
+      <Modal
+        open={modal === "convert"}
+        onClose={closeModal}
+        title="Convert to Sales Order"
+        subtitle={`This creates a new Sales Order from ${q.id} and starts the fulfillment lifecycle.`}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button variant="success" size="sm" onClick={handleConvert}>
+              Create Sales Order
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-paper-600">
+          A new Sales Order will be created for <span className="font-semibold">{customer?.name}</span> with a
+          value of <span className="font-mono font-semibold">{formatMoney(total, q.currency)}</span>. Deposit and
+          balance payment records will be generated automatically based on the agreed{" "}
+          <span className="font-semibold">{q.depositPercent}%</span> deposit term.
+        </p>
+      </Modal>
+    </div>
+  );
+}
