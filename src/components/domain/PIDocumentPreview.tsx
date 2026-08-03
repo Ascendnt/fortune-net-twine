@@ -1,6 +1,37 @@
-import type { Quotation, Customer } from "@/lib/types";
-import { formatMoney, formatWeight, formatDate } from "@/lib/format";
+import { Fragment } from "react";
+import type { Quotation, Customer, QuotationLineItem } from "@/lib/types";
+import { formatMoney, formatDate } from "@/lib/format";
 import fntLogo from "@/assets/fnt-logo.png";
+
+// Consecutive lines that share the exact same specification text are printed as one group: the
+// spec sentence once (as the factory's own PI template does — the source client's real PIs write
+// out the composed spec once, then list each catalog size/code underneath it), rather than
+// repeating the same long spec string on every row.
+function groupBySpecification(items: QuotationLineItem[]): { spec: string; items: QuotationLineItem[] }[] {
+  const groups: { spec: string; items: QuotationLineItem[] }[] = [];
+  for (const li of items) {
+    const last = groups[groups.length - 1];
+    if (last && last.spec === li.specification) {
+      last.items.push(li);
+    } else {
+      groups.push({ spec: li.specification, items: [li] });
+    }
+  }
+  return groups;
+}
+
+// Item code + description is forced onto a single line (no wrap) so every catalog item stays
+// one row, matching the factory's real PI layout — but a long description at a fixed font size
+// would just overflow the column instead of wrapping. Stepping the font size down by length keeps
+// it on one line at any reasonable length while staying legible (never below 9px).
+function descFontClass(text: string): string {
+  const len = text.length;
+  if (len <= 45) return "text-[11px]";
+  if (len <= 60) return "text-[10.5px]";
+  if (len <= 75) return "text-[10px]";
+  if (len <= 90) return "text-[9.5px]";
+  return "text-[9px]";
+}
 
 export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Customer }) {
   // The export client master shows PIs actually go out under one of two legal entities depending
@@ -8,10 +39,14 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
   // record has no letterhead set (e.g. seed customers predating this field).
   const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
   const attn = q.attentionContact || customer?.contactPerson;
+  const groups = groupBySpecification(q.items);
+  const totalWeightKg = q.items.reduce((s, li) => s + li.weightKg, 0);
+  const grandTotal = q.items.reduce((s, li) => s + li.totalPrice, 0) + q.freight - q.discount + q.tax;
+  let itemNo = 0;
 
   return (
     <div id="pi-document-root" className="overflow-x-auto">
-      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:min-w-0 print:max-w-none print:w-full print:rounded-none print:border-0 print:p-0 print:shadow-none">
+      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden bg-white p-8 font-sans text-[13px] text-paper-900 print:min-w-0 print:max-w-none print:w-full print:p-0">
         <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40 print:hidden" />
         <div className="relative">
         <div className="flex items-start justify-between border-b-2 border-pine-800 pb-4 break-inside-avoid">
@@ -60,36 +95,67 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
         <p className="mt-5 border-b border-paper-200 pb-1 font-mono text-[10.5px] font-semibold uppercase tracking-wide text-pine-800">
           Items
         </p>
-        <table className="w-full border-collapse text-[12px]">
+        <table className="w-full table-fixed border-collapse text-[11px]">
           <thead>
-            <tr className="border-y border-pine-800 bg-[#f7f9fd] text-left font-mono text-[10.5px] uppercase tracking-wide text-pine-800">
-              <th className="py-1.5 pr-2">Item</th>
-              <th className="py-1.5 pr-2">Description / Specification</th>
-              <th className="py-1.5 pr-2 text-right">Qty</th>
-              <th className="py-1.5 pr-2 text-right">Weight</th>
-              <th className="py-1.5 pr-2 text-right">Unit Price</th>
-              <th className="py-1.5 pl-2 text-right">Amount</th>
+            <tr className="bg-pine-700 text-left font-mono text-[10px] font-semibold uppercase tracking-wide text-white">
+              <th className="w-10 py-1.5 pl-2 text-center">Item No.</th>
+              <th className="py-1.5 px-2">Item Specification</th>
+              <th className="w-14 py-1.5 px-2 text-right">UOM</th>
+              <th className="w-12 py-1.5 px-2 text-right">Qty</th>
+              <th className="w-20 py-1.5 px-2 text-right">U/P</th>
+              <th className="w-24 py-1.5 px-2 text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {q.items.map((li) => (
-              <tr key={li.id} className="break-inside-avoid border-b border-paper-100">
-                <td className="py-1.5 pr-2 align-top font-mono text-[11px] text-paper-500">{li.itemCode}</td>
-                <td className="py-1.5 pr-2 align-top">
-                  <p className="font-medium">{li.description}</p>
-                  <p className="text-[11px] text-paper-400">{li.specification}</p>
-                </td>
-                <td className="py-1.5 pr-2 text-right align-top font-mono">
-                  {li.qtyPcs} {li.unit}
-                </td>
-                <td className="py-1.5 pr-2 text-right align-top font-mono">{formatWeight(li.weightKg)}</td>
-                <td className="py-1.5 pr-2 text-right align-top font-mono">{formatMoney(li.unitPrice, q.currency)}</td>
-                <td className="py-1.5 pl-2 text-right align-top font-mono font-semibold">
-                  {formatMoney(li.totalPrice, q.currency)}
-                </td>
-              </tr>
+            {groups.map((g, gi) => (
+              <Fragment key={gi}>
+                <tr className="break-inside-avoid bg-paper-100">
+                  <td className="py-1 pl-2" />
+                  <td className="truncate py-1 px-2 font-semibold uppercase leading-tight text-paper-900">{g.spec}</td>
+                  <td className="py-1 px-2 text-right font-mono text-[10px] text-paper-500">KGS</td>
+                  <td className="py-1 px-2 text-right font-mono text-[10px] text-paper-500">PCS</td>
+                  <td className="py-1 px-2" />
+                  <td className="py-1 px-2" />
+                </tr>
+                {g.items.map((li) => {
+                  itemNo += 1;
+                  const label = `${li.itemCode} ${li.description}`;
+                  return (
+                    <tr key={li.id} className="break-inside-avoid border-b border-paper-100">
+                      <td className="py-1 pl-2 text-center font-mono text-paper-500">{itemNo}</td>
+                      <td
+                        className={`whitespace-nowrap overflow-hidden py-1 px-2 font-medium leading-tight text-pine-700 ${descFontClass(label)}`}
+                      >
+                        {label}
+                      </td>
+                      <td className="py-1 px-2 text-right font-mono">{li.weightKg.toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right font-mono">{li.qtyPcs}</td>
+                      <td className="py-1 px-2 text-right font-mono">{formatMoney(li.unitPrice, q.currency)}</td>
+                      <td className="py-1 px-2 text-right font-mono font-semibold">
+                        {formatMoney(li.totalPrice, q.currency)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </Fragment>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="break-inside-avoid border-t-2 border-pine-800 font-semibold text-paper-800">
+              <td className="py-2 pl-2 text-right" colSpan={2}>
+                Total Weight:
+              </td>
+              <td className="whitespace-nowrap py-2 px-2 text-right font-mono text-[10.5px]">
+                {totalWeightKg.toFixed(2)} KGS
+              </td>
+              <td className="py-2 px-2 text-right" colSpan={2}>
+                Grand Total:
+              </td>
+              <td className="whitespace-nowrap py-2 px-2 text-right font-mono text-[13px] text-pine-800">
+                {formatMoney(grandTotal, q.currency)}
+              </td>
+            </tr>
+          </tfoot>
         </table>
 
         {q.remarks && (
