@@ -16,7 +16,6 @@ import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatMoney, formatDate, formatDateTime } from "@/lib/format";
 import { ORDER_STAGES } from "@/lib/types";
 import {
@@ -53,7 +52,7 @@ const stageColors: Record<string, string> = {
 };
 
 export function Dashboard() {
-  const { salesOrders, quotations, payments, approvals } = useStore();
+  const { salesOrders, quotations, payments, approvals, customers: CUSTOMERS } = useStore();
 
   const stats = useMemo(() => {
     const active = salesOrders.filter((o) => o.currentStage !== "completed");

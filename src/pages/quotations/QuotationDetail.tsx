@@ -5,11 +5,13 @@ import {
   Send,
   CheckCircle2,
   FileDown,
+  Printer,
   GitBranch,
   MessageSquareReply,
   ArrowRightCircle,
   History,
   ChevronLeft,
+  Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
@@ -19,22 +21,23 @@ import { Modal } from "@/components/ui/Modal";
 import { PIDocumentPreview } from "@/components/domain/PIDocumentPreview";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatMoney, formatDate } from "@/lib/format";
+import { downloadElementAsPdf } from "@/lib/pdf";
 
 type ModalKind = "revision" | "response" | "convert" | null;
 
 export function QuotationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { quotations, role, updateQuotationStatus, createRevision, convertToSalesOrder, pushToast } = useStore();
+  const { quotations, role, updateQuotationStatus, createRevision, convertToSalesOrder, pushToast, customers } = useStore();
   const [modal, setModal] = useState<ModalKind>(null);
   const [noteText, setNoteText] = useState("");
   const [responseDecision, setResponseDecision] = useState<"accepted" | "rejected" | "under_negotiation">("accepted");
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const q = quotations.find((x) => x.id === id);
 
-  const customer = q ? CUSTOMERS.find((c) => c.id === q.customerId) : undefined;
+  const customer = q ? customers.find((c) => c.id === q.customerId) : undefined;
   const canApprove = role === "sales_manager" || role === "management" || role === "admin";
 
   const total = useMemo(() => {
@@ -73,12 +76,20 @@ export function QuotationDetail() {
     pushToast({ tone: "info", title: "Marked as sent", description: `${q!.id} recorded as sent to customer.` });
   }
 
-  function handleGeneratePdf() {
-    pushToast({
-      tone: "info",
-      title: "PDF export simulated",
-      description: "In production this generates a signed PDF for email delivery.",
-    });
+  async function handleDownloadPdf() {
+    setPdfLoading(true);
+    try {
+      await downloadElementAsPdf("pi-document-root", `${q!.id}.pdf`);
+      pushToast({ tone: "success", title: "PDF downloaded", description: `${q!.id}.pdf saved to your downloads.` });
+    } catch (err) {
+      pushToast({
+        tone: "danger",
+        title: "PDF download failed",
+        description: err instanceof Error ? err.message : "Unexpected error while generating the PDF.",
+      });
+    } finally {
+      setPdfLoading(false);
+    }
   }
 
   function handleCreateRevision() {
@@ -107,6 +118,7 @@ export function QuotationDetail() {
 
   return (
     <div>
+      <div className="no-print">
       <PageHeader
         breadcrumb={["Fortune Net & Twine ERP", "Quotations", q.id]}
         eyebrow={`Revision ${q.revisionNo}`}
@@ -115,8 +127,23 @@ export function QuotationDetail() {
         actions={
           <div className="flex items-center gap-2">
             <Badge status={q.status} />
-            <Button variant="secondary" size="sm" icon={<FileDown className="h-3.5 w-3.5" />} onClick={handleGeneratePdf}>
-              Generate PDF
+            <Button variant="secondary" size="sm" icon={<Printer className="h-3.5 w-3.5" />} onClick={() => window.print()}>
+              Print
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pdfLoading}
+              icon={
+                pdfLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FileDown className="h-3.5 w-3.5" />
+                )
+              }
+              onClick={handleDownloadPdf}
+            >
+              {pdfLoading ? "Generating…" : "Download PDF"}
             </Button>
           </div>
         }
@@ -177,9 +204,10 @@ export function QuotationDetail() {
           Save Draft
         </Button>
       </div>
+      </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[380px_1fr]">
-        <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-5 print:block xl:grid-cols-[380px_1fr]">
+        <div className="space-y-4 no-print">
           <Card>
             <CardHeader title="Commercial Summary" eyebrow="Terms" />
             <KeyValue label="Currency" value={q.currency} />

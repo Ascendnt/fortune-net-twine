@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
   SPEC_MATERIALS,
   SPEC_NET_TYPES,
@@ -43,14 +44,23 @@ function Picker({
         {label}
         {required && <span className="text-vermillion-600">*</span>}
       </label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
-        <option value="">— none —</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
+      {options.length > 10 ? (
+        <SearchableSelect
+          value={value}
+          onChange={onChange}
+          placeholder="— none —"
+          options={options.map((o) => ({ value: o, label: o }))}
+        />
+      ) : (
+        <select value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
+          <option value="">— none —</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }

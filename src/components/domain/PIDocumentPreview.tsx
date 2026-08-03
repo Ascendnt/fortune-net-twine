@@ -3,22 +3,18 @@ import { formatMoney, formatWeight, formatDate } from "@/lib/format";
 import fntLogo from "@/assets/fnt-logo.png";
 
 export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Customer }) {
-  const subtotal = q.items.reduce((s, li) => s + li.totalPrice, 0);
-  const totalWeight = q.items.reduce((s, li) => s + li.weightKg, 0);
-  const total = subtotal + q.freight - q.discount + q.tax;
-  const deposit = total * (q.depositPercent / 100);
-  const balance = total - deposit;
   // The export client master shows PIs actually go out under one of two legal entities depending
   // on the account, not a single fixed name — falls back to the historical default when a customer
   // record has no letterhead set (e.g. seed customers predating this field).
   const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
+  const attn = q.attentionContact || customer?.contactPerson;
 
   return (
-    <div className="overflow-x-auto">
-      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:shadow-none">
-        <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40" />
+    <div id="pi-document-root" className="overflow-x-auto">
+      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:min-w-0 print:max-w-none print:w-full print:rounded-none print:border-0 print:p-0 print:shadow-none">
+        <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40 print:hidden" />
         <div className="relative">
-        <div className="flex items-start justify-between border-b-2 border-pine-800 pb-4">
+        <div className="flex items-start justify-between border-b-2 border-pine-800 pb-4 break-inside-avoid">
           <div className="flex items-center gap-3">
             <img src={fntLogo} alt="Fortune Net & Twine" className="h-14 w-14 object-contain" />
             <div>
@@ -45,12 +41,12 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-6">
+        <div className="mt-4 grid grid-cols-2 gap-6 break-inside-avoid">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-wide text-paper-400">Messrs.</p>
             <p className="text-[13px] font-semibold">{customer?.name ?? q.consignee}</p>
             <p className="text-[12px] text-paper-500">{customer?.address}</p>
-            <p className="mt-1 text-[12px] text-paper-500">Attn: {customer?.contactPerson}</p>
+            {attn && <p className="mt-1 text-[12px] text-paper-500">Attn: {attn}</p>}
           </div>
           <div className="space-y-1 text-[12px]">
             <Row label="Shipment" value={formatDate(q.estimatedShipmentDate)} />
@@ -61,9 +57,12 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
           </div>
         </div>
 
-        <table className="mt-5 w-full border-collapse text-[12px]">
+        <p className="mt-5 border-b border-paper-200 pb-1 font-mono text-[10.5px] font-semibold uppercase tracking-wide text-pine-800">
+          Items
+        </p>
+        <table className="w-full border-collapse text-[12px]">
           <thead>
-            <tr className="border-y border-pine-800 bg-pine-50/60 text-left font-mono text-[10.5px] uppercase tracking-wide text-pine-800">
+            <tr className="border-y border-pine-800 bg-[#f7f9fd] text-left font-mono text-[10.5px] uppercase tracking-wide text-pine-800">
               <th className="py-1.5 pr-2">Item</th>
               <th className="py-1.5 pr-2">Description / Specification</th>
               <th className="py-1.5 pr-2 text-right">Qty</th>
@@ -74,7 +73,7 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
           </thead>
           <tbody>
             {q.items.map((li) => (
-              <tr key={li.id} className="border-b border-paper-100">
+              <tr key={li.id} className="break-inside-avoid border-b border-paper-100">
                 <td className="py-1.5 pr-2 align-top font-mono text-[11px] text-paper-500">{li.itemCode}</td>
                 <td className="py-1.5 pr-2 align-top">
                   <p className="font-medium">{li.description}</p>
@@ -93,29 +92,14 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
           </tbody>
         </table>
 
-        <div className="mt-4 flex justify-end">
-          <div className="w-64 space-y-1 text-[12px]">
-            <Row label="Subtotal" value={formatMoney(subtotal, q.currency)} mono />
-            <Row label="Freight / charges" value={formatMoney(q.freight, q.currency)} mono />
-            <Row label="Discount" value={`- ${formatMoney(q.discount, q.currency)}`} mono />
-            <Row label="Tax" value={formatMoney(q.tax, q.currency)} mono />
-            <div className="my-1 border-t border-paper-300" />
-            <Row label="Total Amount" value={formatMoney(total, q.currency)} mono bold />
-            <Row label="Total Weight" value={formatWeight(totalWeight)} mono />
-            <div className="my-1 border-t border-dashed border-paper-200" />
-            <Row label={`Required deposit (${q.depositPercent}%)`} value={formatMoney(deposit, q.currency)} mono />
-            <Row label="Remaining balance" value={formatMoney(balance, q.currency)} mono />
-          </div>
-        </div>
-
         {q.remarks && (
-          <div className="mt-4 rounded-md bg-paper-50 px-3 py-2 text-[11.5px] text-paper-600">
+          <div className="mt-4 break-inside-avoid rounded-md bg-paper-50 px-3 py-2 text-[11.5px] text-paper-600">
             <span className="font-semibold text-paper-700">Remarks: </span>
             {q.remarks}
           </div>
         )}
 
-        <div className="mt-8 flex justify-between text-[11px] text-paper-400">
+        <div className="mt-8 flex justify-between break-inside-avoid text-[11px] text-paper-400">
           <div>
             <p className="mb-6">Prepared by:</p>
             <p className="border-t border-paper-300 pt-1">{q.assignedSalesperson}</p>

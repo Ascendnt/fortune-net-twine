@@ -7,12 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatDate } from "@/lib/format";
 import type { ApprovalRequest } from "@/lib/types";
 
 export function ApprovalsInbox() {
-  const { approvals, resolveApproval, pushToast } = useStore();
+  const { approvals, resolveApproval, pushToast, customers: CUSTOMERS } = useStore();
   const [target, setTarget] = useState<ApprovalRequest | null>(null);
   const [decision, setDecision] = useState<"approved" | "rejected" | "returned">("approved");
 

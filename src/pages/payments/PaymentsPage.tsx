@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatMoney, formatDate } from "@/lib/format";
 import type { PaymentStatus } from "@/lib/types";
 
@@ -21,7 +20,7 @@ const FILTERS: { id: PaymentStatus | "all"; label: string }[] = [
 ];
 
 export function PaymentsPage() {
-  const { payments, salesOrders, verifyPayment, rejectPayment, role, pushToast } = useStore();
+  const { payments, salesOrders, verifyPayment, rejectPayment, role, pushToast, customers: CUSTOMERS } = useStore();
   const [filter, setFilter] = useState<PaymentStatus | "all">("all");
   const [query, setQuery] = useState("");
 

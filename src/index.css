@@ -126,18 +126,22 @@ body {
 /* Net-mesh lattice: the one signature motif, drawn from the actual product —
    Fortune Net & Twine manufactures fishing net. Used sparingly on document
    watermarks, empty states, and the sidebar header. */
+/* Written as plain rgba() rather than color-mix() — mathematically identical to the theme's
+   resolved values (pine-900 #081527 at 7%, paper-0 #ffffff at 10%), but color-mix() is what was
+   crashing html2canvas's CSS parser ("unsupported color function") during PDF export, since it
+   can't parse color-mix()/oklab at all. Plain rgba() is universally supported. */
 .mesh-lattice {
   background-image: repeating-linear-gradient(
       60deg,
-      color-mix(in srgb, var(--color-pine-900) 7%, transparent) 0px,
-      color-mix(in srgb, var(--color-pine-900) 7%, transparent) 1px,
+      rgba(8, 21, 39, 0.07) 0px,
+      rgba(8, 21, 39, 0.07) 1px,
       transparent 1px,
       transparent 22px
     ),
     repeating-linear-gradient(
       -60deg,
-      color-mix(in srgb, var(--color-pine-900) 7%, transparent) 0px,
-      color-mix(in srgb, var(--color-pine-900) 7%, transparent) 1px,
+      rgba(8, 21, 39, 0.07) 0px,
+      rgba(8, 21, 39, 0.07) 1px,
       transparent 1px,
       transparent 22px
     );
@@ -146,15 +150,15 @@ body {
 .mesh-lattice-light {
   background-image: repeating-linear-gradient(
       60deg,
-      color-mix(in srgb, var(--color-paper-0) 10%, transparent) 0px,
-      color-mix(in srgb, var(--color-paper-0) 10%, transparent) 1px,
+      rgba(255, 255, 255, 0.1) 0px,
+      rgba(255, 255, 255, 0.1) 1px,
       transparent 1px,
       transparent 20px
     ),
     repeating-linear-gradient(
       -60deg,
-      color-mix(in srgb, var(--color-paper-0) 10%, transparent) 0px,
-      color-mix(in srgb, var(--color-paper-0) 10%, transparent) 1px,
+      rgba(255, 255, 255, 0.1) 0px,
+      rgba(255, 255, 255, 0.1) 1px,
       transparent 1px,
       transparent 20px
     );
@@ -185,6 +189,21 @@ body {
 @media print {
   .no-print {
     display: none !important;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  html,
+  body {
+    background: white;
+  }
+  #pi-document-root,
+  #pi-document-root *,
+  #ci-document-root,
+  #ci-document-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
 

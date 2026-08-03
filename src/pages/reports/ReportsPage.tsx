@@ -6,11 +6,10 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatMoney, daysBetween } from "@/lib/format";
 
 export function ReportsPage() {
-  const { payments, salesOrders, pushToast } = useStore();
+  const { payments, salesOrders, pushToast, customers: CUSTOMERS } = useStore();
   const [soaCustomer, setSoaCustomer] = useState<string | null>(null);
 
   const aging = useMemo(() => {

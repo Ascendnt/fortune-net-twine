@@ -11,6 +11,8 @@ import type {
   QuotationStatus,
   PricingRule,
   LookupTable,
+  Customer,
+  Contact,
 } from "./types";
 import { ORDER_STAGES } from "./types";
 import {
@@ -23,6 +25,7 @@ import {
   CURRENT_USER_BY_ROLE,
   PRICING_RULES,
   LOOKUP_TABLES,
+  CUSTOMERS,
 } from "./mockData";
 
 interface StoreState {
@@ -41,6 +44,14 @@ interface StoreState {
   lookupTables: LookupTable[];
   updatePricingRule: (id: string, patch: Partial<Pick<PricingRule, "enabled" | "rate">>) => void;
   updateLookupRow: (tableId: string, key: string, value: number) => void;
+
+  // Customer master data lives here (not a static import) so contacts — and, later, other
+  // one-time-setup-but-still-editable fields — can be added/edited from the Customers page and
+  // be reflected everywhere else in the app (New Quotation's Attn picker, PI/CI previews, etc.).
+  customers: Customer[];
+  addContact: (customerId: string, contact: Omit<Contact, "id">) => void;
+  updateContact: (customerId: string, contactId: string, patch: Partial<Contact>) => void;
+  removeContact: (customerId: string, contactId: string) => void;
 
   toasts: ToastMessage[];
   pushToast: (t: Omit<ToastMessage, "id">) => void;
@@ -78,7 +89,41 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [activity, setActivity] = useState<ActivityEntry[]>(ACTIVITY);
   const [pricingRules, setPricingRules] = useState<PricingRule[]>(PRICING_RULES);
   const [lookupTables, setLookupTables] = useState<LookupTable[]>(LOOKUP_TABLES);
+  const [customers, setCustomers] = useState<Customer[]>(CUSTOMERS);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addContact = useCallback((customerId: string, contact: Omit<Contact, "id">) => {
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id !== customerId) return c;
+        const newContact: Contact = { ...contact, id: nextId("CT") };
+        const existing = c.contacts ?? (c.contactPerson ? [{ id: nextId("CT"), name: c.contactPerson, isPrimary: true }] : []);
+        return { ...c, contacts: [...existing, newContact] };
+      })
+    );
+  }, []);
+
+  const updateContact = useCallback((customerId: string, contactId: string, patch: Partial<Contact>) => {
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id !== customerId || !c.contacts) return c;
+        const contacts = c.contacts.map((ct) => (ct.id === contactId ? { ...ct, ...patch } : ct));
+        const primary = contacts.find((ct) => ct.isPrimary) ?? contacts[0];
+        return { ...c, contacts, contactPerson: primary?.name ?? c.contactPerson };
+      })
+    );
+  }, []);
+
+  const removeContact = useCallback((customerId: string, contactId: string) => {
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id !== customerId || !c.contacts) return c;
+        const contacts = c.contacts.filter((ct) => ct.id !== contactId);
+        const primary = contacts.find((ct) => ct.isPrimary) ?? contacts[0];
+        return { ...c, contacts, contactPerson: primary?.name ?? c.contactPerson };
+      })
+    );
+  }, []);
 
   const updatePricingRule = useCallback((id: string, patch: Partial<Pick<PricingRule, "enabled" | "rate">>) => {
     setPricingRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -471,6 +516,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       lookupTables,
       updatePricingRule,
       updateLookupRow,
+      customers,
+      addContact,
+      updateContact,
+      removeContact,
       toasts,
       pushToast,
       dismissToast,
@@ -498,6 +547,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       lookupTables,
       updatePricingRule,
       updateLookupRow,
+      customers,
+      addContact,
+      updateContact,
+      removeContact,
       toasts,
       pushToast,
       dismissToast,

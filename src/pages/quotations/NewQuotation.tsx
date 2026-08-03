@@ -4,14 +4,17 @@ import { Plus, Trash2, ChevronLeft, ChevronDown, ChevronUp, Wand2 } from "lucide
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { SpecBuilderModal } from "@/components/domain/SpecBuilderModal";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS, ITEM_MASTER } from "@/lib/mockData";
+import { ITEM_MASTER } from "@/lib/mockData";
 import { formatMoney } from "@/lib/format";
 import { computeLinePricing, lookupKeyForRule } from "@/lib/pricing";
-import type { QuotationLineItem } from "@/lib/types";
+import type { QuotationLineItem, Currency } from "@/lib/types";
 import clsx from "clsx";
+
+const CURRENCIES: Currency[] = ["USD", "KRW", "EUR"];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -61,9 +64,19 @@ function defaultsFor(itemCode: string, enabledRuleIds: string[]): Omit<DraftLine
 
 export function NewQuotation() {
   const navigate = useNavigate();
-  const { createQuotation, pushToast, currentUser, pricingRules, lookupTables } = useStore();
+  const { createQuotation, pushToast, currentUser, pricingRules, lookupTables, customers } = useStore();
 
-  const [customerId, setCustomerId] = useState(CUSTOMERS[0].id);
+  const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
+  const customer = customers.find((c) => c.id === customerId);
+
+  // Currency, payment terms, consignee, and Attn contact all pre-fill from the customer's master
+  // data when a customer is picked (the "one-time setup" values) but stay fully editable per
+  // quotation from here on — real accounts sometimes ship to a different consignee, quote in a
+  // different currency, or negotiate terms that differ from what's on file.
+  const [currency, setCurrency] = useState<Currency>(customer?.defaultCurrency ?? "USD");
+  const [paymentTerms, setPaymentTerms] = useState(customer?.defaultPaymentTerms ?? "");
+  const [consignee, setConsignee] = useState(customer?.consignee ?? "");
+  const [attentionContact, setAttentionContact] = useState(customer?.contactPerson ?? "");
   const [depositPercent, setDepositPercent] = useState(30);
   const [leadTimeWeeks, setLeadTimeWeeks] = useState(6);
   const [validityDays, setValidityDays] = useState(7);
@@ -72,8 +85,23 @@ export function NewQuotation() {
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [specBuilderLineId, setSpecBuilderLineId] = useState<string | null>(null);
 
-  const customer = CUSTOMERS.find((c) => c.id === customerId)!;
   const enabledRules = pricingRules.filter((r) => r.enabled).sort((a, b) => a.sequence - b.sequence);
+  const contactOptions = customer?.contacts?.length
+    ? customer.contacts
+    : customer
+      ? [{ id: "primary", name: customer.contactPerson, isPrimary: true }]
+      : [];
+
+  function handleCustomerChange(id: string) {
+    setCustomerId(id);
+    const c = customers.find((x) => x.id === id);
+    if (c) {
+      setCurrency(c.defaultCurrency);
+      setPaymentTerms(c.defaultPaymentTerms);
+      setConsignee(c.consignee);
+      setAttentionContact(c.contactPerson);
+    }
+  }
 
   function priceLine(line: DraftLine) {
     const item = ITEM_MASTER.find((i) => i.code === line.itemCode) ?? ITEM_MASTER[0];
@@ -138,6 +166,10 @@ export function NewQuotation() {
   const total = itemsTotal + freight;
 
   function handleCreate() {
+    if (!customer) {
+      pushToast({ tone: "warning", title: "Select a customer" });
+      return;
+    }
     if (lines.length === 0) {
       pushToast({ tone: "warning", title: "Add at least one line item" });
       return;
@@ -171,11 +203,12 @@ export function NewQuotation() {
 
     const id = createQuotation({
       customerId,
-      consignee: customer.name,
-      currency: customer.defaultCurrency,
+      consignee: consignee || customer.name,
+      attentionContact,
+      currency,
       validityDays,
       issueDate: new Date().toISOString().slice(0, 10),
-      paymentTerms: customer.defaultPaymentTerms,
+      paymentTerms: paymentTerms || customer.defaultPaymentTerms,
       moq: "Subject to confirmation",
       leadTimeWeeks,
       estimatedShipmentDate: new Date(Date.now() + leadTimeWeeks * 7 * 86400000).toISOString().slice(0, 10),
@@ -210,17 +243,40 @@ export function NewQuotation() {
           <Card>
             <CardHeader title="Customer & Terms" eyebrow="Step 1" />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="Customer">
-                <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={inputClass}>
-                  {CUSTOMERS.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} — {c.country}
+              <div className="sm:col-span-2">
+                <Field label="Customer">
+                  <SearchableSelect
+                    value={customerId}
+                    onChange={handleCustomerChange}
+                    placeholder="Select a customer…"
+                    options={customers.map((c) => ({ value: c.id, label: c.name, sublabel: `— ${c.country}` }))}
+                  />
+                </Field>
+              </div>
+              <Field label="Consignee">
+                <input value={consignee} onChange={(e) => setConsignee(e.target.value)} className={inputClass} />
+              </Field>
+              <Field label="Attn (contact)">
+                <select value={attentionContact} onChange={(e) => setAttentionContact(e.target.value)} className={inputClass}>
+                  {contactOptions.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                      {c.title ? ` — ${c.title}` : ""}
                     </option>
                   ))}
                 </select>
               </Field>
               <Field label="Currency">
-                <input disabled value={customer.defaultCurrency} className={`${inputClass} bg-paper-50 text-paper-500`} />
+                <select value={currency} onChange={(e) => setCurrency(e.target.value as Currency)} className={inputClass}>
+                  {CURRENCIES.map((cur) => (
+                    <option key={cur} value={cur}>
+                      {cur}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Payment terms">
+                <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className={inputClass} />
               </Field>
               <Field label="Deposit required (%)">
                 <input
@@ -285,7 +341,7 @@ export function NewQuotation() {
                         <span className="truncate text-xs text-paper-500">{item.description}</span>
                       </button>
                       <span className="shrink-0 font-mono text-xs font-semibold text-pine-800">
-                        {formatMoney(result.totalPrice, customer.defaultCurrency)}
+                        {formatMoney(result.totalPrice, currency)}
                       </span>
                       <button onClick={() => removeItem(line.id)} className="shrink-0 text-paper-400 hover:text-alert-600">
                         <Trash2 className="h-4 w-4" />
@@ -444,11 +500,11 @@ export function NewQuotation() {
             <div className="mt-3 flex justify-end gap-4 border-t border-paper-100 pt-3 text-sm">
               <span>
                 <span className="text-paper-500">Items:&nbsp;</span>
-                <span className="font-mono font-semibold text-paper-700">{formatMoney(itemsTotal, customer.defaultCurrency)}</span>
+                <span className="font-mono font-semibold text-paper-700">{formatMoney(itemsTotal, currency)}</span>
               </span>
               <span>
                 <span className="text-paper-500">Total (incl. freight):&nbsp;</span>
-                <span className="font-mono font-bold text-pine-800">{formatMoney(total, customer.defaultCurrency)}</span>
+                <span className="font-mono font-bold text-pine-800">{formatMoney(total, currency)}</span>
               </span>
             </div>
           </Card>
@@ -475,16 +531,22 @@ export function NewQuotation() {
         </div>
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader title={customer.name} eyebrow="Customer Snapshot" />
-            <p className="text-sm text-paper-600">{customer.address}</p>
-            <p className="mt-2 text-xs text-paper-400">Default terms</p>
-            <p className="text-sm text-paper-700">{customer.defaultPaymentTerms}</p>
-            <p className="mt-2 text-xs text-paper-400">Outstanding balance</p>
-            <p className="font-mono text-sm font-semibold text-paper-800">
-              {formatMoney(customer.outstandingBalanceUSD)}
-            </p>
-          </Card>
+          {customer ? (
+            <Card>
+              <CardHeader title={customer.name} eyebrow="Customer Snapshot" />
+              <p className="text-sm text-paper-600">{customer.address}</p>
+              <p className="mt-2 text-xs text-paper-400">Default terms (editable above)</p>
+              <p className="text-sm text-paper-700">{customer.defaultPaymentTerms}</p>
+              <p className="mt-2 text-xs text-paper-400">Outstanding balance</p>
+              <p className="font-mono text-sm font-semibold text-paper-800">
+                {formatMoney(customer.outstandingBalanceUSD)}
+              </p>
+            </Card>
+          ) : (
+            <Card>
+              <p className="text-sm text-paper-400">Select a customer to see their snapshot.</p>
+            </Card>
+          )}
           <ProcessDiscoveryNote
             items={[
               "Which fields are mandatory before submission — is a technical assessment always required first?",

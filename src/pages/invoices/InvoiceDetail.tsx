@@ -1,20 +1,22 @@
+import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ChevronLeft, Printer, FileDown } from "lucide-react";
+import { ChevronLeft, Printer, FileDown, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { InvoiceDocumentPreview } from "@/components/domain/InvoiceDocumentPreview";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatDate, formatMoney } from "@/lib/format";
+import { downloadElementAsPdf } from "@/lib/pdf";
 
 export function InvoiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { invoices, pushToast } = useStore();
+  const { invoices, customers, pushToast } = useStore();
   const inv = invoices.find((i) => i.id === id);
-  const customer = inv ? CUSTOMERS.find((c) => c.id === inv.customerId) : undefined;
+  const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   if (!inv) {
     return (
@@ -30,8 +32,25 @@ export function InvoiceDetail() {
   const total = inv.items.reduce((s, li) => s + li.totalPrice, 0) + inv.freight - inv.discount + inv.tax;
   const isPartial = inv.items.some((li) => li.shippedQtyPcs !== undefined && li.shippedQtyPcs !== li.qtyPcs);
 
+  async function handleDownloadPdf() {
+    setPdfLoading(true);
+    try {
+      await downloadElementAsPdf("ci-document-root", `${inv!.id}.pdf`);
+      pushToast({ tone: "success", title: "PDF downloaded", description: `${inv!.id}.pdf saved to your downloads.` });
+    } catch (err) {
+      pushToast({
+        tone: "danger",
+        title: "PDF download failed",
+        description: err instanceof Error ? err.message : "Unexpected error while generating the PDF.",
+      });
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   return (
     <div>
+      <div className="no-print">
       <PageHeader
         breadcrumb={["Fortune Net & Twine ERP", "Sales Orders", inv.salesOrderId, inv.id]}
         eyebrow="Commercial Invoice"
@@ -46,16 +65,24 @@ export function InvoiceDetail() {
             <Button
               variant="secondary"
               size="sm"
-              icon={<FileDown className="h-3.5 w-3.5" />}
-              onClick={() => pushToast({ tone: "info", title: "PDF export simulated" })}
+              disabled={pdfLoading}
+              icon={
+                pdfLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FileDown className="h-3.5 w-3.5" />
+                )
+              }
+              onClick={handleDownloadPdf}
             >
-              Export PDF
+              {pdfLoading ? "Generating…" : "Download PDF"}
             </Button>
           </div>
         }
       />
+      </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_1fr]">
+      <div className="grid grid-cols-1 gap-5 print:block xl:grid-cols-[320px_1fr]">
         <div className="space-y-4 no-print">
           <Card>
             <CardHeader title="Summary" eyebrow="Invoice" />

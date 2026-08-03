@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatMoney, formatDate } from "@/lib/format";
 import type { QuotationStatus } from "@/lib/types";
 
@@ -22,7 +21,7 @@ const STATUS_FILTERS: { id: QuotationStatus | "all"; label: string }[] = [
 ];
 
 export function QuotationsList() {
-  const { quotations } = useStore();
+  const { quotations, customers: CUSTOMERS } = useStore();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<QuotationStatus | "all">("all");

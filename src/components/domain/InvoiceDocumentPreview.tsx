@@ -9,11 +9,11 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
   const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
 
   return (
-    <div className="overflow-x-auto">
-      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:shadow-none">
-        <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40" />
+    <div id="ci-document-root" className="overflow-x-auto">
+      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:min-w-0 print:max-w-none print:w-full print:rounded-none print:border-0 print:p-0 print:shadow-none">
+        <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40 print:hidden" />
         <div className="relative">
-        <div className="flex items-start justify-between border-b-2 border-vermillion-700 pb-4">
+        <div className="flex items-start justify-between border-b-2 border-vermillion-700 pb-4 break-inside-avoid">
           <div className="flex items-center gap-3">
             <img src={fntLogo} alt="Fortune Net & Twine" className="h-14 w-14 object-contain" />
             <div>
@@ -34,7 +34,7 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-6">
+        <div className="mt-4 grid grid-cols-2 gap-6 break-inside-avoid">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-wide text-paper-400">Sold to</p>
             <p className="text-[13px] font-semibold">{customer?.name}</p>
@@ -48,9 +48,12 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
           </div>
         </div>
 
-        <table className="mt-5 w-full border-collapse text-[12px]">
+        <p className="mt-5 border-b border-paper-200 pb-1 font-mono text-[10.5px] font-semibold uppercase tracking-wide text-vermillion-700">
+          Items
+        </p>
+        <table className="w-full border-collapse text-[12px]">
           <thead>
-            <tr className="border-y border-vermillion-700 bg-vermillion-50/60 text-left font-mono text-[10.5px] uppercase tracking-wide text-vermillion-700">
+            <tr className="border-y border-vermillion-700 bg-[#fdf4f4] text-left font-mono text-[10.5px] uppercase tracking-wide text-vermillion-700">
               <th className="py-1.5 pr-2">Item</th>
               <th className="py-1.5 pr-2">Description</th>
               <th className="py-1.5 pr-2 text-right">Shipped Qty</th>
@@ -61,7 +64,7 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
           </thead>
           <tbody>
             {inv.items.map((li) => (
-              <tr key={li.id} className="border-b border-paper-100">
+              <tr key={li.id} className="break-inside-avoid border-b border-paper-100">
                 <td className="py-1.5 pr-2 align-top font-mono text-[11px] text-paper-500">{li.itemCode}</td>
                 <td className="py-1.5 pr-2 align-top font-medium">{li.description}</td>
                 <td className="py-1.5 pr-2 text-right align-top font-mono">
@@ -78,7 +81,7 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
           </tbody>
         </table>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end break-inside-avoid">
           <div className="w-64 space-y-1 text-[12px]">
             <Row label="Subtotal" value={formatMoney(subtotal, inv.currency)} mono />
             <Row label="Freight" value={formatMoney(inv.freight, inv.currency)} mono />

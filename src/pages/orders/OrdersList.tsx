@@ -6,13 +6,12 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS } from "@/lib/mockData";
 import { formatMoney, formatDate } from "@/lib/format";
 import { ORDER_STAGES } from "@/lib/types";
 import type { OrderStage } from "@/lib/types";
 
 export function OrdersList() {
-  const { salesOrders } = useStore();
+  const { salesOrders, customers: CUSTOMERS } = useStore();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [stageFilter, setStageFilter] = useState<OrderStage | "all">("all");

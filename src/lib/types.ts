@@ -21,6 +21,18 @@ export type Currency = "USD" | "KRW" | "EUR";
 
 // ---------- Master data ----------
 
+// A customer may have several named contacts (buyer, accounts, logistics, etc.) — the export
+// client master shows real accounts with 2-3 people on file. `contactPerson` on Customer stays as
+// the primary/default; `contacts` holds the full addressable list a quotation can pick "Attn:" from.
+export interface Contact {
+  id: string;
+  name: string;
+  title?: string; // e.g. "Director", "Purchasing"
+  email?: string;
+  phone?: string;
+  isPrimary?: boolean;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -41,6 +53,8 @@ export interface Customer {
   letterhead?: "NETTEX MFG. AND EXPORT CORP." | "FORTUNE NET & TWINE MFG. CORP.";
   // Who books/represents this account (e.g. "HOUSE ACCOUNT" vs a regional agent like "INSUPES").
   agent?: string;
+  // Full contact list for this account. When absent, contactPerson is the only known contact.
+  contacts?: Contact[];
 }
 
 export interface ItemMaster {
@@ -164,6 +178,9 @@ export interface Quotation {
   revisions: QuotationRevision[];
   customerId: string;
   consignee: string;
+  // Which of the customer's contacts this PI is addressed to ("Attn:"). Falls back to the
+  // customer's primary contactPerson when unset (older/seed quotations).
+  attentionContact?: string;
   status: QuotationStatus;
   currency: Currency;
   validityDays: number;

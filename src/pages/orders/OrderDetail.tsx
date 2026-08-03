@@ -20,7 +20,7 @@ import { Modal } from "@/components/ui/Modal";
 import { LifecycleStepper } from "@/components/domain/LifecycleStepper";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
-import { CUSTOMERS, DOCUMENTS } from "@/lib/mockData";
+import { DOCUMENTS } from "@/lib/mockData";
 import { formatMoney, formatDate, formatDateTime } from "@/lib/format";
 import { ORDER_STAGES } from "@/lib/types";
 
@@ -35,7 +35,7 @@ const TABS = [
 export function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { salesOrders, quotations, payments, invoices, activity, advanceStage, generateInvoice, verifyPayment, role, pushToast } =
+  const { salesOrders, quotations, payments, invoices, activity, advanceStage, generateInvoice, verifyPayment, role, pushToast, customers } =
     useStore();
   const [tab, setTab] = useState("overview");
   const [shipModalOpen, setShipModalOpen] = useState(false);
@@ -43,7 +43,7 @@ export function OrderDetail() {
 
   const order = salesOrders.find((o) => o.id === id);
   const quotation = order ? quotations.find((q) => q.id === order.quotationId) : undefined;
-  const customer = order ? CUSTOMERS.find((c) => c.id === order.customerId) : undefined;
+  const customer = order ? customers.find((c) => c.id === order.customerId) : undefined;
   const orderPayments = payments.filter((p) => p.salesOrderId === id);
   const orderActivity = activity.filter((a) => a.recordId === id);
   const orderDocs = DOCUMENTS.filter((d) => d.relatedOrderId === id);
