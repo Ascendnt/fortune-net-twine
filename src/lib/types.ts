@@ -36,6 +36,11 @@ export interface Customer {
   totalValueUSD: number;
   outstandingBalanceUSD: number;
   since: string; // ISO date
+  // Which legal entity issues this customer's documents — the export client list shows PI/CI
+  // headers actually alternate between two entities per account, not a single fixed company name.
+  letterhead?: "NETTEX MFG. AND EXPORT CORP." | "FORTUNE NET & TWINE MFG. CORP.";
+  // Who books/represents this account (e.g. "HOUSE ACCOUNT" vs a regional agent like "INSUPES").
+  agent?: string;
 }
 
 export interface ItemMaster {

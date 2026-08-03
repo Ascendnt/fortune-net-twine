@@ -110,6 +110,15 @@ export function CustomersList() {
               <KeyValue label="Default payment terms" value={selected.defaultPaymentTerms} />
               <KeyValue label="Default currency" value={selected.defaultCurrency} />
               <KeyValue label="Customer since" value={formatDate(selected.since)} />
+              <KeyValue label="Agent" value={selected.agent ?? "—"} />
+              <KeyValue
+                label="Issuing entity"
+                value={
+                  selected.letterhead === "NETTEX MFG. AND EXPORT CORP."
+                    ? "Nettex Mfg. and Export Corp."
+                    : "Fortune Net & Twine Manufacturing Corp."
+                }
+              />
               <div className="my-2 border-t border-paper-100" />
               <KeyValue label="Total orders" value={String(selected.totalOrders)} />
               <KeyValue label="Total value" value={formatMoney(selected.totalValueUSD)} mono />

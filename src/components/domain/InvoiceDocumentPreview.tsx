@@ -5,6 +5,8 @@ import fntLogo from "@/assets/fnt-logo.png";
 export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoice; customer?: Customer }) {
   const subtotal = inv.items.reduce((s, li) => s + li.totalPrice, 0);
   const total = subtotal + inv.freight - inv.discount + inv.tax;
+  // Same per-customer issuing-entity logic as the PI preview — see PIDocumentPreview.tsx.
+  const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
 
   return (
     <div className="overflow-x-auto">
@@ -16,7 +18,9 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
             <img src={fntLogo} alt="Fortune Net & Twine" className="h-14 w-14 object-contain" />
             <div>
               <p className="text-[15px] font-bold leading-tight text-pine-900">
-                Fortune Net &amp; Twine Manufacturing Corp.
+                {issuingEntity === "NETTEX MFG. AND EXPORT CORP."
+                  ? "Nettex Mfg. and Export Corp."
+                  : "Fortune Net & Twine Manufacturing Corp."}
               </p>
               <p className="text-[11px] leading-tight text-paper-500">
                 70 D. Bonifacio St., Bo. Canumay, Valenzuela, Metro Manila, Philippines

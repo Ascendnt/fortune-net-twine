@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, ChevronLeft, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronDown, ChevronUp, Wand2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
+import { SpecBuilderModal } from "@/components/domain/SpecBuilderModal";
 import { useStore } from "@/lib/store";
 import { CUSTOMERS, ITEM_MASTER } from "@/lib/mockData";
 import { formatMoney } from "@/lib/format";
@@ -38,6 +39,10 @@ interface DraftLine {
   twineKg: number;
   twineRate: number;
   expanded: boolean;
+  // Set when the line's specification was composed via the Build Specification flow (material,
+  // net type, knots, selvages, stretching, reinforcement, others, color) instead of being taken
+  // as-is from the catalog row's meshDepth/color — overrides the default spec text at save time.
+  specificationOverride?: string;
 }
 
 function defaultsFor(itemCode: string, enabledRuleIds: string[]): Omit<DraftLine, "id" | "qtyPcs" | "expanded"> {
@@ -65,6 +70,7 @@ export function NewQuotation() {
   const [freight, setFreight] = useState(0);
   const [remarks, setRemarks] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([]);
+  const [specBuilderLineId, setSpecBuilderLineId] = useState<string | null>(null);
 
   const customer = CUSTOMERS.find((c) => c.id === customerId)!;
   const enabledRules = pricingRules.filter((r) => r.enabled).sort((a, b) => a.sequence - b.sequence);
@@ -140,7 +146,7 @@ export function NewQuotation() {
       id: line.id,
       itemCode: item.code,
       description: item.description,
-      specification: `${item.meshDepth}, ${item.color}`,
+      specification: line.specificationOverride || `${item.meshDepth}, ${item.color}`,
       qtyPcs: line.qtyPcs,
       unit: item.uom,
       unitPrice: Math.round(result.unitPrice * 100) / 100,
@@ -291,18 +297,44 @@ export function NewQuotation() {
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                           <div className="sm:col-span-2">
                             <Field label="Specification">
-                              <select
-                                value={line.itemCode}
-                                onChange={(e) => setItemCode(line.id, e.target.value)}
-                                className="w-full rounded-md border border-paper-200 px-2 py-1.5 text-xs"
-                              >
-                                {ITEM_MASTER.map((im) => (
-                                  <option key={im.code} value={im.code}>
-                                    {im.code}
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={line.itemCode}
+                                  onChange={(e) => setItemCode(line.id, e.target.value)}
+                                  className="w-full rounded-md border border-paper-200 px-2 py-1.5 text-xs"
+                                >
+                                  {ITEM_MASTER.map((im) => (
+                                    <option key={im.code} value={im.code}>
+                                      {im.code}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  title="Build a custom specification"
+                                  onClick={() => setSpecBuilderLineId(line.id)}
+                                  className="flex shrink-0 items-center gap-1 rounded-md border border-paper-200 px-2 py-1.5 text-xs text-paper-500 hover:border-manifest-500 hover:text-manifest-700"
+                                >
+                                  <Wand2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </Field>
+                            {line.specificationOverride ? (
+                              <div className="mt-1.5 flex items-start justify-between gap-2 rounded-md bg-manifest-50 px-2 py-1.5">
+                                <p className="text-[11px] leading-tight text-manifest-900">{line.specificationOverride}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => patchLine(line.id, { specificationOverride: undefined })}
+                                  className="shrink-0 text-[10px] font-medium text-manifest-600 hover:text-manifest-900"
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="mt-1.5 text-[11px] text-paper-400">
+                                Default: {item.meshDepth}, {item.color}
+                              </p>
+                            )}
                           </div>
                           <Field label="Qty (pcs)">
                             <input
@@ -459,10 +491,21 @@ export function NewQuotation() {
               "MOQ and lead-time defaults per item family are not yet finalized with the factory.",
               "Should freight be entered manually per quotation or pulled from a shipping-line rate table?",
               "Given Price/kg, labor, wastage, and twine defaults are catalog placeholders — factory costing to confirm actual figures per spec.",
+              "Build Specification (wand icon) composes a spec string from the export description-flow option set, but still prices off the selected catalog row's Given Price/kg — a custom-built spec with its own base cost isn't modeled yet.",
             ]}
           />
         </div>
       </div>
+
+      <SpecBuilderModal
+        open={specBuilderLineId !== null}
+        onClose={() => setSpecBuilderLineId(null)}
+        initial={lines.find((l) => l.id === specBuilderLineId)?.specificationOverride}
+        onApply={(spec) => {
+          if (specBuilderLineId) patchLine(specBuilderLineId, { specificationOverride: spec });
+          setSpecBuilderLineId(null);
+        }}
+      />
     </div>
   );
 }

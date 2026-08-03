@@ -8,6 +8,10 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
   const total = subtotal + q.freight - q.discount + q.tax;
   const deposit = total * (q.depositPercent / 100);
   const balance = total - deposit;
+  // The export client master shows PIs actually go out under one of two legal entities depending
+  // on the account, not a single fixed name — falls back to the historical default when a customer
+  // record has no letterhead set (e.g. seed customers predating this field).
+  const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
 
   return (
     <div className="overflow-x-auto">
@@ -19,7 +23,9 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
             <img src={fntLogo} alt="Fortune Net & Twine" className="h-14 w-14 object-contain" />
             <div>
               <p className="text-[15px] font-bold leading-tight text-pine-900">
-                Fortune Net &amp; Twine Manufacturing Corp.
+                {issuingEntity === "NETTEX MFG. AND EXPORT CORP."
+                  ? "Nettex Mfg. and Export Corp."
+                  : "Fortune Net & Twine Manufacturing Corp."}
               </p>
               <p className="text-[11px] leading-tight text-paper-500">
                 70 D. Bonifacio St., Bo. Canumay, Valenzuela, Metro Manila, Philippines

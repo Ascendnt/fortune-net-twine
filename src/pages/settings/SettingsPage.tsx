@@ -28,8 +28,13 @@ export function SettingsPage() {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Company Profile" eyebrow="Static" />
-          <KeyValue label="Legal name" value="Fortune Net & Twine Manufacturing Corp." />
+          <CardHeader
+            title="Company Profile"
+            eyebrow="Static"
+            subtitle="The export client master shows PIs/CIs actually issue under one of two entities, chosen per customer — not a single fixed name."
+          />
+          <KeyValue label="Issuing entity A" value="Fortune Net & Twine Manufacturing Corp." />
+          <KeyValue label="Issuing entity B" value="Nettex Mfg. and Export Corp." />
           <KeyValue label="Plant" value="70 D. Bonifacio St., Bo. Canumay, Valenzuela" />
           <KeyValue label="Office" value="42 Sto. Domingo St., Quezon City" />
           <KeyValue label="Default Incoterm" value="FOB Manila" />
@@ -140,6 +145,8 @@ export function SettingsPage() {
             "Real authentication, SSO, and per-role permission enforcement are not part of this prototype — the role switcher only changes what's visible for demonstration.",
             "Pricing rules and lookup tables are now editable data (rate, enabled, lookup values) — adding or removing whole rule/lookup rows is the next increment once the factory confirms which adjustment types are actually in play.",
             "Deposit %, approval thresholds, and discount limits are still per-quotation fields; centralizing their defaults here is pending discovery.",
+            "Customers now include the real export client master (~50 accounts) with a per-customer \"letterhead\" field driving which entity issues the PI/CI — need to confirm this two-entity split with the business rather than the assumption baked in here.",
+            "Shipment and Validity are still free-text/numeric fields; the client master's standard phrasing (SHIPMENT_TERM_OPTIONS / VALIDITY_TERM_OPTIONS in mockData.ts) isn't wired into the quotation form yet.",
           ]}
         />
       </div>
