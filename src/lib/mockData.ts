@@ -2,6 +2,8 @@ import type {
   RoleInfo,
   Customer,
   ItemMaster,
+  LookupTable,
+  PricingRule,
   Quotation,
   SalesOrder,
   PaymentRecord,
@@ -175,13 +177,61 @@ export const CUSTOMERS: Customer[] = [
 ];
 
 export const ITEM_MASTER: ItemMaster[] = [
-  { code: "NET-120-210-22-350", description: "No.120(210/22x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/22x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 3498.37, unitWeightKg: 241.5 },
-  { code: "NET-96-210-20-350", description: "No.96(210/20x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/20x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 3299.99, unitWeightKg: 227.9 },
-  { code: "NET-84-210-16-350", description: "No.84(210/16x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/16x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 2387.03, unitWeightKg: 164.85 },
-  { code: "NET-72-210-14-350", description: "No.72(210/14x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/14x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 2080.78, unitWeightKg: 143.7 },
-  { code: "NET-42-250-08-8IN", description: "No.42(250/08x16) 8\" Hi-Ex Braided Net", material: "Hi-Ex", plySize: "250D/08x16", meshSize: "8\"", meshDepth: "50md x 120fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 936.33, unitWeightKg: 33.9 },
-  { code: "NET-96-250-20-5IN", description: "No.96(250/20x16) 5\" Hi-Ex Braided Net", material: "Hi-Ex", plySize: "250D/20x16", meshSize: "5\"", meshDepth: "15md x 120fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 1063.98, unitWeightKg: 38.55 },
-  { code: "TWINE-HEX-TARRED", description: "H-Ex Lacing Twine, Tarred", material: "Hi-Ex", plySize: "—", meshSize: "—", meshDepth: "—", color: "Tarred", uom: "KGS", unitPrice: 6.64, unitWeightKg: 1 },
+  { code: "NET-120-210-22-350", description: "No.120(210/22x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/22x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 3498.37, unitWeightKg: 241.5, givenPriceKg: 11.60, defaultLaborHours: 1.4, defaultLaborRate: 2.75, defaultWastageKg: 4.8, defaultTwineKg: 0.9, defaultTwineRate: 6.64 },
+  { code: "NET-96-210-20-350", description: "No.96(210/20x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/20x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 3299.99, unitWeightKg: 227.9, givenPriceKg: 11.30, defaultLaborHours: 1.3, defaultLaborRate: 2.75, defaultWastageKg: 4.5, defaultTwineKg: 0.85, defaultTwineRate: 6.64 },
+  { code: "NET-84-210-16-350", description: "No.84(210/16x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/16x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 2387.03, unitWeightKg: 164.85, givenPriceKg: 11.00, defaultLaborHours: 1.1, defaultLaborRate: 2.75, defaultWastageKg: 3.3, defaultTwineKg: 0.7, defaultTwineRate: 6.64 },
+  { code: "NET-72-210-14-350", description: "No.72(210/14x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/14x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 2080.78, unitWeightKg: 143.7, givenPriceKg: 10.80, defaultLaborHours: 1.0, defaultLaborRate: 2.75, defaultWastageKg: 2.9, defaultTwineKg: 0.6, defaultTwineRate: 6.64 },
+  { code: "NET-42-250-08-8IN", description: "No.42(250/08x16) 8\" Hi-Ex Braided Net", material: "Hi-Ex", plySize: "250D/08x16", meshSize: "8\"", meshDepth: "50md x 120fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 936.33, unitWeightKg: 33.9, givenPriceKg: 14.50, defaultLaborHours: 0.6, defaultLaborRate: 2.75, defaultWastageKg: 0.7, defaultTwineKg: 0.3, defaultTwineRate: 6.64 },
+  { code: "NET-96-250-20-5IN", description: "No.96(250/20x16) 5\" Hi-Ex Braided Net", material: "Hi-Ex", plySize: "250D/20x16", meshSize: "5\"", meshDepth: "15md x 120fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 1063.98, unitWeightKg: 38.55, givenPriceKg: 14.00, defaultLaborHours: 0.65, defaultLaborRate: 2.75, defaultWastageKg: 0.8, defaultTwineKg: 0.32, defaultTwineRate: 6.64 },
+  { code: "TWINE-HEX-TARRED", description: "H-Ex Lacing Twine, Tarred", material: "Hi-Ex", plySize: "—", meshSize: "—", meshDepth: "—", color: "Tarred", uom: "KGS", unitPrice: 6.64, unitWeightKg: 1, givenPriceKg: 5.10, defaultLaborHours: 0, defaultLaborRate: 0, defaultWastageKg: 0, defaultTwineKg: 0, defaultTwineRate: 0 },
+];
+
+// -------------------------------------------------------------------------
+// Pricing rule engine — lookup tables and rule chain (Part A/C of the
+// discovery doc). MD/DW/Insurance rows reuse the doc's own verified figures
+// (122md -> +3.50, +10.00, net -> +0.66) so the engine is traceable back to
+// the original simulation. Editable from Settings -> Pricing Rules.
+// -------------------------------------------------------------------------
+export const LOOKUP_TABLES: LookupTable[] = [
+  {
+    id: "lt_md",
+    name: "Mesh Depth (MD) rate",
+    rows: [
+      { key: "122", value: 3.5 },
+      { key: "50", value: 1.2 },
+      { key: "15", value: 0.6 },
+      { key: "default", value: 0 },
+    ],
+  },
+  {
+    id: "lt_dw",
+    name: "Depth-Way (float length) rate",
+    rows: [
+      { key: "50", value: 10.0 },
+      { key: "120", value: 6.5 },
+      { key: "default", value: 0 },
+    ],
+  },
+  {
+    id: "lt_ins",
+    name: "Insurance rate (by category)",
+    rows: [
+      { key: "net", value: 0.66 },
+      { key: "twine", value: 0.18 },
+      { key: "default", value: 0 },
+    ],
+  },
+];
+
+export const PRICING_RULES: PricingRule[] = [
+  { id: "r_comm", code: "COMMISSION", label: "Commission", operation: "add", basis: "percent_of_result", rate: 3, sequence: 1, enabled: true },
+  { id: "r_markup", code: "PERCENTAGE", label: "Markup", operation: "add", basis: "percent_of_base", rate: 5, sequence: 2, enabled: true },
+  { id: "r_discount", code: "PERCENTAGE", label: "Discount", operation: "subtract", basis: "percent_of_base", rate: 5, sequence: 3, enabled: false },
+  { id: "r_surcharge", code: "AMOUNT", label: "Flat surcharge", operation: "add", basis: "flat_amount", rate: 0.1, sequence: 4, enabled: false },
+  { id: "r_deduction", code: "AMOUNT", label: "Flat deduction", operation: "subtract", basis: "flat_amount", rate: 0.2, sequence: 5, enabled: false },
+  { id: "r_md", code: "MD_COMPUTATION", label: "Mesh Depth adjustment", operation: "add", basis: "lookup_table", rate: 0, lookupTableId: "lt_md", sequence: 6, enabled: true },
+  { id: "r_dw", code: "DW_COMPUTATION", label: "Depth-Way adjustment", operation: "add", basis: "lookup_table", rate: 0, lookupTableId: "lt_dw", sequence: 7, enabled: true },
+  { id: "r_ins", code: "INSURANCE", label: "Insurance", operation: "add", basis: "lookup_table", rate: 0, lookupTableId: "lt_ins", sequence: 8, enabled: true },
 ];
 
 // -------------------------------------------------------------------------

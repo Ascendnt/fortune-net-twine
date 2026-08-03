@@ -20,7 +20,7 @@ const toneClass = {
 export function ToastStack() {
   const { toasts, dismissToast } = useStore();
   return (
-    <div className="fixed bottom-5 right-5 z-[100] flex w-80 flex-col gap-2 no-print">
+    <div className="fixed bottom-5 right-5 left-5 z-[100] flex w-auto max-w-80 flex-col gap-2 no-print sm:left-auto">
       {toasts.map((t) => {
         const Icon = toneIcon[t.tone];
         return (

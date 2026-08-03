@@ -47,8 +47,72 @@ export interface ItemMaster {
   meshDepth: string;
   color: string;
   uom: "PCS" | "KGS";
-  unitPrice: number;
+  unitPrice: number; // last quoted / reference sell price — historical PIs keep using this as-is
   unitWeightKg: number;
+  // ---- Pricing engine inputs (Part A/C of the discovery doc: rules read this as their P0/base) ----
+  givenPriceKg: number; // "Given Price" per kg — base value the pricing rule chain starts from
+  defaultLaborHours: number;
+  defaultLaborRate: number;
+  defaultWastageKg: number;
+  defaultTwineKg: number;
+  defaultTwineRate: number;
+}
+
+// ---------- Pricing rule engine ----------
+// Rules are data, not hardcoded types (Part C recommendation #1) — each rule declares its own
+// "basis" explicitly instead of leaving of-base vs of-result implied by a label, which is what
+// made COMMISSION and PERCENTAGE easy to confuse in the original build.
+
+export type PricingRuleOperation = "add" | "subtract";
+export type PricingRuleBasis = "percent_of_base" | "percent_of_result" | "flat_amount" | "lookup_table";
+
+export interface PricingRule {
+  id: string;
+  code: string;
+  label: string;
+  operation: PricingRuleOperation;
+  basis: PricingRuleBasis;
+  rate: number; // used when basis is percent_of_base / percent_of_result / flat_amount
+  lookupTableId?: string; // used when basis is lookup_table
+  sequence: number; // chain order — each rule's output feeds the next rule's input
+  enabled: boolean; // available to be applied to a line; disabling retires a rule without deleting history
+}
+
+export interface LookupTableRow {
+  key: string;
+  value: number;
+}
+
+export interface LookupTable {
+  id: string;
+  name: string;
+  rows: LookupTableRow[];
+}
+
+export interface PricingChainStep {
+  ruleId: string;
+  code: string;
+  label: string;
+  before: number;
+  after: number;
+}
+
+// Snapshot of how a line's unit price was built — kept alongside the line so margin can be
+// reviewed later without recomputing, and so the customer-facing PI/CI never needs to show it.
+export interface LinePricing {
+  givenPriceKg: number;
+  appliedRuleIds: string[];
+  laborHours: number;
+  laborRate: number;
+  wastageKg: number;
+  twineKg: number;
+  twineRate: number;
+  chain: PricingChainStep[];
+  newPriceKg: number;
+  pricePerPiece: number;
+  laborCost: number;
+  wastageCost: number;
+  twineCost: number;
 }
 
 // ---------- Quotation / Proforma Invoice ----------
@@ -74,6 +138,12 @@ export interface QuotationLineItem {
   unitPrice: number;
   weightKg: number;
   totalPrice: number;
+  // Present when the line was built through the pricing rule engine (Step 2 onward in NewQuotation).
+  // Older/seed lines have no pricing snapshot and keep using unitPrice/totalPrice as authored.
+  pricing?: LinePricing;
+  // Set once a Commercial Invoice is generated against actual shipped quantity, which may differ
+  // from the quoted qtyPcs on partial shipments (Part B, field mapping: Qty -> Shipped Qty).
+  shippedQtyPcs?: number;
 }
 
 export interface QuotationRevision {

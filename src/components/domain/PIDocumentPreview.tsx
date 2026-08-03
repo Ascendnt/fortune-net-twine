@@ -10,9 +10,10 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
   const balance = total - deposit;
 
   return (
-    <div className="relative mx-auto max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:shadow-none">
-      <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40" />
-      <div className="relative">
+    <div className="overflow-x-auto">
+      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:shadow-none">
+        <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40" />
+        <div className="relative">
         <div className="flex items-start justify-between border-b-2 border-pine-800 pb-4">
           <div className="flex items-center gap-3">
             <img src={fntLogo} alt="Fortune Net & Twine" className="h-14 w-14 object-contain" />
@@ -118,6 +119,7 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
             <p className="border-t border-paper-300 pt-1">{q.approver ?? "—"}</p>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

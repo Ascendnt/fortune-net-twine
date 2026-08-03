@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fortune Net &amp; Twine — Quotation to Invoice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F6F2E7;
+    --paper-raised:#FFFDF8;
+    --ink:#1B2A33;
+    --ink-soft:#4A5A63;
+    --net:#2F6F62;
+    --net-dark:#205046;
+    --rope:#B98849;
+    --rope-dark:#8F6633;
+    --rust:#B5482E;
+    --line:#DAD2BC;
+    --line-strong:#C2B896;
+    --radius:3px;
+    --shadow:0 1px 0 rgba(27,42,51,0.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  a{color:var(--net);}
+
+  /* ---------- App shell ---------- */
+  .app{display:flex; min-height:100vh;}
+  .rail{
+    width:236px; flex-shrink:0;
+    background:var(--ink);
+    color:var(--paper);
+    padding:24px 0;
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .rail-brand{
+    padding:0 20px 20px 20px;
+    border-bottom:1px solid rgba(246,242,231,0.14);
+    margin-bottom:18px;
+  }
+  .rail-brand .mark{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700; font-size:15px; letter-spacing:0.02em;
+    color:var(--paper);
+  }
+  .rail-brand .sub{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--rope); margin-top:4px;
+  }
+  .rail-steps{list-style:none; margin:0; padding:0;}
+  .rail-step{
+    display:flex; align-items:flex-start; gap:10px; width:100%;
+    padding:11px 20px; cursor:pointer;
+    border-left:3px solid transparent; border-top:none; border-right:none; border-bottom:none;
+    background:transparent; font-family:'Inter',sans-serif; text-align:left;
+    font-size:13px; color:rgba(246,242,231,0.68);
+    transition:background .12s ease, color .12s ease;
+  }
+  .rail-step:hover{background:rgba(246,242,231,0.06); color:var(--paper);}
+  .rail-step:focus-visible{outline:2px solid var(--rope); outline-offset:-2px;}
+  .rail-step.active{
+    border-left-color:var(--rope);
+    background:rgba(185,136,73,0.14);
+    color:var(--paper);
+  }
+  .rail-step .num{
+    font-family:'IBM Plex Mono',monospace; font-size:11px;
+    width:18px; flex-shrink:0; padding-top:1px;
+    color:var(--rope);
+  }
+  .rail-step .lbl{display:flex; flex-direction:column;}
+  .rail-step .lbl b{font-weight:600; font-size:12.5px;}
+  .rail-step .lbl small{font-size:10.5px; color:rgba(246,242,231,0.45); margin-top:1px;}
+
+  .rail-foot{
+    margin-top:22px; padding:14px 20px 0 20px;
+    border-top:1px solid rgba(246,242,231,0.14);
+    font-size:11px; color:rgba(246,242,231,0.4);
+  }
+
+  .main{flex:1; min-width:0; padding:32px 40px 80px;}
+  .section{display:none; max-width:1180px; margin:0 auto;}
+  .section.active{display:block;}
+
+  .page-head{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; gap:20px; flex-wrap:wrap;}
+  .page-head h1{
+    font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:600;
+    margin:0 0 4px 0; letter-spacing:-0.01em;
+  }
+  .page-head .eyebrow{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--net-dark); margin-bottom:6px; display:block;
+  }
+  .page-head p{margin:0; color:var(--ink-soft); font-size:13px; max-width:520px;}
+
+  /* ---------- Cards / tables ---------- */
+  .card{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px 22px;
+    margin-bottom:20px;
+    box-shadow:var(--shadow);
+  }
+  .card-title{
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--line);
+  }
+  .card-title .hint{font-family:'Inter'; font-weight:400; font-size:11.5px; color:var(--ink-soft);}
+
+  .grid{display:grid; gap:12px 16px;}
+  .grid.cols-2{grid-template-columns:1fr 1fr;}
+  .grid.cols-3{grid-template-columns:1fr 1fr 1fr;}
+  .grid.cols-4{grid-template-columns:1fr 1fr 1fr 1fr;}
+
+  label{display:block; font-size:11px; font-weight:600; color:var(--ink-soft); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.04em;}
+  input[type=text],input[type=number],input[type=date],select,textarea{
+    width:100%; padding:7px 9px; border:1px solid var(--line-strong); border-radius:var(--radius);
+    background:#fff; color:var(--ink); font-family:'Inter',sans-serif; font-size:13px;
+  }
+  input.mono-field, .mono-field{font-family:'IBM Plex Mono',monospace;}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--net); outline-offset:1px; border-color:var(--net);}
+  textarea{resize:vertical; min-height:44px;}
+  .field{margin-bottom:2px;}
+  .fixed-field{
+    padding:7px 9px; background:var(--paper); border:1px dashed var(--line-strong); border-radius:var(--radius);
+    color:var(--ink-soft); font-size:13px;
+  }
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{
+    text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.05em;
+    text-transform:uppercase; color:var(--ink-soft); font-weight:500;
+    padding:6px 8px; border-bottom:1px solid var(--line-strong); white-space:nowrap;
+  }
+  td{padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  td input,td select{padding:5px 7px; font-size:12.5px;}
+  .num{text-align:right; font-family:'IBM Plex Mono',monospace;}
+  .tbl-wrap{overflow-x:auto;}
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px;
+    padding:8px 14px; border-radius:var(--radius); border:1px solid transparent;
+    cursor:pointer; transition:opacity .12s ease, transform .05s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn:focus-visible,.chip:focus-within,.btn-ghost:focus-visible{outline:2px solid var(--net); outline-offset:2px;}
+  .btn-primary{background:var(--net); color:#fff;}
+  .btn-primary:hover{background:var(--net-dark);}
+  .btn-secondary{background:transparent; color:var(--ink); border-color:var(--line-strong);}
+  .btn-secondary:hover{background:var(--paper);}
+  .btn-rope{background:var(--rope); color:#fff;}
+  .btn-rope:hover{background:var(--rope-dark);}
+  .btn-ghost{background:transparent; color:var(--ink-soft); border:none; padding:8px 10px; min-width:32px; min-height:32px; border-radius:var(--radius);}
+  .btn-ghost:hover{color:var(--rust);}
+  .btn-danger{background:transparent; color:var(--rust); border-color:var(--rust);}
+  .btn-danger:hover{background:var(--rust); color:#fff;}
+  .btn[disabled]{opacity:0.4; cursor:not-allowed;}
+  .btn-row{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;}
+
+  /* ---------- Stamp (signature element) ---------- */
+  .stamp{
+    display:inline-block; font-family:'Space Grotesk',sans-serif; font-weight:700;
+    font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    padding:5px 12px; border:2px solid currentColor; border-radius:2px;
+    transform:rotate(-3deg); white-space:nowrap;
+  }
+  .stamp-draft{color:var(--ink-soft);}
+  .stamp-sent{color:var(--net-dark);}
+  .stamp-accepted{color:var(--net);}
+  .stamp-declined{color:var(--rust);}
+  .stamp-converted{color:var(--rope-dark);}
+  .stamp-paid{color:var(--net);}
+  .stamp-partial{color:var(--rope-dark);}
+  .stamp-closed{color:var(--ink-soft);}
+
+  /* ---------- Misc ---------- */
+  .divider{height:1px; background:var(--line); margin:18px 0;}
+  .muted{color:var(--ink-soft);}
+  .small{font-size:11.5px;}
+  .totals-row{display:flex; justify-content:flex-end; gap:34px; padding-top:12px; margin-top:6px; border-top:1px solid var(--line-strong);}
+  .totals-row .item{text-align:right;}
+  .totals-row .item .k{font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); display:block; margin-bottom:2px;}
+  .totals-row .item .v{font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:600;}
+  .totals-row .item.grand .v{color:var(--net);}
+
+  .chip-row{display:flex; flex-wrap:wrap; gap:6px;}
+  .chip{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:5px 9px; border:1px solid var(--line-strong); border-radius:20px;
+    font-size:11.5px; cursor:pointer; background:#fff; color:var(--ink-soft);
+  }
+  .chip input{margin:0; width:auto;}
+  .chip.on{background:var(--net); border-color:var(--net); color:#fff;}
+
+  .callout{
+    background:var(--paper); border:1px dashed var(--line-strong); border-radius:var(--radius);
+    padding:12px 14px; font-size:12.5px; color:var(--ink-soft); margin-bottom:16px;
+  }
+  .callout b{color:var(--ink);}
+  .callout.warn{border-color:var(--rust); color:var(--rust); background:#FBEDEA;}
+
+  .line-block{
+    border:1px solid var(--line); border-radius:var(--radius); margin-bottom:14px; overflow:hidden;
+  }
+  .line-block-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 14px; background:var(--paper); border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:0.03em;
+  }
+  .line-block-body{padding:14px;}
+  .line-breakdown{
+    margin-top:12px; padding-top:12px; border-top:1px dashed var(--line-strong);
+    display:grid; grid-template-columns:repeat(6,1fr); gap:10px;
+  }
+  .line-breakdown .cell .k{display:block; font-size:9.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-soft); margin-bottom:2px;}
+  .line-breakdown .cell .v{font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600;}
+  .line-breakdown .cell.up .v{color:var(--net);}
+  .line-breakdown .cell.amt .v{color:var(--rope-dark);}
+
+  ::-webkit-scrollbar{height:8px; width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--line-strong); border-radius:4px;}
+
+  @media print{
+    .rail, .no-print{display:none !important;}
+    .main{padding:0;}
+    .section{display:none !important; max-width:none;}
+    .section.print-target{display:block !important;}
+    body{background:#fff;}
+    .card{box-shadow:none; border-color:#999;}
+  }
+
+  @media (max-width: 880px){
+    .app{flex-direction:column;}
+    .rail{position:relative; width:100%; height:auto;}
+    .main{padding:20px;}
+    .grid.cols-2,.grid.cols-3,.grid.cols-4{grid-template-columns:1fr 1fr;}
+    .line-breakdown{grid-template-columns:repeat(3,1fr);}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <nav class="rail no-print">
+    <div class="rail-brand">
+      <div class="mark">FORTUNE NET &amp; TWINE</div>
+      <div class="sub">Export Documents</div>
+    </div>
+    <ul class="rail-steps" id="railSteps">
+      <li><button type="button" class="rail-step" data-section="rules"><span class="num">01</span><span class="lbl"><b>Rules &amp; Catalog</b><small>Pricing engine, lookups, specs</small></span></button></li>
+      <li><button type="button" class="rail-step" data-section="quotation"><span class="num">02</span><span class="lbl"><b>Quotation</b><small>Header, line items, totals</small></span></button></li>
+      <li><button type="button" class="rail-step" data-section="invoice"><span class="num">03</span><span class="lbl"><b>Convert &amp; Invoice</b><small>Shipped qty, tax, payments</small></span></button></li>
+    </ul>
+    <div class="rail-foot">Prototype — in-memory session data.<br>No values leave this page.</div>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ SECTION 1: RULES & CATALOG ============ -->
+    <section class="section" id="sec-rules">
+      <div class="page-head">
+        <div>
+          <span class="eyebrow">Configuration</span>
+          <h1>Pricing rules &amp; specification catalog</h1>
+          <p>Rules are data, not code — add, reorder, or retune any adjustment without touching the computation engine. This replaces the hardcoded COMMISSION/PERCENTAGE/MD/DW/INSURANCE types from the original build.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Pricing rules <span class="hint">Applied in Sequence order, each using the previous result as its input</span></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Seq</th><th>Code</th><th>Label</th><th>Operation</th><th>Basis</th><th>Rate / Reference</th><th>Enabled</th><th></th>
+            </tr></thead>
+            <tbody id="rulesTbody"></tbody>
+          </table>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="addRuleBtn">+ Add rule</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Lookup tables <span class="hint">Referenced by rules with basis = lookup_table — editable by non-developers</span></div>
+        <div id="lookupTablesWrap"></div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="addLookupTableBtn">+ Add lookup table</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Specification catalog <span class="hint">Pre-loaded specs by code — used to auto-fill line items</span></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Code</th><th>Twine</th><th>Mesh Size</th><th>Mesh Depth</th><th>Length</th><th id="thWeight">Weight/PC (kg)</th><th></th>
+            </tr></thead>
+            <tbody id="catalogTbody"></tbody>
+          </table>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="addCatalogBtn">+ Add specification</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Units <span class="hint">Generalize away from the hardcoded KG / per-hour assumption</span></div>
+        <div class="grid cols-3">
+          <div class="field"><label>Weight unit</label><input type="text" id="uWeight" class="mono-field"></div>
+          <div class="field"><label>Labor rate unit</label><input type="text" id="uLabor" class="mono-field"></div>
+          <div class="field"><label>Base currency</label><input type="text" id="uCurrency" class="mono-field"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SECTION 2: QUOTATION ============ -->
+    <section class="section" id="sec-quotation">
+      <div class="page-head">
+        <div>
+          <span class="eyebrow">Step 02</span>
+          <h1>Quotation</h1>
+          <p>Company is fixed to the logged-in account. Everything else — customer, line items, applied pricing rules — is editable per quotation.</p>
+        </div>
+        <span class="stamp" id="quoteStamp"></span>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Document header</div>
+        <div class="grid cols-3" style="margin-bottom:12px;">
+          <div class="field"><label>Company</label><div class="fixed-field">Fortune Net &amp; Twine Mfg. Corp.</div></div>
+          <div class="field"><label>Quotation No.</label><div class="fixed-field mono-field" id="quoteIdDisplay"></div></div>
+          <div class="field"><label>Date</label><div class="fixed-field mono-field" id="quoteDateDisplay"></div></div>
+        </div>
+        <div class="grid cols-2">
+          <div class="field"><label>Customer code / description</label><input type="text" id="qCustomer" placeholder="e.g. Bluewater Fisheries Co."></div>
+          <div class="field"><label>Attn / Messrs</label><input type="text" id="qAttn"></div>
+          <div class="field" style="grid-column:1 / -1;"><label>Address</label><input type="text" id="qAddress"></div>
+          <div class="field"><label>Shipment</label><input type="text" id="qShipment" placeholder="e.g. FOB Manila, 45 days"></div>
+          <div class="field"><label>Payment terms</label><input type="text" id="qPayment" placeholder="e.g. 30% down / 70% before shipment, 30 days"></div>
+          <div class="field"><label>Validity</label><input type="text" id="qValidity" placeholder="e.g. 30 days from quote date"></div>
+          <div class="field"><label>Remarks</label><textarea id="qRemarks"></textarea></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Line items <span class="hint">Batch Group → Item → Specification</span></div>
+        <div id="linesWrap"></div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="addLineBtn">+ Add line</button>
+        </div>
+        <div class="totals-row">
+          <div class="item"><span class="k" id="uWeightLbl2">Total weight</span><span class="v" id="totWeight">0.00</span></div>
+          <div class="item grand"><span class="k">Grand total</span><span class="v" id="totGrand">0.00</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Status</div>
+        <p class="muted small" style="margin-top:0;">Inquiry → Draft → Internal review → Send → Customer decision → PO → Sales order → Production → Delivery → Invoice. This tool models the draft-through-decision steps; production/shipment are external.</p>
+        <div class="btn-row">
+          <button class="btn btn-secondary" data-set-status="draft">Mark Draft</button>
+          <button class="btn btn-primary" data-set-status="sent">Send Quotation</button>
+          <button class="btn btn-rope" data-set-status="accepted">Customer Accepted</button>
+          <button class="btn btn-danger" data-set-status="declined">Customer Declined</button>
+          <button class="btn btn-secondary" id="printQuoteBtn">Export / Print PDF</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SECTION 3: INVOICE ============ -->
+    <section class="section" id="sec-invoice">
+      <div class="page-head">
+        <div>
+          <span class="eyebrow">Step 03</span>
+          <h1>Convert &amp; invoice</h1>
+          <p>Freezes the quotation's specs and unit price, then recalculates on actual shipped quantity — the gap the original build had no module for.</p>
+        </div>
+        <span class="stamp" id="invStampHeader" style="display:none;"></span>
+      </div>
+
+      <div id="noInvoiceState" class="card">
+        <div class="card-title">Convert this quotation to an invoice</div>
+        <p class="muted">Source: <span class="mono-field" id="convSourceId"></span> — <span id="convLineCount"></span> line item(s), grand total <span id="convGrandTotal" class="mono-field"></span>.</p>
+        <div class="callout" id="convWarn" style="display:none;">Add at least one line item to the quotation before converting.</div>
+        <button class="btn btn-primary" id="convertBtn">Convert to Invoice</button>
+      </div>
+
+      <div id="invoiceState" style="display:none;">
+        <div class="card">
+          <div class="card-title">Invoice header</div>
+          <div class="grid cols-3" style="margin-bottom:12px;">
+            <div class="field"><label>Invoice No.</label><div class="fixed-field mono-field" id="invId"></div></div>
+            <div class="field"><label>Invoice date</label><input type="date" id="invDate"></div>
+            <div class="field"><label>Due date</label><input type="date" id="invDueDate"></div>
+          </div>
+          <div class="grid cols-3">
+            <div class="field"><label>Currency</label><input type="text" id="invCurrency" class="mono-field"></div>
+            <div class="field"><label>Exchange rate</label><input type="number" step="0.0001" id="invExRate" class="mono-field"></div>
+            <div class="field"><label>Tax / VAT %</label><input type="number" step="0.01" id="invTaxRate" class="mono-field"></div>
+          </div>
+          <div class="field" style="margin-top:12px;"><label>Bank details</label><textarea id="invBank" placeholder="Beneficiary bank, account no., SWIFT..."></textarea></div>
+          <p class="small muted" id="dueDateHint" style="margin-top:8px;"></p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Invoice lines <span class="hint">Spec and U/P are frozen from the quotation — only Shipped Qty is editable</span></div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>Spec</th><th>Batch</th><th class="num">Quoted Qty</th><th class="num">Shipped Qty</th><th class="num">U/P (frozen)</th><th class="num">Amount</th>
+              </tr></thead>
+              <tbody id="invoiceLinesTbody"></tbody>
+            </table>
+          </div>
+          <div class="totals-row">
+            <div class="item"><span class="k">Subtotal</span><span class="v" id="invSubtotal">0.00</span></div>
+            <div class="item"><span class="k">Tax</span><span class="v" id="invTaxAmt">0.00</span></div>
+            <div class="item grand"><span class="k">Grand total</span><span class="v" id="invGrandTotal">0.00</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Payments <span class="hint">Balance due updates the invoice status automatically</span></div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Amount</th><th>Note</th><th></th></tr></thead>
+              <tbody id="paymentsTbody"></tbody>
+            </table>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="addPaymentBtn">+ Log payment</button>
+          </div>
+          <div class="totals-row">
+            <div class="item"><span class="k">Paid to date</span><span class="v" id="paidToDate">0.00</span></div>
+            <div class="item grand"><span class="k">Balance due</span><span class="v" id="balanceDue">0.00</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Status</div>
+          <div class="btn-row">
+            <button class="btn btn-secondary" data-set-inv-status="draft">Mark Draft</button>
+            <button class="btn btn-primary" data-set-inv-status="sent">Send Invoice</button>
+            <button class="btn btn-danger" data-set-inv-status="closed">Close Invoice</button>
+            <button class="btn btn-secondary" id="printInvoiceBtn">Export / Print PDF</button>
+          </div>
+          <p class="small muted" style="margin-top:10px;">Partially Paid / Paid are set automatically from logged payments vs. balance due.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------------------------------------------------------
+  // STATE — everything downstream reads from here. Rules, lookup
+  // tables and the catalog are data, so the computation engine never
+  // needs to change when the business adds a new adjustment type.
+  // ---------------------------------------------------------------
+  let uid = 1;
+  const nextId = (p) => (p || 'id') + '_' + (uid++);
+
+  const state = {
+    activeSection: 'rules',
+    units: { weight: 'KG', labor: 'per Hour', currency: 'USD' },
+
+    lookupTables: [
+      { id:'lt_md', name:'Mesh Depth (MD)', rows:[
+        {key:'100', value:2.00},{key:'122', value:3.50},{key:'150', value:5.00}
+      ]},
+      { id:'lt_dw', name:'Depth-Way (DW)', rows:[
+        {key:'standard', value:10.00},{key:'reinforced', value:15.00}
+      ]},
+      { id:'lt_ins', name:'Insurance (by category/weight)', rows:[
+        {key:'default', value:0.66},{key:'high-value', value:1.20}
+      ]}
+    ],
+
+    pricingRules: [
+      { id:'r_comm',   code:'COMMISSION',    label:'Commission',        operation:'add',      basis:'percent_of_result', rate:3,    lookupTableId:null,  sequence:1, enabled:true  },
+      { id:'r_pctadd', code:'PERCENTAGE',    label:'Markup %',          operation:'add',      basis:'percent_of_base',   rate:5,    lookupTableId:null,  sequence:2, enabled:true  },
+      { id:'r_pctsub', code:'PERCENTAGE',    label:'Discount %',        operation:'subtract', basis:'percent_of_base',   rate:5,    lookupTableId:null,  sequence:3, enabled:false },
+      { id:'r_amtadd', code:'AMOUNT',        label:'Flat surcharge',    operation:'add',      basis:'flat_amount',       rate:0.10, lookupTableId:null,  sequence:4, enabled:false },
+      { id:'r_amtsub', code:'AMOUNT',        label:'Flat deduction',    operation:'subtract', basis:'flat_amount',       rate:0.20, lookupTableId:null,  sequence:5, enabled:false },
+      { id:'r_md',     code:'MD_COMPUTATION',label:'Mesh Depth adj.',   operation:'add',      basis:'lookup_table',      rate:0,    lookupTableId:'lt_md', lookupKey:'122', sequence:6, enabled:false },
+      { id:'r_dw',     code:'DW_COMPUTATION',label:'Depth-Way adj.',    operation:'add',      basis:'lookup_table',      rate:0,    lookupTableId:'lt_dw', lookupKey:'standard', sequence:7, enabled:false },
+      { id:'r_ins',    code:'INSURANCE',     label:'Insurance',         operation:'add',      basis:'lookup_table',      rate:0,    lookupTableId:'lt_ins', lookupKey:'default', sequence:8, enabled:false }
+    ],
+
+    catalog: [
+      { code:'N-1595', twine:'PE 210D/36', meshSize:'2.0"', meshDepth:'122', length:'50m', weightPerPc:1.85 },
+      { code:'N-2210', twine:'PE 210D/48', meshSize:'2.5"', meshDepth:'150', length:'50m', weightPerPc:2.40 },
+      { code:'N-0880', twine:'PE 210D/24', meshSize:'1.5"', meshDepth:'100', length:'50m', weightPerPc:1.15 }
+    ],
+
+    quotation: {
+      id: 'Q-2026-0001',
+      date: new Date().toISOString().slice(0,10),
+      status: 'draft',
+      header: { customer:'', attn:'', address:'', shipment:'', payment:'30% down / 70% before shipment, balance 30 days after invoice', validity:'30 days from quotation date', remarks:'' },
+      lines: []
+    },
+
+    invoiceSeq: 1,
+    invoice: null
+  };
+
+  function newLine(){
+    const spec = state.catalog[0];
+    return {
+      id: nextId('line'),
+      batchGroup: 'NORMAL',
+      specCode: spec ? spec.code : '',
+      weightPc: spec ? spec.weightPerPc : 0,
+      givenPrice: 100,
+      qty: 100,
+      appliedRuleIds: [],
+      laborHours: 0, laborRate: 0,
+      wastageKg: 0,
+      twineKg: 0, twineRate: 0
+    };
+  }
+  state.quotation.lines.push(newLine());
+
+  // ---------------------------------------------------------------
+  // COMPUTATION ENGINE — reads rule definitions as data. Adding a
+  // new rule type never requires touching this function; only the
+  // "basis" it declares matters.
+  // ---------------------------------------------------------------
+  function getLookupValue(lookupTableId, key){
+    const t = state.lookupTables.find(t => t.id === lookupTableId);
+    if(!t) return 0;
+    const row = t.rows.find(r => r.key === key) || t.rows[0];
+    return row ? Number(row.value) || 0 : 0;
+  }
+
+  function computeLine(line){
+    let p = Number(line.givenPrice) || 0;
+    const applied = state.pricingRules
+      .filter(r => r.enabled && line.appliedRuleIds.includes(r.id))
+      .sort((a,b) => a.sequence - b.sequence);
+
+    const trace = [];
+    for(const r of applied){
+      const before = p;
+      let rateVal = r.basis === 'lookup_table' ? getLookupValue(r.lookupTableId, r.lookupKey) : Number(r.rate) || 0;
+
+      if(r.basis === 'percent_of_result' && r.operation === 'add')      p = p / (1 - rateVal/100);
+      else if(r.basis === 'percent_of_result' && r.operation === 'subtract') p = p * (1 - rateVal/100);
+      else if(r.basis === 'percent_of_base' && r.operation === 'add')   p = p * (1 + rateVal/100);
+      else if(r.basis === 'percent_of_base' && r.operation === 'subtract') p = p / (1 + rateVal/100);
+      else if(r.basis === 'flat_amount' && r.operation === 'add')       p = p + rateVal;
+      else if(r.basis === 'flat_amount' && r.operation === 'subtract')  p = p - rateVal;
+      else if(r.basis === 'lookup_table')                                p = r.operation === 'subtract' ? p - rateVal : p + rateVal;
+
+      trace.push({ code:r.code, label:r.label, before, after:p });
+    }
+
+    const newPriceKg = p;
+    const pricePerPiece = newPriceKg * (Number(line.weightPc)||0);
+    const labor = (Number(line.laborHours)||0) * (Number(line.laborRate)||0);
+    const wastage = (Number(line.wastageKg)||0) * newPriceKg;
+    const twine = (Number(line.twineKg)||0) * (Number(line.twineRate)||0);
+    const up = pricePerPiece + labor + wastage + twine;
+    const qty = Number(line.qty) || 0;
+    const amount = up * qty;
+    const weightSubtotal = (Number(line.weightPc)||0) * qty;
+
+    return { newPriceKg, pricePerPiece, labor, wastage, twine, up, amount, weightSubtotal, trace };
+  }
+
+  function quotationTotals(){
+    let totWeight = 0, totGrand = 0;
+    state.quotation.lines.forEach(l => {
+      const c = computeLine(l);
+      totWeight += c.weightSubtotal;
+      totGrand += c.amount;
+    });
+    return { totWeight, totGrand };
+  }
+
+  function fmt(n){
+    return (Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:4});
+  }
+  function fmt2(n){
+    return (Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  // Attempt to parse a "NN days" style payment term into a due date.
+  // Falls back to leaving the field for manual entry — never silently wrong.
+  function computeDueDate(paymentText, fromDateStr){
+    if(!paymentText) return null;
+    const m = paymentText.match(/(\d+)\s*days?/i);
+    if(!m) return null;
+    const from = new Date(fromDateStr);
+    if(isNaN(from.getTime())) return null;
+    from.setDate(from.getDate() + parseInt(m[1], 10));
+    return from.toISOString().slice(0,10);
+  }
+
+  // ---------------------------------------------------------------
+  // RENDER — section 1: Rules & Catalog
+  // ---------------------------------------------------------------
+  function renderRules(){
+    const tbody = document.getElementById('rulesTbody');
+    tbody.innerHTML = state.pricingRules.map(r => `
+      <tr data-rule-id="${r.id}">
+        <td><input type="number" class="mono-field" style="width:52px" data-field="sequence" value="${r.sequence}"></td>
+        <td><input type="text" class="mono-field" style="width:130px" data-field="code" value="${escapeAttr(r.code)}"></td>
+        <td><input type="text" style="width:130px" data-field="label" value="${escapeAttr(r.label)}"></td>
+        <td>
+          <select data-field="operation">
+            <option value="add" ${r.operation==='add'?'selected':''}>Add</option>
+            <option value="subtract" ${r.operation==='subtract'?'selected':''}>Subtract</option>
+          </select>
+        </td>
+        <td>
+          <select data-field="basis">
+            <option value="percent_of_base" ${r.basis==='percent_of_base'?'selected':''}>% of base</option>
+            <option value="percent_of_result" ${r.basis==='percent_of_result'?'selected':''}>% of running result</option>
+            <option value="flat_amount" ${r.basis==='flat_amount'?'selected':''}>Flat amount</option>
+            <option value="lookup_table" ${r.basis==='lookup_table'?'selected':''}>Lookup table</option>
+          </select>
+        </td>
+        <td>${renderRateCell(r)}</td>
+        <td style="text-align:center;"><input type="checkbox" data-field="enabled" ${r.enabled?'checked':''}></td>
+        <td><button class="btn-ghost" data-action="delete-rule" title="Remove rule">✕</button></td>
+      </tr>
+    `).join('');
+
+    renderLookupTables();
+    document.getElementById('uWeight').value = state.units.weight;
+    document.getElementById('uLabor').value = state.units.labor;
+    document.getElementById('uCurrency').value = state.units.currency;
+    document.getElementById('thWeight').textContent = 'Weight/PC (' + state.units.weight.toLowerCase() + ')';
+
+    renderCatalog();
+  }
+
+  function renderRateCell(r){
+    if(r.basis === 'lookup_table'){
+      const t = state.lookupTables.find(t => t.id === r.lookupTableId);
+      const tableOpts = state.lookupTables.map(t2 => `<option value="${t2.id}" ${t2.id===r.lookupTableId?'selected':''}>${escapeAttr(t2.name)}</option>`).join('');
+      const keyOpts = t ? t.rows.map(row => `<option value="${escapeAttr(row.key)}" ${row.key===r.lookupKey?'selected':''}>${escapeAttr(row.key)}</option>`).join('') : '';
+      return `<div style="display:flex; gap:4px;">
+        <select data-field="lookupTableId" style="width:110px">${tableOpts}</select>
+        <select data-field="lookupKey" style="width:90px">${keyOpts}</select>
+      </div>`;
+    }
+    const suffix = r.basis === 'flat_amount' ? state.units.currency : '%';
+    return `<div style="display:flex; align-items:center; gap:5px;">
+      <input type="number" step="0.01" class="mono-field" style="width:80px" data-field="rate" value="${r.rate}">
+      <span class="muted small">${suffix}</span>
+    </div>`;
+  }
+
+  function renderLookupTables(){
+    const wrap = document.getElementById('lookupTablesWrap');
+    wrap.innerHTML = state.lookupTables.map(t => `
+      <div class="line-block" data-lookup-id="${t.id}">
+        <div class="line-block-head">
+          <input type="text" class="mono-field" style="max-width:260px; background:transparent; border:none; font-weight:600; padding:2px 4px;" data-lt-field="name" value="${escapeAttr(t.name)}">
+          <button class="btn-ghost" data-action="delete-lookup" title="Remove table">✕ remove table</button>
+        </div>
+        <div class="line-block-body">
+          <table>
+            <thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>
+            <tbody>
+              ${t.rows.map((row, idx) => `
+                <tr data-row-idx="${idx}">
+                  <td><input type="text" class="mono-field" data-lt-row-field="key" value="${escapeAttr(row.key)}"></td>
+                  <td><input type="number" step="0.01" class="mono-field" data-lt-row-field="value" value="${row.value}"></td>
+                  <td><button class="btn-ghost" data-action="delete-lookup-row" title="Remove row">✕</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="btn-row"><button class="btn btn-secondary" data-action="add-lookup-row" style="padding:5px 10px; font-size:11.5px;">+ Add row</button></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderCatalog(){
+    const tbody = document.getElementById('catalogTbody');
+    tbody.innerHTML = state.catalog.map((c, idx) => `
+      <tr data-cat-idx="${idx}">
+        <td><input type="text" class="mono-field" style="width:90px" data-cf="code" value="${escapeAttr(c.code)}"></td>
+        <td><input type="text" data-cf="twine" value="${escapeAttr(c.twine)}"></td>
+        <td><input type="text" style="width:80px" data-cf="meshSize" value="${escapeAttr(c.meshSize)}"></td>
+        <td><input type="text" style="width:80px" data-cf="meshDepth" value="${escapeAttr(c.meshDepth)}"></td>
+        <td><input type="text" style="width:70px" data-cf="length" value="${escapeAttr(c.length)}"></td>
+        <td><input type="number" step="0.01" class="mono-field" style="width:90px" data-cf="weightPerPc" value="${c.weightPerPc}"></td>
+        <td><button class="btn-ghost" data-action="delete-catalog" title="Remove spec">✕</button></td>
+      </tr>
+    `).join('');
+  }
+
+  function escapeAttr(s){
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  }
+
+  // ---------------------------------------------------------------
+  // RENDER — section 2: Quotation
+  // ---------------------------------------------------------------
+  const STAMP_LABELS = { draft:'Draft', sent:'Sent', accepted:'Accepted', declined:'Declined' };
+
+  function renderQuotation(){
+    const q = state.quotation;
+    document.getElementById('quoteIdDisplay').textContent = q.id;
+    document.getElementById('quoteDateDisplay').textContent = q.date;
+    document.getElementById('qCustomer').value = q.header.customer;
+    document.getElementById('qAttn').value = q.header.attn;
+    document.getElementById('qAddress').value = q.header.address;
+    document.getElementById('qShipment').value = q.header.shipment;
+    document.getElementById('qPayment').value = q.header.payment;
+    document.getElementById('qValidity').value = q.header.validity;
+    document.getElementById('qRemarks').value = q.header.remarks;
+
+    const stamp = document.getElementById('quoteStamp');
+    stamp.textContent = STAMP_LABELS[q.status] || q.status;
+    stamp.className = 'stamp stamp-' + q.status;
+
+    const linesWrap = document.getElementById('linesWrap');
+    linesWrap.innerHTML = q.lines.map((line, idx) => renderLineBlock(line, idx)).join('') ||
+      '<div class="callout">No line items yet — add one to start pricing.</div>';
+
+    const totals = quotationTotals();
+    document.getElementById('totWeight').textContent = fmt(totals.totWeight) + ' ' + state.units.weight;
+    document.getElementById('totGrand').textContent = state.units.currency + ' ' + fmt2(totals.totGrand);
+    document.getElementById('uWeightLbl2').textContent = 'Total weight (' + state.units.weight + ')';
+
+    renderInvoiceConvertPanel();
+  }
+
+  function renderLineBlock(line, idx){
+    const c = computeLine(line);
+    const catalogOpts = state.catalog.map(cat => `<option value="${escapeAttr(cat.code)}" ${cat.code===line.specCode?'selected':''}>${escapeAttr(cat.code)}</option>`).join('');
+    const ruleChips = state.pricingRules.filter(r => r.enabled).map(r => `
+      <label class="chip ${line.appliedRuleIds.includes(r.id) ? 'on':''}" data-action="toggle-rule" data-rule="${r.id}">
+        <input type="checkbox" ${line.appliedRuleIds.includes(r.id)?'checked':''}>
+        ${escapeAttr(r.label)}
+      </label>
+    `).join('') || '<span class="muted small">No rules enabled — turn some on in Rules &amp; Catalog.</span>';
+
+    return `
+    <div class="line-block" data-line-id="${line.id}">
+      <div class="line-block-head">
+        <span>LINE ${String(idx+1).padStart(2,'0')} · ${escapeAttr(line.specCode)}</span>
+        <button class="btn-ghost" data-action="delete-line" title="Remove line">✕ remove</button>
+      </div>
+      <div class="line-block-body">
+        <div class="grid cols-4">
+          <div class="field"><label>Batch group</label>
+            <select data-lf="batchGroup">
+              ${['ASSEMBLED','NORMAL','LACING','NOTE'].map(g=>`<option value="${g}" ${line.batchGroup===g?'selected':''}>${g}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>Specification</label><select data-lf="specCode">${catalogOpts}</select></div>
+          <div class="field"><label>Weight/PC (${state.units.weight})</label><input type="number" step="0.001" class="mono-field" data-lf="weightPc" value="${line.weightPc}"></div>
+          <div class="field"><label>Given price (per ${state.units.weight})</label><input type="number" step="0.01" class="mono-field" data-lf="givenPrice" value="${line.givenPrice}"></div>
+          <div class="field"><label>Qty (pieces)</label><input type="number" step="1" class="mono-field" data-lf="qty" value="${line.qty}"></div>
+          <div class="field"><label>Labor hours</label><input type="number" step="0.01" class="mono-field" data-lf="laborHours" value="${line.laborHours}"></div>
+          <div class="field"><label>Labor rate (${state.units.labor})</label><input type="number" step="0.01" class="mono-field" data-lf="laborRate" value="${line.laborRate}"></div>
+          <div class="field"><label>Wastage (${state.units.weight})</label><input type="number" step="0.001" class="mono-field" data-lf="wastageKg" value="${line.wastageKg}"></div>
+          <div class="field"><label>Sewing twine (${state.units.weight})</label><input type="number" step="0.001" class="mono-field" data-lf="twineKg" value="${line.twineKg}"></div>
+          <div class="field"><label>Twine rate (per ${state.units.weight})</label><input type="number" step="0.01" class="mono-field" data-lf="twineRate" value="${line.twineRate}"></div>
+        </div>
+
+        <div class="field" style="margin-top:12px;">
+          <label>Applied pricing rules (chained in sequence order)</label>
+          <div class="chip-row">${ruleChips}</div>
+        </div>
+
+        <div class="line-breakdown">
+          <div class="cell"><span class="k">New price/${state.units.weight}</span><span class="v">${fmt(c.newPriceKg)}</span></div>
+          <div class="cell"><span class="k">Price/piece</span><span class="v">${fmt(c.pricePerPiece)}</span></div>
+          <div class="cell"><span class="k">Labor</span><span class="v">${fmt(c.labor)}</span></div>
+          <div class="cell"><span class="k">Wastage</span><span class="v">${fmt(c.wastage)}</span></div>
+          <div class="cell"><span class="k">Twine</span><span class="v">${fmt(c.twine)}</span></div>
+          <div class="cell up"><span class="k">U/P</span><span class="v">${fmt(c.up)}</span></div>
+        </div>
+        <div class="totals-row" style="margin-top:8px;">
+          <div class="item"><span class="k">Weight subtotal</span><span class="v">${fmt(c.weightSubtotal)}</span></div>
+          <div class="item amt"><span class="k">Amount</span><span class="v" style="color:var(--rope-dark)">${fmt2(c.amount)}</span></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ---------------------------------------------------------------
+  // RENDER — section 3: Invoice
+  // ---------------------------------------------------------------
+  const INV_STAMP_LABELS = { draft:'Draft', sent:'Sent', partially_paid:'Partially Paid', paid:'Paid', closed:'Closed' };
+
+  function renderInvoiceConvertPanel(){
+    const q = state.quotation;
+    const totals = quotationTotals();
+    document.getElementById('convSourceId').textContent = q.id;
+    document.getElementById('convLineCount').textContent = q.lines.length;
+    document.getElementById('convGrandTotal').textContent = state.units.currency + ' ' + fmt2(totals.totGrand);
+    document.getElementById('convWarn').style.display = q.lines.length === 0 ? 'block' : 'none';
+    document.getElementById('convertBtn').disabled = q.lines.length === 0;
+
+    const hasInvoice = !!state.invoice;
+    document.getElementById('noInvoiceState').style.display = hasInvoice ? 'none' : 'block';
+    document.getElementById('invoiceState').style.display = hasInvoice ? 'block' : 'none';
+    const stampHeader = document.getElementById('invStampHeader');
+    if(hasInvoice){
+      stampHeader.style.display = 'inline-block';
+      stampHeader.textContent = INV_STAMP_LABELS[state.invoice.status] || state.invoice.status;
+      stampHeader.className = 'stamp stamp-' + (state.invoice.status === 'partially_paid' ? 'partial' : state.invoice.status);
+      renderInvoice();
+    } else {
+      stampHeader.style.display = 'none';
+    }
+  }
+
+  function invoiceLineAmount(il){
+    return il.frozenUp * (Number(il.shippedQty)||0);
+  }
+
+  function renderInvoice(){
+    const inv = state.invoice;
+    document.getElementById('invId').textContent = inv.id;
+    document.getElementById('invDate').value = inv.date;
+    document.getElementById('invDueDate').value = inv.dueDate || '';
+    document.getElementById('invCurrency').value = inv.currency;
+    document.getElementById('invExRate').value = inv.exRate;
+    document.getElementById('invTaxRate').value = inv.taxRate;
+    document.getElementById('invBank').value = inv.bank;
+
+    const hint = document.getElementById('dueDateHint');
+    hint.textContent = inv.dueDateAuto
+      ? 'Due date parsed from quotation payment terms ("' + state.quotation.header.payment + '"). Override above if needed.'
+      : 'Could not parse a day count from the payment terms — set the due date manually.';
+
+    const tbody = document.getElementById('invoiceLinesTbody');
+    tbody.innerHTML = inv.lines.map(il => `
+      <tr data-inv-line-id="${il.id}">
+        <td class="mono">${escapeAttr(il.specCode)}</td>
+        <td>${escapeAttr(il.batchGroup)}</td>
+        <td class="num">${fmt(il.quotedQty)}</td>
+        <td class="num"><input type="number" step="1" class="mono-field" style="width:90px; text-align:right;" data-ilf="shippedQty" value="${il.shippedQty}"></td>
+        <td class="num mono">${fmt(il.frozenUp)}</td>
+        <td class="num mono">${fmt2(invoiceLineAmount(il))}</td>
+      </tr>
+    `).join('');
+
+    let subtotal = 0;
+    inv.lines.forEach(il => subtotal += invoiceLineAmount(il));
+    const taxAmt = subtotal * (Number(inv.taxRate)||0) / 100;
+    const grand = subtotal + taxAmt;
+
+    document.getElementById('invSubtotal').textContent = inv.currency + ' ' + fmt2(subtotal);
+    document.getElementById('invTaxAmt').textContent = inv.currency + ' ' + fmt2(taxAmt);
+    document.getElementById('invGrandTotal').textContent = inv.currency + ' ' + fmt2(grand);
+
+    const paymentsTbody = document.getElementById('paymentsTbody');
+    paymentsTbody.innerHTML = inv.payments.map((p, idx) => `
+      <tr data-pay-idx="${idx}">
+        <td><input type="date" data-pf="date" value="${p.date}"></td>
+        <td><input type="number" step="0.01" class="mono-field" data-pf="amount" value="${p.amount}"></td>
+        <td><input type="text" data-pf="note" value="${escapeAttr(p.note)}"></td>
+        <td><button class="btn-ghost" data-action="delete-payment" title="Remove">✕</button></td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" class="muted small">No payments logged yet.</td></tr>';
+
+    let paid = 0;
+    inv.payments.forEach(p => paid += Number(p.amount)||0);
+    const balance = grand - paid;
+    document.getElementById('paidToDate').textContent = inv.currency + ' ' + fmt2(paid);
+    document.getElementById('balanceDue').textContent = inv.currency + ' ' + fmt2(balance);
+
+    // Auto status from payments (unless manually closed)
+    if(inv.status !== 'closed'){
+      if(paid <= 0 && inv.status === 'draft'){ /* stay draft until sent */ }
+      else if(balance <= 0.0001 && paid > 0) inv.status = 'paid';
+      else if(paid > 0 && balance > 0.0001) inv.status = 'partially_paid';
+    }
+    const stampHeader = document.getElementById('invStampHeader');
+    stampHeader.textContent = INV_STAMP_LABELS[inv.status] || inv.status;
+    stampHeader.className = 'stamp stamp-' + (inv.status === 'partially_paid' ? 'partial' : inv.status);
+  }
+
+  // ---------------------------------------------------------------
+  // ACTIONS
+  // ---------------------------------------------------------------
+  function convertToInvoice(){
+    const q = state.quotation;
+    if(q.lines.length === 0) return;
+    const dueAuto = computeDueDate(q.header.payment, q.date);
+    const year = new Date().getFullYear();
+    state.invoice = {
+      id: 'INV-' + year + '-' + String(state.invoiceSeq++).padStart(4,'0'),
+      sourceQuotationId: q.id,
+      date: new Date().toISOString().slice(0,10),
+      dueDate: dueAuto,
+      dueDateAuto: !!dueAuto,
+      currency: state.units.currency,
+      exRate: 1,
+      taxRate: 0,
+      bank: '',
+      status: 'draft',
+      lines: q.lines.map(line => {
+        const c = computeLine(line);
+        return {
+          id: nextId('il'),
+          sourceLineId: line.id,
+          specCode: line.specCode,
+          batchGroup: line.batchGroup,
+          quotedQty: line.qty,
+          shippedQty: line.qty,
+          frozenUp: c.up
+        };
+      }),
+      payments: []
+    };
+    state.quotation.status = state.quotation.status === 'declined' ? state.quotation.status : 'accepted';
+    render();
+    setActiveSection('invoice');
+  }
+
+  // ---------------------------------------------------------------
+  // NAV
+  // ---------------------------------------------------------------
+  function setActiveSection(name){
+    state.activeSection = name;
+    document.querySelectorAll('.rail-step').forEach(el => {
+      const isActive = el.dataset.section === name;
+      el.classList.toggle('active', isActive);
+      if(isActive) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('.section').forEach(el => el.classList.remove('active','print-target'));
+    const target = document.getElementById('sec-' + name);
+    target.classList.add('active','print-target');
+  }
+
+  function render(){
+    renderRules();
+    renderQuotation();
+  }
+
+  // ---------------------------------------------------------------
+  // EVENT DELEGATION
+  // ---------------------------------------------------------------
+  document.getElementById('railSteps').addEventListener('click', (e) => {
+    const step = e.target.closest('.rail-step');
+    if(step) setActiveSection(step.dataset.section);
+  });
+
+  // --- Rules table ---
+  document.getElementById('rulesTbody').addEventListener('input', (e) => {
+    const tr = e.target.closest('tr'); if(!tr) return;
+    const rule = state.pricingRules.find(r => r.id === tr.dataset.ruleId);
+    if(!rule) return;
+    const field = e.target.dataset.field;
+    if(!field) return;
+    // Only text/number fields are handled here. Selects and checkboxes
+    // are handled on 'change' below — acting on their 'input' event would
+    // rebuild this table mid-interaction and break the native change bubble.
+    if(field === 'sequence') rule.sequence = Number(e.target.value)||0;
+    else if(field === 'rate') rule.rate = Number(e.target.value)||0;
+    else if(field === 'code' || field === 'label') rule[field] = e.target.value;
+    else return;
+    renderQuotation();
+  });
+  document.getElementById('rulesTbody').addEventListener('change', (e) => {
+    const tr = e.target.closest('tr'); if(!tr) return;
+    const rule = state.pricingRules.find(r => r.id === tr.dataset.ruleId);
+    if(!rule) return;
+    const field = e.target.dataset.field;
+    if(field === 'enabled'){ rule.enabled = e.target.checked; renderQuotation(); }
+    if(field === 'operation'){ rule.operation = e.target.value; renderQuotation(); }
+    if(field === 'basis'){ rule.basis = e.target.value; renderRules(); renderQuotation(); }
+    if(field === 'lookupTableId'){ rule.lookupTableId = e.target.value; const t=state.lookupTables.find(t=>t.id===rule.lookupTableId); rule.lookupKey = t && t.rows[0] ? t.rows[0].key : null; renderRules(); renderQuotation(); }
+    if(field === 'lookupKey'){ rule.lookupKey = e.target.value; renderQuotation(); }
+  });
+  document.getElementById('rulesTbody').addEventListener('click', (e) => {
+    if(e.target.dataset.action === 'delete-rule'){
+      const tr = e.target.closest('tr');
+      state.pricingRules = state.pricingRules.filter(r => r.id !== tr.dataset.ruleId);
+      renderRules(); renderQuotation();
+    }
+  });
+  document.getElementById('addRuleBtn').addEventListener('click', () => {
+    state.pricingRules.push({ id: nextId('rule'), code:'CUSTOM', label:'New rule', operation:'add', basis:'percent_of_base', rate:0, lookupTableId:null, sequence: state.pricingRules.length+1, enabled:false });
+    renderRules();
+  });
+
+  // --- Lookup tables ---
+  document.getElementById('lookupTablesWrap').addEventListener('input', (e) => {
+    const block = e.target.closest('.line-block'); if(!block) return;
+    const table = state.lookupTables.find(t => t.id === block.dataset.lookupId);
+    if(!table) return;
+    if(e.target.dataset.ltField === 'name'){ table.name = e.target.value; renderRules(); return; }
+    const rowEl = e.target.closest('tr[data-row-idx]');
+    if(rowEl && e.target.dataset.ltRowField){
+      const idx = Number(rowEl.dataset.rowIdx);
+      const f = e.target.dataset.ltRowField;
+      table.rows[idx][f] = f === 'value' ? Number(e.target.value)||0 : e.target.value;
+      renderQuotation();
+    }
+  });
+  document.getElementById('lookupTablesWrap').addEventListener('click', (e) => {
+    const block = e.target.closest('.line-block'); if(!block) return;
+    const table = state.lookupTables.find(t => t.id === block.dataset.lookupId);
+    if(!table) return;
+    if(e.target.dataset.action === 'add-lookup-row'){ table.rows.push({key:'new', value:0}); renderRules(); }
+    if(e.target.dataset.action === 'delete-lookup-row'){
+      const rowEl = e.target.closest('tr[data-row-idx]');
+      table.rows.splice(Number(rowEl.dataset.rowIdx), 1);
+      renderRules();
+    }
+    if(e.target.dataset.action === 'delete-lookup'){
+      state.lookupTables = state.lookupTables.filter(t => t.id !== table.id);
+      state.pricingRules.forEach(r => { if(r.lookupTableId === table.id){ r.lookupTableId = null; r.enabled = false; } });
+      renderRules(); renderQuotation();
+    }
+  });
+  document.getElementById('addLookupTableBtn').addEventListener('click', () => {
+    state.lookupTables.push({ id: nextId('lt'), name:'New table', rows:[{key:'default', value:0}] });
+    renderRules();
+  });
+
+  // --- Catalog ---
+  document.getElementById('catalogTbody').addEventListener('input', (e) => {
+    const tr = e.target.closest('tr'); if(!tr) return;
+    const idx = Number(tr.dataset.catIdx);
+    const f = e.target.dataset.cf;
+    if(!f) return;
+    state.catalog[idx][f] = f === 'weightPerPc' ? Number(e.target.value)||0 : e.target.value;
+    if(f === 'code') renderQuotation();
+  });
+  document.getElementById('catalogTbody').addEventListener('click', (e) => {
+    if(e.target.dataset.action === 'delete-catalog'){
+      const tr = e.target.closest('tr');
+      state.catalog.splice(Number(tr.dataset.catIdx), 1);
+      renderCatalog(); renderQuotation();
+    }
+  });
+  document.getElementById('addCatalogBtn').addEventListener('click', () => {
+    state.catalog.push({ code:'NEW-CODE', twine:'', meshSize:'', meshDepth:'', length:'', weightPerPc:0 });
+    renderCatalog();
+  });
+
+  // --- Units ---
+  ['uWeight','uLabor','uCurrency'].forEach(id => {
+    document.getElementById(id).addEventListener('input', (e) => {
+      const map = { uWeight:'weight', uLabor:'labor', uCurrency:'currency' };
+      state.units[map[id]] = e.target.value;
+      renderRules(); renderQuotation();
+    });
+  });
+
+  // --- Quotation header ---
+  const headerFieldMap = { qCustomer:'customer', qAttn:'attn', qAddress:'address', qShipment:'shipment', qPayment:'payment', qValidity:'validity', qRemarks:'remarks' };
+  Object.keys(headerFieldMap).forEach(id => {
+    document.getElementById(id).addEventListener('input', (e) => {
+      state.quotation.header[headerFieldMap[id]] = e.target.value;
+    });
+  });
+
+  // --- Lines ---
+  document.getElementById('linesWrap').addEventListener('input', (e) => {
+    const block = e.target.closest('.line-block'); if(!block) return;
+    const line = state.quotation.lines.find(l => l.id === block.dataset.lineId);
+    if(!line) return;
+    const f = e.target.dataset.lf;
+    if(!f) return;
+    if(['weightPc','givenPrice','qty','laborHours','laborRate','wastageKg','twineKg','twineRate'].includes(f)){
+      line[f] = Number(e.target.value)||0;
+    } else {
+      line[f] = e.target.value;
+    }
+    if(f === 'specCode'){
+      const spec = state.catalog.find(c => c.code === e.target.value);
+      if(spec) line.weightPc = spec.weightPerPc;
+    }
+    renderQuotation();
+  });
+  document.getElementById('linesWrap').addEventListener('click', (e) => {
+    const block = e.target.closest('.line-block'); if(!block) return;
+    const line = state.quotation.lines.find(l => l.id === block.dataset.lineId);
+    if(!line) return;
+    if(e.target.dataset.action === 'delete-line'){
+      state.quotation.lines = state.quotation.lines.filter(l => l.id !== line.id);
+      renderQuotation();
+      return;
+    }
+    const chip = e.target.closest('[data-action="toggle-rule"]');
+    if(chip){
+      const ruleId = chip.dataset.rule;
+      const i = line.appliedRuleIds.indexOf(ruleId);
+      if(i === -1) line.appliedRuleIds.push(ruleId); else line.appliedRuleIds.splice(i,1);
+      renderQuotation();
+    }
+  });
+  document.getElementById('addLineBtn').addEventListener('click', () => {
+    state.quotation.lines.push(newLine());
+    renderQuotation();
+  });
+
+  // --- Quotation status ---
+  document.querySelectorAll('[data-set-status]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.quotation.status = btn.dataset.setStatus;
+      renderQuotation();
+    });
+  });
+  document.getElementById('printQuoteBtn').addEventListener('click', () => { setActiveSection('quotation'); window.print(); });
+
+  // --- Convert to invoice ---
+  document.getElementById('convertBtn').addEventListener('click', convertToInvoice);
+
+  // --- Invoice header fields ---
+  function bindInvField(id, field, isNumber){
+    document.getElementById(id).addEventListener('input', (e) => {
+      if(!state.invoice) return;
+      state.invoice[field] = isNumber ? Number(e.target.value)||0 : e.target.value;
+      if(field === 'dueDate') state.invoice.dueDateAuto = false;
+      renderInvoice();
+    });
+  }
+  bindInvField('invDate','date', false);
+  bindInvField('invDueDate','dueDate', false);
+  bindInvField('invCurrency','currency', false);
+  bindInvField('invExRate','exRate', true);
+  bindInvField('invTaxRate','taxRate', true);
+  bindInvField('invBank','bank', false);
+
+  document.getElementById('invoiceLinesTbody').addEventListener('input', (e) => {
+    const tr = e.target.closest('tr'); if(!tr || !state.invoice) return;
+    const il = state.invoice.lines.find(l => l.id === tr.dataset.invLineId);
+    if(!il) return;
+    if(e.target.dataset.ilf === 'shippedQty'){ il.shippedQty = Number(e.target.value)||0; renderInvoice(); }
+  });
+
+  // --- Payments ---
+  document.getElementById('addPaymentBtn').addEventListener('click', () => {
+    if(!state.invoice) return;
+    state.invoice.payments.push({ date: new Date().toISOString().slice(0,10), amount: 0, note:'' });
+    renderInvoice();
+  });
+  document.getElementById('paymentsTbody').addEventListener('input', (e) => {
+    const tr = e.target.closest('tr'); if(!tr || !state.invoice) return;
+    const idx = Number(tr.dataset.payIdx);
+    const f = e.target.dataset.pf;
+    if(!f) return;
+    state.invoice.payments[idx][f] = f === 'amount' ? Number(e.target.value)||0 : e.target.value;
+    renderInvoice();
+  });
+  document.getElementById('paymentsTbody').addEventListener('click', (e) => {
+    if(e.target.dataset.action === 'delete-payment' && state.invoice){
+      const tr = e.target.closest('tr');
+      state.invoice.payments.splice(Number(tr.dataset.payIdx), 1);
+      renderInvoice();
+    }
+  });
+
+  document.querySelectorAll('[data-set-inv-status]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(!state.invoice) return;
+      state.invoice.status = btn.dataset.setInvStatus;
+      renderInvoice();
+    });
+  });
+  document.getElementById('printInvoiceBtn').addEventListener('click', () => { setActiveSection('invoice'); window.print(); });
+
+  // ---------------------------------------------------------------
+  // INIT
+  // ---------------------------------------------------------------
+  setActiveSection('rules');
+  render();
+})();
+</script>
+</body>
+</html>

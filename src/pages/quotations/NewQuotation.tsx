@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Trash2, ChevronLeft } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -8,7 +8,9 @@ import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
 import { CUSTOMERS, ITEM_MASTER } from "@/lib/mockData";
 import { formatMoney } from "@/lib/format";
+import { computeLinePricing, lookupKeyForRule } from "@/lib/pricing";
 import type { QuotationLineItem } from "@/lib/types";
+import clsx from "clsx";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -21,10 +23,40 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputClass =
   "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
+const miniInputClass =
+  "w-full rounded-md border border-paper-200 bg-white px-2 py-1.5 text-xs font-mono focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
+
+interface DraftLine {
+  id: string;
+  itemCode: string;
+  qtyPcs: number;
+  givenPriceKg: number;
+  appliedRuleIds: string[];
+  laborHours: number;
+  laborRate: number;
+  wastageKg: number;
+  twineKg: number;
+  twineRate: number;
+  expanded: boolean;
+}
+
+function defaultsFor(itemCode: string, enabledRuleIds: string[]): Omit<DraftLine, "id" | "qtyPcs" | "expanded"> {
+  const im = ITEM_MASTER.find((i) => i.code === itemCode) ?? ITEM_MASTER[0];
+  return {
+    itemCode: im.code,
+    givenPriceKg: im.givenPriceKg,
+    appliedRuleIds: enabledRuleIds,
+    laborHours: im.defaultLaborHours,
+    laborRate: im.defaultLaborRate,
+    wastageKg: im.defaultWastageKg,
+    twineKg: im.defaultTwineKg,
+    twineRate: im.defaultTwineRate,
+  };
+}
 
 export function NewQuotation() {
   const navigate = useNavigate();
-  const { createQuotation, pushToast, currentUser } = useStore();
+  const { createQuotation, pushToast, currentUser, pricingRules, lookupTables } = useStore();
 
   const [customerId, setCustomerId] = useState(CUSTOMERS[0].id);
   const [depositPercent, setDepositPercent] = useState(30);
@@ -32,62 +64,105 @@ export function NewQuotation() {
   const [validityDays, setValidityDays] = useState(7);
   const [freight, setFreight] = useState(0);
   const [remarks, setRemarks] = useState("");
-  const [items, setItems] = useState<QuotationLineItem[]>([]);
+  const [lines, setLines] = useState<DraftLine[]>([]);
 
   const customer = CUSTOMERS.find((c) => c.id === customerId)!;
+  const enabledRules = pricingRules.filter((r) => r.enabled).sort((a, b) => a.sequence - b.sequence);
+
+  function priceLine(line: DraftLine) {
+    const item = ITEM_MASTER.find((i) => i.code === line.itemCode) ?? ITEM_MASTER[0];
+    const result = computeLinePricing(
+      {
+        givenPriceKg: line.givenPriceKg,
+        weightPerPc: item.unitWeightKg,
+        qtyPcs: line.qtyPcs,
+        appliedRuleIds: line.appliedRuleIds,
+        laborHours: line.laborHours,
+        laborRate: line.laborRate,
+        wastageKg: line.wastageKg,
+        twineKg: line.twineKg,
+        twineRate: line.twineRate,
+        lookupKeyForRule: lookupKeyForRule(item),
+      },
+      pricingRules,
+      lookupTables
+    );
+    return { item, result };
+  }
 
   function addItem() {
     const im = ITEM_MASTER[0];
-    setItems((prev) => [
+    setLines((prev) => [
       ...prev,
       {
         id: `L${prev.length + 1}-${Date.now()}`,
-        itemCode: im.code,
-        description: im.description,
-        specification: `${im.meshDepth}, ${im.color}`,
         qtyPcs: 1,
-        unit: im.uom,
-        unitPrice: im.unitPrice,
-        weightKg: im.unitWeightKg,
-        totalPrice: im.unitPrice,
+        expanded: prev.length === 0,
+        ...defaultsFor(im.code, enabledRules.map((r) => r.id)),
       },
     ]);
   }
 
-  function updateItem(id: string, patch: Partial<QuotationLineItem>) {
-    setItems((prev) =>
-      prev.map((li) => {
-        if (li.id !== id) return li;
-        const merged = { ...li, ...patch };
-        merged.totalPrice = merged.qtyPcs * merged.unitPrice;
-        return merged;
+  function patchLine(id: string, patch: Partial<DraftLine>) {
+    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  }
+
+  function setItemCode(id: string, code: string) {
+    setLines((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, ...defaultsFor(code, l.appliedRuleIds) } : l))
+    );
+  }
+
+  function toggleRule(id: string, ruleId: string) {
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        const has = l.appliedRuleIds.includes(ruleId);
+        return { ...l, appliedRuleIds: has ? l.appliedRuleIds.filter((x) => x !== ruleId) : [...l.appliedRuleIds, ruleId] };
       })
     );
   }
 
-  function setItemCode(id: string, code: string) {
-    const im = ITEM_MASTER.find((x) => x.code === code);
-    if (!im) return;
-    updateItem(id, {
-      itemCode: im.code,
-      description: im.description,
-      specification: `${im.meshDepth}, ${im.color}`,
-      unitPrice: im.unitPrice,
-      weightKg: im.unitWeightKg,
-    });
-  }
-
   function removeItem(id: string) {
-    setItems((prev) => prev.filter((li) => li.id !== id));
+    setLines((prev) => prev.filter((l) => l.id !== id));
   }
 
-  const total = items.reduce((s, li) => s + li.totalPrice, 0) + freight;
+  const priced = lines.map((l) => ({ line: l, ...priceLine(l) }));
+  const itemsTotal = priced.reduce((s, p) => s + p.result.totalPrice, 0);
+  const total = itemsTotal + freight;
 
   function handleCreate() {
-    if (items.length === 0) {
+    if (lines.length === 0) {
       pushToast({ tone: "warning", title: "Add at least one line item" });
       return;
     }
+    const items: QuotationLineItem[] = priced.map(({ line, item, result }) => ({
+      id: line.id,
+      itemCode: item.code,
+      description: item.description,
+      specification: `${item.meshDepth}, ${item.color}`,
+      qtyPcs: line.qtyPcs,
+      unit: item.uom,
+      unitPrice: Math.round(result.unitPrice * 100) / 100,
+      weightKg: Math.round(result.weightKg * 100) / 100,
+      totalPrice: Math.round(result.totalPrice * 100) / 100,
+      pricing: {
+        givenPriceKg: line.givenPriceKg,
+        appliedRuleIds: line.appliedRuleIds,
+        laborHours: line.laborHours,
+        laborRate: line.laborRate,
+        wastageKg: line.wastageKg,
+        twineKg: line.twineKg,
+        twineRate: line.twineRate,
+        chain: result.chain,
+        newPriceKg: result.newPriceKg,
+        pricePerPiece: result.pricePerPiece,
+        laborCost: result.laborCost,
+        wastageCost: result.wastageCost,
+        twineCost: result.twineCost,
+      },
+    }));
+
     const id = createQuotation({
       customerId,
       consignee: customer.name,
@@ -128,7 +203,7 @@ export function NewQuotation() {
         <div className="space-y-4">
           <Card>
             <CardHeader title="Customer & Terms" eyebrow="Step 1" />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Customer">
                 <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={inputClass}>
                   {CUSTOMERS.map((c) => (
@@ -174,59 +249,175 @@ export function NewQuotation() {
           <Card>
             <CardHeader
               title="Line Items"
-              eyebrow="Step 2"
+              eyebrow="Step 2 — Pricing Engine"
+              subtitle="Given Price/kg runs through the enabled adjustment chain, then Labor + Wastage + Sewing Twine are added per piece."
               action={
                 <Button variant="secondary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={addItem}>
                   Add Item
                 </Button>
               }
             />
-            {items.length === 0 ? (
+            {lines.length === 0 ? (
               <p className="rounded-lg border border-dashed border-paper-300 py-8 text-center text-sm text-paper-400">
                 No items yet — add a line item from the item master.
               </p>
             ) : (
-              <div className="space-y-2">
-                {items.map((li) => (
-                  <div key={li.id} className="grid grid-cols-12 items-center gap-2 rounded-lg border border-paper-100 p-2.5">
-                    <select
-                      value={li.itemCode}
-                      onChange={(e) => setItemCode(li.id, e.target.value)}
-                      className="col-span-5 rounded-md border border-paper-200 px-2 py-1.5 text-xs"
-                    >
-                      {ITEM_MASTER.map((im) => (
-                        <option key={im.code} value={im.code}>
-                          {im.description}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      value={li.qtyPcs}
-                      onChange={(e) => updateItem(li.id, { qtyPcs: Number(e.target.value) })}
-                      className="col-span-2 rounded-md border border-paper-200 px-2 py-1.5 text-xs"
-                      placeholder="Qty"
-                    />
-                    <input
-                      type="number"
-                      value={li.unitPrice}
-                      onChange={(e) => updateItem(li.id, { unitPrice: Number(e.target.value) })}
-                      className="col-span-2 rounded-md border border-paper-200 px-2 py-1.5 text-xs"
-                      placeholder="Unit price"
-                    />
-                    <span className="col-span-2 text-right font-mono text-xs font-semibold">
-                      {formatMoney(li.totalPrice, customer.defaultCurrency)}
-                    </span>
-                    <button onClick={() => removeItem(li.id)} className="col-span-1 flex justify-end text-paper-400 hover:text-alert-600">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+              <div className="space-y-3">
+                {priced.map(({ line, item, result }) => (
+                  <div key={line.id} className="overflow-hidden rounded-lg border border-paper-200">
+                    <div className="flex items-center justify-between gap-2 bg-paper-50/80 px-3 py-2">
+                      <button
+                        onClick={() => patchLine(line.id, { expanded: !line.expanded })}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                      >
+                        {line.expanded ? (
+                          <ChevronUp className="h-3.5 w-3.5 shrink-0 text-paper-400" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-paper-400" />
+                        )}
+                        <span className="truncate font-mono text-xs font-semibold text-pine-800">{item.code}</span>
+                        <span className="truncate text-xs text-paper-500">{item.description}</span>
+                      </button>
+                      <span className="shrink-0 font-mono text-xs font-semibold text-pine-800">
+                        {formatMoney(result.totalPrice, customer.defaultCurrency)}
+                      </span>
+                      <button onClick={() => removeItem(line.id)} className="shrink-0 text-paper-400 hover:text-alert-600">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {line.expanded && (
+                      <div className="space-y-3 border-t border-paper-100 p-3">
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="sm:col-span-2">
+                            <Field label="Specification">
+                              <select
+                                value={line.itemCode}
+                                onChange={(e) => setItemCode(line.id, e.target.value)}
+                                className="w-full rounded-md border border-paper-200 px-2 py-1.5 text-xs"
+                              >
+                                {ITEM_MASTER.map((im) => (
+                                  <option key={im.code} value={im.code}>
+                                    {im.code}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                          </div>
+                          <Field label="Qty (pcs)">
+                            <input
+                              type="number"
+                              value={line.qtyPcs}
+                              onChange={(e) => patchLine(line.id, { qtyPcs: Number(e.target.value) })}
+                              className={miniInputClass}
+                            />
+                          </Field>
+                          <Field label={`Given price / kg`}>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.givenPriceKg}
+                              onChange={(e) => patchLine(line.id, { givenPriceKg: Number(e.target.value) })}
+                              className={miniInputClass}
+                            />
+                          </Field>
+                          <Field label="Weight/pc (kg)">
+                            <div className="rounded-md border border-dashed border-paper-200 bg-paper-50 px-2 py-1.5 text-xs font-mono text-paper-500">
+                              {item.unitWeightKg.toFixed(2)}
+                            </div>
+                          </Field>
+                        </div>
+
+                        <div>
+                          <label className="mb-1.5 block text-xs font-medium text-paper-600">
+                            Applied pricing rules (chained in sequence order)
+                          </label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {enabledRules.length === 0 && (
+                              <span className="text-xs text-paper-400">No rules enabled — see Settings → Pricing Rules.</span>
+                            )}
+                            {enabledRules.map((r) => {
+                              const active = line.appliedRuleIds.includes(r.id);
+                              return (
+                                <button
+                                  key={r.id}
+                                  onClick={() => toggleRule(line.id, r.id)}
+                                  className={clsx(
+                                    "rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
+                                    active
+                                      ? "border-pine-700 bg-pine-700 text-white"
+                                      : "border-paper-200 bg-white text-paper-600 hover:bg-paper-50"
+                                  )}
+                                >
+                                  {r.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <Field label="Labor hours">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.laborHours}
+                              onChange={(e) => patchLine(line.id, { laborHours: Number(e.target.value) })}
+                              className={miniInputClass}
+                            />
+                          </Field>
+                          <Field label="Labor rate / hr">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.laborRate}
+                              onChange={(e) => patchLine(line.id, { laborRate: Number(e.target.value) })}
+                              className={miniInputClass}
+                            />
+                          </Field>
+                          <Field label="Wastage (kg)">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.wastageKg}
+                              onChange={(e) => patchLine(line.id, { wastageKg: Number(e.target.value) })}
+                              className={miniInputClass}
+                            />
+                          </Field>
+                          <Field label="Sewing twine (kg)">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={line.twineKg}
+                              onChange={(e) => patchLine(line.id, { twineKg: Number(e.target.value) })}
+                              className={miniInputClass}
+                            />
+                          </Field>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 rounded-lg bg-paper-50 p-2.5 text-center sm:grid-cols-6">
+                          <Stat label={`New price/kg`} value={result.newPriceKg.toFixed(2)} />
+                          <Stat label="Price/piece" value={result.pricePerPiece.toFixed(2)} />
+                          <Stat label="Labor" value={result.laborCost.toFixed(2)} />
+                          <Stat label="Wastage" value={result.wastageCost.toFixed(2)} />
+                          <Stat label="Twine" value={result.twineCost.toFixed(2)} />
+                          <Stat label="U/P" value={result.unitPrice.toFixed(2)} tone="pine" />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
-            <div className="mt-3 flex justify-end border-t border-paper-100 pt-3 text-sm">
-              <span className="text-paper-500">Total (incl. freight):&nbsp;</span>
-              <span className="font-mono font-bold text-pine-800">{formatMoney(total, customer.defaultCurrency)}</span>
+            <div className="mt-3 flex justify-end gap-4 border-t border-paper-100 pt-3 text-sm">
+              <span>
+                <span className="text-paper-500">Items:&nbsp;</span>
+                <span className="font-mono font-semibold text-paper-700">{formatMoney(itemsTotal, customer.defaultCurrency)}</span>
+              </span>
+              <span>
+                <span className="text-paper-500">Total (incl. freight):&nbsp;</span>
+                <span className="font-mono font-bold text-pine-800">{formatMoney(total, customer.defaultCurrency)}</span>
+              </span>
             </div>
           </Card>
 
@@ -267,10 +458,20 @@ export function NewQuotation() {
               "Which fields are mandatory before submission — is a technical assessment always required first?",
               "MOQ and lead-time defaults per item family are not yet finalized with the factory.",
               "Should freight be entered manually per quotation or pulled from a shipping-line rate table?",
+              "Given Price/kg, labor, wastage, and twine defaults are catalog placeholders — factory costing to confirm actual figures per spec.",
             ]}
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "pine" }) {
+  return (
+    <div>
+      <p className="text-[9.5px] font-medium uppercase tracking-wide text-paper-400">{label}</p>
+      <p className={clsx("font-mono text-[13px] font-semibold", tone === "pine" ? "text-pine-700" : "text-paper-800")}>{value}</p>
     </div>
   );
 }

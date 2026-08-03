@@ -220,6 +220,47 @@ export function QuotationDetail() {
             </Card>
           )}
 
+          {q.items.some((li) => li.pricing) && (
+            <Card>
+              <CardHeader title="Pricing Breakdown" eyebrow="Internal — margin review" />
+              <div className="space-y-4">
+                {q.items
+                  .filter((li) => li.pricing)
+                  .map((li) => (
+                    <div key={li.id} className="border-b border-paper-100 pb-3 last:border-0 last:pb-0">
+                      <p className="mb-1.5 text-xs font-semibold text-paper-800">{li.itemCode}</p>
+                      <div className="space-y-1 text-[11.5px]">
+                        <div className="flex justify-between text-paper-500">
+                          <span>Given price/kg</span>
+                          <span className="font-mono text-paper-700">{li.pricing!.givenPriceKg.toFixed(2)}</span>
+                        </div>
+                        {li.pricing!.chain.map((step, i) => (
+                          <div key={i} className="flex justify-between text-paper-500">
+                            <span>{step.label}</span>
+                            <span className="font-mono text-paper-700">→ {step.after.toFixed(4)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between border-t border-dashed border-paper-200 pt-1 font-medium text-paper-700">
+                          <span>New price/kg</span>
+                          <span className="font-mono">{li.pricing!.newPriceKg.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-paper-500">
+                          <span>Labor + Wastage + Twine</span>
+                          <span className="font-mono text-paper-700">
+                            {(li.pricing!.laborCost + li.pricing!.wastageCost + li.pricing!.twineCost).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between font-semibold text-pine-700">
+                          <span>U/P</span>
+                          <span className="font-mono">{li.unitPrice.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          )}
+
           <ProcessDiscoveryNote
             items={[
               "Is customer acceptance received as a signed PI, email confirmation, or separate PO?",

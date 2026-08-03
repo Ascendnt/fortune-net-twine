@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Tabs } from "@/components/ui/Tabs";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
+import { Modal } from "@/components/ui/Modal";
 import { LifecycleStepper } from "@/components/domain/LifecycleStepper";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
@@ -37,6 +38,8 @@ export function OrderDetail() {
   const { salesOrders, quotations, payments, invoices, activity, advanceStage, generateInvoice, verifyPayment, role, pushToast } =
     useStore();
   const [tab, setTab] = useState("overview");
+  const [shipModalOpen, setShipModalOpen] = useState(false);
+  const [shippedQty, setShippedQty] = useState<Record<string, number>>({});
 
   const order = salesOrders.find((o) => o.id === id);
   const quotation = order ? quotations.find((q) => q.id === order.quotationId) : undefined;
@@ -80,10 +83,25 @@ export function OrderDetail() {
     advanceStage(order!.id);
   }
 
+  function openShipModal() {
+    const defaults: Record<string, number> = {};
+    quotation?.items.forEach((li) => {
+      defaults[li.id] = li.qtyPcs;
+    });
+    setShippedQty(defaults);
+    setShipModalOpen(true);
+  }
+
   function handleGenerateInvoice() {
-    const invId = generateInvoice(order!.id);
+    const invId = generateInvoice(order!.id, shippedQty);
+    setShipModalOpen(false);
     if (invId) {
-      pushToast({ tone: "success", title: "Commercial Invoice generated", description: invId });
+      const isPartial = quotation?.items.some((li) => (shippedQty[li.id] ?? li.qtyPcs) !== li.qtyPcs);
+      pushToast({
+        tone: "success",
+        title: "Commercial Invoice generated",
+        description: isPartial ? `${invId} — partial shipment recalculated on actual qty.` : invId,
+      });
       navigate(`/invoices/${invId}`);
     }
   }
@@ -108,7 +126,7 @@ export function OrderDetail() {
       </Card>
 
       {blockedStage && (
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-alert-200 bg-alert-50 px-4 py-3">
+        <div className="mb-5 flex flex-wrap items-start gap-3 rounded-xl border border-alert-200 bg-alert-50 px-4 py-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-alert-600" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-alert-800">Order blocked at {currentStageMeta.label}</p>
@@ -121,7 +139,7 @@ export function OrderDetail() {
       )}
 
       {!blockedStage && currentStageRec?.pendingAction && order.currentStage !== "completed" && (
-        <div className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-manifest-200 bg-manifest-50 px-4 py-3">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-manifest-200 bg-manifest-50 px-4 py-3">
           <div className="flex gap-3">
             <ArrowRightCircle className="mt-0.5 h-4 w-4 shrink-0 text-manifest-600" />
             <div>
@@ -138,19 +156,19 @@ export function OrderDetail() {
       )}
 
       {order.currentStage === "documents" && !invoice && (
-        <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-pine-200 bg-pine-50 px-4 py-3">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-pine-200 bg-pine-50 px-4 py-3">
           <div className="flex items-center gap-2 text-pine-800">
             <ReceiptText className="h-4 w-4" />
             <p className="text-sm font-semibold">Ready to generate the Commercial Invoice</p>
           </div>
-          <Button variant="success" size="sm" onClick={handleGenerateInvoice}>
+          <Button variant="success" size="sm" onClick={openShipModal}>
             Generate Commercial Invoice
           </Button>
         </div>
       )}
 
       {invoice && (
-        <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-pine-200 bg-pine-50 px-4 py-3">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-pine-200 bg-pine-50 px-4 py-3">
           <div className="flex items-center gap-2 text-pine-800">
             <CheckCircle2 className="h-4 w-4" />
             <p className="text-sm font-semibold">Commercial Invoice {invoice.id} issued</p>
@@ -202,7 +220,7 @@ export function OrderDetail() {
 
               <Card>
                 <CardHeader title="Production Summary" eyebrow="Factory" />
-                <div className="grid grid-cols-4 gap-3 text-center">
+                <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
                   <div className="rounded-lg bg-paper-50 py-3">
                     <p className="text-lg font-bold text-paper-900">{order.productionQtyOrdered}</p>
                     <p className="text-[11px] text-paper-400">Ordered</p>
@@ -285,7 +303,7 @@ export function OrderDetail() {
 
         {tab === "payments" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <FinanceControl
                 label="Production Release"
                 allowed={depositPayment?.status === "verified"}
@@ -400,6 +418,57 @@ export function OrderDetail() {
           </Card>
         )}
       </div>
+
+      <Modal
+        open={shipModalOpen}
+        onClose={() => setShipModalOpen(false)}
+        title="Confirm Shipped Quantity"
+        subtitle="Defaults to the quoted qty. Adjust any line that shipped partial — Amount recalculates from the frozen U/P."
+        width="max-w-xl"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setShipModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" size="sm" onClick={handleGenerateInvoice}>
+              Generate Commercial Invoice
+            </Button>
+          </>
+        }
+      >
+        {quotation && (
+          <Table>
+            <THead>
+              <TH>Item</TH>
+              <TH>Quoted Qty</TH>
+              <TH>Shipped Qty</TH>
+              <TH>Amount</TH>
+            </THead>
+            <tbody>
+              {quotation.items.map((li) => {
+                const qty = shippedQty[li.id] ?? li.qtyPcs;
+                return (
+                  <TR key={li.id}>
+                    <TD className="font-mono text-xs">{li.itemCode}</TD>
+                    <TD className="font-mono text-xs">{li.qtyPcs}</TD>
+                    <TD>
+                      <input
+                        type="number"
+                        value={qty}
+                        onChange={(e) => setShippedQty((prev) => ({ ...prev, [li.id]: Number(e.target.value) }))}
+                        className="w-20 rounded-md border border-paper-200 px-2 py-1 text-xs font-mono focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+                      />
+                    </TD>
+                    <TD className="font-mono text-xs font-semibold">
+                      {formatMoney(li.unitPrice * qty, order.currency)}
+                    </TD>
+                  </TR>
+                );
+              })}
+            </tbody>
+          </Table>
+        )}
+      </Modal>
     </div>
   );
 }

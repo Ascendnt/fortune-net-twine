@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Bell, Plus, ChevronDown, Check } from "lucide-react";
+import { Search, Bell, Plus, ChevronDown, Check, Menu } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { ROLES } from "@/lib/mockData";
 import { initials } from "@/lib/format";
 import type { Role } from "@/lib/types";
 import clsx from "clsx";
 
-export function Topbar() {
+export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { role, setRole, currentUser, pushToast } = useStore();
   const [roleOpen, setRoleOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -22,8 +22,16 @@ export function Topbar() {
   ];
 
   return (
-    <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-paper-200 bg-white/90 px-5 backdrop-blur">
-      <div className="relative w-full max-w-sm">
+    <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-paper-200 bg-white/90 px-3 backdrop-blur sm:gap-3 sm:px-5">
+      <button
+        onClick={onMenuClick}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-paper-500 hover:bg-paper-100 lg:hidden"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      <div className="relative w-full min-w-0 sm:max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-paper-400" />
         <input
           type="text"
@@ -32,13 +40,13 @@ export function Topbar() {
         />
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         <button
           onClick={() => navigate("/quotations/new")}
-          className="flex items-center gap-1.5 rounded-lg bg-pine-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-pine-600"
+          className="flex items-center gap-1.5 rounded-lg bg-pine-700 px-2.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-pine-600 sm:px-3"
         >
           <Plus className="h-4 w-4" />
-          Quick Create
+          <span className="hidden sm:inline">Quick Create</span>
         </button>
 
         <div className="relative">
@@ -52,7 +60,7 @@ export function Topbar() {
           {notifOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-              <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-paper-200 bg-white p-2 shadow-[var(--shadow-pop)]">
+              <div className="absolute right-0 z-50 mt-2 w-[calc(100vw-1.5rem)] max-w-80 rounded-xl border border-paper-200 bg-white p-2 shadow-[var(--shadow-pop)]">
                 <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-paper-400">
                   Notifications
                 </p>
@@ -86,7 +94,7 @@ export function Topbar() {
           {roleOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setRoleOpen(false)} />
-              <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-paper-200 bg-white p-2 shadow-[var(--shadow-pop)]">
+              <div className="absolute right-0 z-50 mt-2 w-[calc(100vw-1.5rem)] max-w-72 rounded-xl border border-paper-200 bg-white p-2 shadow-[var(--shadow-pop)]">
                 <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-paper-400">
                   Preview interface as…
                 </p>

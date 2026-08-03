@@ -28,6 +28,7 @@ export function InvoiceDetail() {
   }
 
   const total = inv.items.reduce((s, li) => s + li.totalPrice, 0) + inv.freight - inv.discount + inv.tax;
+  const isPartial = inv.items.some((li) => li.shippedQtyPcs !== undefined && li.shippedQtyPcs !== li.qtyPcs);
 
   return (
     <div>
@@ -59,6 +60,7 @@ export function InvoiceDetail() {
           <Card>
             <CardHeader title="Summary" eyebrow="Invoice" />
             <KeyValue label="Issue date" value={formatDate(inv.issueDate)} />
+            <KeyValue label="Shipment" value={isPartial ? "Partial — recalculated on shipped qty" : "Full quoted qty"} />
             <KeyValue label="Total due" value={formatMoney(total, inv.currency)} mono />
             <KeyValue label="Shipped weight" value={`${inv.shippedWeightKg.toFixed(1)} kg`} mono />
             <KeyValue

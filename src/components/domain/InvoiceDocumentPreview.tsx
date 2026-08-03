@@ -7,9 +7,10 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
   const total = subtotal + inv.freight - inv.discount + inv.tax;
 
   return (
-    <div className="relative mx-auto max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:shadow-none">
-      <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40" />
-      <div className="relative">
+    <div className="overflow-x-auto">
+      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:shadow-none">
+        <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40" />
+        <div className="relative">
         <div className="flex items-start justify-between border-b-2 border-vermillion-700 pb-4">
           <div className="flex items-center gap-3">
             <img src={fntLogo} alt="Fortune Net & Twine" className="h-14 w-14 object-contain" />
@@ -48,7 +49,7 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
             <tr className="border-y border-vermillion-700 bg-vermillion-50/60 text-left font-mono text-[10.5px] uppercase tracking-wide text-vermillion-700">
               <th className="py-1.5 pr-2">Item</th>
               <th className="py-1.5 pr-2">Description</th>
-              <th className="py-1.5 pr-2 text-right">Qty</th>
+              <th className="py-1.5 pr-2 text-right">Shipped Qty</th>
               <th className="py-1.5 pr-2 text-right">Weight</th>
               <th className="py-1.5 pr-2 text-right">Unit Price</th>
               <th className="py-1.5 pl-2 text-right">Amount</th>
@@ -59,7 +60,12 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
               <tr key={li.id} className="border-b border-paper-100">
                 <td className="py-1.5 pr-2 align-top font-mono text-[11px] text-paper-500">{li.itemCode}</td>
                 <td className="py-1.5 pr-2 align-top font-medium">{li.description}</td>
-                <td className="py-1.5 pr-2 text-right align-top font-mono">{li.qtyPcs} {li.unit}</td>
+                <td className="py-1.5 pr-2 text-right align-top font-mono">
+                  {li.shippedQtyPcs ?? li.qtyPcs} {li.unit}
+                  {li.shippedQtyPcs !== undefined && li.shippedQtyPcs !== li.qtyPcs && (
+                    <span className="block text-[10px] font-sans text-paper-400">of {li.qtyPcs} quoted</span>
+                  )}
+                </td>
                 <td className="py-1.5 pr-2 text-right align-top font-mono">{formatWeight(li.weightKg)}</td>
                 <td className="py-1.5 pr-2 text-right align-top font-mono">{formatMoney(li.unitPrice, inv.currency)}</td>
                 <td className="py-1.5 pl-2 text-right align-top font-mono font-semibold">{formatMoney(li.totalPrice, inv.currency)}</td>
@@ -78,6 +84,7 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
             <Row label="Shipped Weight" value={formatWeight(inv.shippedWeightKg)} mono />
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

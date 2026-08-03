@@ -9,6 +9,8 @@ import type {
   ActivityEntry,
   ToastMessage,
   QuotationStatus,
+  PricingRule,
+  LookupTable,
 } from "./types";
 import { ORDER_STAGES } from "./types";
 import {
@@ -19,6 +21,8 @@ import {
   APPROVALS,
   ACTIVITY,
   CURRENT_USER_BY_ROLE,
+  PRICING_RULES,
+  LOOKUP_TABLES,
 } from "./mockData";
 
 interface StoreState {
@@ -33,6 +37,11 @@ interface StoreState {
   approvals: ApprovalRequest[];
   activity: ActivityEntry[];
 
+  pricingRules: PricingRule[];
+  lookupTables: LookupTable[];
+  updatePricingRule: (id: string, patch: Partial<Pick<PricingRule, "enabled" | "rate">>) => void;
+  updateLookupRow: (tableId: string, key: string, value: number) => void;
+
   toasts: ToastMessage[];
   pushToast: (t: Omit<ToastMessage, "id">) => void;
   dismissToast: (id: string) => void;
@@ -46,7 +55,8 @@ interface StoreState {
   verifyPayment: (paymentId: string) => void;
   rejectPayment: (paymentId: string) => void;
   resolveApproval: (id: string, decision: "approved" | "rejected" | "returned") => void;
-  generateInvoice: (salesOrderId: string) => string;
+  /** shippedQty maps QuotationLineItem id -> actual shipped pcs; defaults to the quoted qty when omitted. */
+  generateInvoice: (salesOrderId: string, shippedQty?: Record<string, number>) => string;
   advanceStage: (salesOrderId: string) => void;
 }
 
@@ -66,7 +76,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [invoices, setInvoices] = useState<CommercialInvoice[]>(INVOICES);
   const [approvals, setApprovals] = useState<ApprovalRequest[]>(APPROVALS);
   const [activity, setActivity] = useState<ActivityEntry[]>(ACTIVITY);
+  const [pricingRules, setPricingRules] = useState<PricingRule[]>(PRICING_RULES);
+  const [lookupTables, setLookupTables] = useState<LookupTable[]>(LOOKUP_TABLES);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const updatePricingRule = useCallback((id: string, patch: Partial<Pick<PricingRule, "enabled" | "rate">>) => {
+    setPricingRules((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }, []);
+
+  const updateLookupRow = useCallback((tableId: string, key: string, value: number) => {
+    setLookupTables((prev) =>
+      prev.map((t) => (t.id !== tableId ? t : { ...t, rows: t.rows.map((row) => (row.key === key ? { ...row, value } : row)) }))
+    );
+  }, []);
 
   const currentUser = CURRENT_USER_BY_ROLE[role] ?? "Guest User";
 
@@ -315,11 +337,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const generateInvoice = useCallback(
-    (salesOrderId: string): string => {
+    (salesOrderId: string, shippedQty?: Record<string, number>): string => {
       const order = salesOrders.find((o) => o.id === salesOrderId);
       const quotation = order ? quotations.find((q) => q.id === order.quotationId) : undefined;
       if (!order || !quotation) return "";
       const id = nextId("CI");
+
+      // Snapshot the items (not a shared reference) and recalculate on actual shipped qty per
+      // Part B of the discovery doc — Amount = U/P x Actual Shipped Qty, not the quoted qty.
+      // unitPrice stays frozen from the quotation; only qty and the derived totals move.
+      const items = quotation.items.map((li) => {
+        const shipped = shippedQty?.[li.id] ?? li.qtyPcs;
+        const weightPerPc = li.qtyPcs > 0 ? li.weightKg / li.qtyPcs : 0;
+        return {
+          ...li,
+          shippedQtyPcs: shipped,
+          totalPrice: Math.round(li.unitPrice * shipped * 100) / 100,
+          weightKg: Math.round(weightPerPc * shipped * 100) / 100,
+        };
+      });
+      const isPartial = items.some((li) => (li.shippedQtyPcs ?? li.qtyPcs) !== li.qtyPcs);
+
       const newInvoice: CommercialInvoice = {
         id,
         salesOrderId,
@@ -327,17 +365,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         customerId: order.customerId,
         issueDate: new Date().toISOString().slice(0, 10),
         currency: order.currency,
-        items: quotation.items,
+        items,
         freight: quotation.freight,
         discount: quotation.discount,
         tax: quotation.tax,
         status: "issued",
-        shippedWeightKg: quotation.items.reduce((s, li) => s + li.weightKg, 0),
+        shippedWeightKg: items.reduce((s, li) => s + li.weightKg, 0),
       };
       setInvoices((prev) => [newInvoice, ...prev]);
       setSalesOrders((prev) => prev.map((o) => (o.id === salesOrderId ? { ...o, invoiceId: id } : o)));
       logActivity({
-        action: "Generated Commercial Invoice",
+        action: isPartial ? "Generated Commercial Invoice (partial shipment)" : "Generated Commercial Invoice",
         recordType: "Commercial Invoice",
         recordId: id,
         comment: `From ${salesOrderId}`,
@@ -429,6 +467,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       invoices,
       approvals,
       activity,
+      pricingRules,
+      lookupTables,
+      updatePricingRule,
+      updateLookupRow,
       toasts,
       pushToast,
       dismissToast,
@@ -452,6 +494,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       invoices,
       approvals,
       activity,
+      pricingRules,
+      lookupTables,
+      updatePricingRule,
+      updateLookupRow,
       toasts,
       pushToast,
       dismissToast,
