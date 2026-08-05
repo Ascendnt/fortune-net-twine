@@ -20,6 +20,7 @@ import { flattenBatches, lacingAmount, newBatch, newBatchItem, newLacingLine, ne
 import { quotationTotals, recomputeSpecLine } from "@/lib/totals";
 import type { DiscountMode } from "@/lib/totals";
 import { NON_NEGATIVE, NON_NEGATIVE_INT, toNonNegative, toPercent } from "@/lib/num";
+import clsx from "clsx";
 import type { BatchType, Currency, LacingLine, Quotation, QuotationBatch, SpecLine } from "@/lib/types";
 import type { SpecSelection } from "@/lib/specOptions";
 import type { LacingCatalogRow, SpecMasterRow } from "@/lib/specMaster";
@@ -293,7 +294,10 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       attentionContact,
       currency,
       validityDays,
-      paymentTerms: paymentTerms || customer.defaultPaymentTerms,
+      // Deliberately not falling back to the customer default here. Doing so silently refilled a
+      // field the user had cleared, and an edit then round-tripped to a different value than the
+      // one on screen. The field warns when blank instead.
+      paymentTerms,
       shipmentTerms,
       dearSirs,
       moq,
@@ -393,7 +397,19 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                 </select>
               </Field>
               <Field label="Payment terms">
-                <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className={inputClass} />
+                <input
+                  value={paymentTerms}
+                  onChange={(e) => setPaymentTerms(e.target.value)}
+                  placeholder="e.g. 30% deposit, 70% before shipment"
+                  className={clsx(inputClass, !paymentTerms.trim() && "border-amber-300 bg-amber-50/40")}
+                />
+                {!paymentTerms.trim() && (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    {customer && !customer.defaultPaymentTerms
+                      ? `${customer.name} has no default terms on file. Type the terms for this quotation.`
+                      : "Payment terms print on the Proforma Invoice, so this should not be left blank."}
+                  </p>
+                )}
               </Field>
               <Field label="Shipment">
                 <SearchableSelect
@@ -580,7 +596,9 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
               <CardHeader title={customer.name} eyebrow="Customer Snapshot" />
               <p className="text-sm text-paper-600">{customer.address}</p>
               <p className="mt-2 text-xs text-paper-400">Default terms (editable above)</p>
-              <p className="text-sm text-paper-700">{customer.defaultPaymentTerms}</p>
+              <p className={clsx("text-sm", customer.defaultPaymentTerms ? "text-paper-700" : "italic text-amber-700")}>
+                {customer.defaultPaymentTerms || "None on file"}
+              </p>
               <p className="mt-2 text-xs text-paper-400">Outstanding balance</p>
               <p className="font-mono text-sm font-semibold text-paper-800">{formatMoney(customer.outstandingBalanceUSD)}</p>
             </Card>

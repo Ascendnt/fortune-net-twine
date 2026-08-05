@@ -118,6 +118,26 @@ const StoreContext = createContext<StoreState | null>(null);
 const KNOWN_BATCH_TYPES = new Set(["assembled", "normal", "lacing"]);
 
 /**
+ * The source client master writes an em dash where a field was never recorded. Carried into the app
+ * verbatim, that dash reads as a real value: it pre-fills a quotation's payment terms and then
+ * prints "—" on a customer-facing PI. Placeholder dashes are normalised to empty on load, so the
+ * field is visibly blank and the UI can say the terms aren't on file.
+ */
+const PLACEHOLDER = /^[—–-]$/;
+function blankIfPlaceholder(value: string | undefined): string {
+  return value && !PLACEHOLDER.test(value.trim()) ? value : "";
+}
+
+function normalizeCustomers(customers: Customer[]): Customer[] {
+  return customers.map((c) => ({
+    ...c,
+    defaultPaymentTerms: blankIfPlaceholder(c.defaultPaymentTerms),
+    phone: blankIfPlaceholder(c.phone),
+    email: blankIfPlaceholder(c.email),
+  }));
+}
+
+/**
  * Brings quotations saved by an earlier build forward. Right now that means dropping NOTE groups,
  * which no longer exist: a quotation saved before they were removed would otherwise render an
  * unlabelled empty band. They contributed to neither the grand total nor the total weight, so
@@ -161,7 +181,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [lacingCatalog, setLacingCatalog] = useState<LacingCatalogRow[]>(() =>
     loadPersisted(PERSIST_KEYS.lacingCatalog, LACING_CATALOG)
   );
-  const [customers, setCustomers] = useState<Customer[]>(() => loadPersisted(PERSIST_KEYS.customers, CUSTOMERS));
+  const [customers, setCustomers] = useState<Customer[]>(() =>
+    normalizeCustomers(loadPersisted(PERSIST_KEYS.customers, CUSTOMERS))
+  );
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   useEffect(() => persist(PERSIST_KEYS.quotations, quotations), [quotations]);
