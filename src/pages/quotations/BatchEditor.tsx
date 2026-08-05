@@ -126,13 +126,14 @@ function ItemBlock({
 }) {
   return (
     <div className="rounded-lg border border-paper-200">
-      <div className="flex items-start justify-between gap-2 border-b border-paper-100 bg-paper-50/60 px-2.5 py-2">
-        {/* The specification sentence can only be rebuilt through Item Selection, so this header is
-            the way back into it. It reads as static text unless the affordance is explicit, hence
-            the hover highlight, the pointer cursor and the always-visible Edit control. */}
+      {/* The specification sentence can only be rebuilt through Item Selection, so this header is
+          the way back into it. It reads as static text unless the affordance is explicit, hence the
+          hover highlight on the whole row, the pointer cursor and the dedicated Edit control.
+          Edit and Delete are stacked in one right-hand column so their icons line up. */}
+      <div className="group flex items-start justify-between gap-2 border-b border-paper-100 bg-paper-50/60 px-2.5 py-2">
         <button
           onClick={() => handlers.onEditItemSpec(item.id)}
-          className="group -m-1 flex min-w-0 flex-1 cursor-pointer items-start gap-2 rounded-md p-1 text-left transition-colors hover:bg-manifest-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-manifest-600"
+          className="-m-1 flex min-w-0 flex-1 cursor-pointer items-start gap-2 rounded-md p-1 text-left transition-colors hover:bg-manifest-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-manifest-600"
           title="Click to rebuild this item's specification"
         >
           <MousePointerClick className="mt-0.5 h-3.5 w-3.5 shrink-0 text-paper-300 transition-colors group-hover:text-manifest-600" />
@@ -144,18 +145,26 @@ function ItemBlock({
               {item.weightUom} · {item.qtyUom}
             </span>
           </span>
-          <span className="mt-0.5 flex shrink-0 items-center gap-1 rounded-full border border-paper-200 bg-white px-2 py-0.5 text-[10px] font-medium text-paper-500 transition-colors group-hover:border-manifest-500 group-hover:bg-manifest-100 group-hover:text-manifest-800">
-            <Pencil className="h-2.5 w-2.5" />
-            Edit
-          </span>
         </button>
-        <button
-          onClick={() => handlers.onRemoveItem(item.id)}
-          className="shrink-0 text-paper-400 hover:text-alert-600"
-          aria-label="Remove item"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <button
+            onClick={() => handlers.onRemoveItem(item.id)}
+            className="rounded p-1 text-paper-400 transition-colors hover:bg-white hover:text-alert-600"
+            aria-label="Remove item"
+            title="Remove this item"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => handlers.onEditItemSpec(item.id)}
+            className="rounded p-1 text-paper-400 transition-colors group-hover:text-manifest-600 hover:bg-white hover:text-manifest-700"
+            aria-label="Edit item specification"
+            title="Edit this item's specification"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {item.specs.length > 0 && (
