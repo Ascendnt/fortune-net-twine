@@ -280,33 +280,45 @@ export const ITEM_MASTER: ItemMaster[] = [
 
 // -------------------------------------------------------------------------
 // Pricing rule engine — lookup tables and rule chain (Part A/C of the
-// discovery doc). MD/DW/Insurance rows reuse the doc's own verified figures
-// (122md -> +3.50, +10.00, net -> +0.66) so the engine is traceable back to
-// the original simulation. Editable from Settings -> Pricing Rules.
+// discovery doc). MD/DW/Insurance rows use the simulation doc's own observed
+// figures so the engine is traceable back to the original run: §5.2 recorded
+// 122MD -> +0.1750, DW (50FL) -> +0.5000, and insurance at 0.66% of the
+// running total. Intermediate buckets interpolate linearly from those anchors
+// (MD ~0.001434/md, DW 0.01/fl). Editable from Settings -> Pricing Rules.
 // -------------------------------------------------------------------------
 export const LOOKUP_TABLES: LookupTable[] = [
   {
     id: "lt_md",
     name: "Mesh Depth (MD) rate",
+    valueKind: "amount",
     rows: [
-      { key: "122", value: 3.5 },
-      { key: "50", value: 1.2 },
-      { key: "15", value: 0.6 },
+      { key: "122", value: 0.175 }, // observed live, doc §5.2 row 6
+      { key: "50", value: 0.072 },
+      { key: "15", value: 0.022 },
       { key: "default", value: 0 },
     ],
   },
   {
     id: "lt_dw",
     name: "Depth-Way (float length) rate",
+    valueKind: "amount",
     rows: [
-      { key: "50", value: 10.0 },
-      { key: "120", value: 6.5 },
+      { key: "35", value: 0.35 },
+      { key: "50", value: 0.5 }, // observed live, doc §5.2 row 7
+      { key: "60", value: 0.6 },
+      { key: "70", value: 0.7 },
+      { key: "90", value: 0.9 },
+      { key: "120", value: 1.2 },
+      { key: "150", value: 1.5 },
+      { key: "180", value: 1.8 },
       { key: "default", value: 0 },
     ],
   },
   {
     id: "lt_ins",
     name: "Insurance rate (by category)",
+    // Percent, not currency — 0.66 means 0.66% of the running price per kg.
+    valueKind: "percent",
     rows: [
       { key: "net", value: 0.66 },
       { key: "twine", value: 0.18 },

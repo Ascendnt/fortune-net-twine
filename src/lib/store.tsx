@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type {
   Role,
   Quotation,
@@ -27,6 +27,9 @@ import {
   LOOKUP_TABLES,
   CUSTOMERS,
 } from "./mockData";
+import { LACING_CATALOG, SPEC_MASTER } from "./specMaster";
+import type { LacingCatalogRow, SpecMasterRow } from "./specMaster";
+import { PERSIST_KEYS, clearPersisted, loadPersisted, persist } from "./persist";
 
 interface StoreState {
   role: Role;
@@ -44,6 +47,45 @@ interface StoreState {
   lookupTables: LookupTable[];
   updatePricingRule: (id: string, patch: Partial<Pick<PricingRule, "enabled" | "rate">>) => void;
   updateLookupRow: (tableId: string, key: string, value: number) => void;
+
+  // Specification master (the N-code catalog behind "Add Specification") and the lacing catalog.
+  // Both live in the store rather than as static imports so "Create New Specs" can add a row that
+  // is immediately visible everywhere and survives a refresh.
+  specMaster: SpecMasterRow[];
+  lacingCatalog: LacingCatalogRow[];
+  addSpecMasterRow: (row: SpecMasterRow) => void;
+  updateSpecMasterRow: (code: string, patch: Partial<SpecMasterRow>) => void;
+  removeSpecMasterRow: (code: string) => void;
+  addLacingRow: (row: LacingCatalogRow) => void;
+  updateLacingRow: (code: string, patch: Partial<LacingCatalogRow>) => void;
+  removeLacingRow: (code: string) => void;
+
+  // Rule and lookup maintenance. Editing a rate was already possible; adding and retiring whole
+  // rules and lookup buckets is what makes the pricing engine genuinely self-service.
+  addPricingRule: (rule: PricingRule) => void;
+  removePricingRule: (id: string) => void;
+  addLookupRowToTable: (tableId: string, key: string, value: number) => void;
+  removeLookupRowFromTable: (tableId: string, key: string) => void;
+
+  addCustomer: (customer: Omit<Customer, "id">) => string;
+  updateCustomer: (id: string, patch: Partial<Customer>) => void;
+  removeCustomer: (id: string) => void;
+
+  updateQuotation: (id: string, patch: Partial<Quotation>) => void;
+  removeQuotation: (id: string) => void;
+
+  addPayment: (payment: Omit<PaymentRecord, "id">) => string;
+  updatePayment: (id: string, patch: Partial<PaymentRecord>) => void;
+  removePayment: (id: string) => void;
+
+  updateInvoice: (id: string, patch: Partial<CommercialInvoice>) => void;
+  removeInvoice: (id: string) => void;
+
+  updateSalesOrder: (id: string, patch: Partial<SalesOrder>) => void;
+  removeSalesOrder: (id: string) => void;
+
+  /** Wipes persisted state and restores every slice to its seeded demo values. */
+  resetDemoData: () => void;
 
   // Customer master data lives here (not a static import) so contacts — and, later, other
   // one-time-setup-but-still-editable fields — can be added/edited from the Customers page and
@@ -81,16 +123,151 @@ function nextId(prefix: string) {
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>("sales_manager");
-  const [quotations, setQuotations] = useState<Quotation[]>(QUOTATIONS);
+  // Slices that a user can meaningfully change are restored from localStorage; the rest stay as
+  // seeded demo fixtures. See lib/persist.ts for the degradation rules.
+  const [quotations, setQuotations] = useState<Quotation[]>(() => loadPersisted(PERSIST_KEYS.quotations, QUOTATIONS));
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>(SALES_ORDERS);
   const [payments, setPayments] = useState<PaymentRecord[]>(PAYMENTS);
   const [invoices, setInvoices] = useState<CommercialInvoice[]>(INVOICES);
   const [approvals, setApprovals] = useState<ApprovalRequest[]>(APPROVALS);
   const [activity, setActivity] = useState<ActivityEntry[]>(ACTIVITY);
-  const [pricingRules, setPricingRules] = useState<PricingRule[]>(PRICING_RULES);
-  const [lookupTables, setLookupTables] = useState<LookupTable[]>(LOOKUP_TABLES);
-  const [customers, setCustomers] = useState<Customer[]>(CUSTOMERS);
+  const [pricingRules, setPricingRules] = useState<PricingRule[]>(() =>
+    loadPersisted(PERSIST_KEYS.pricingRules, PRICING_RULES)
+  );
+  const [lookupTables, setLookupTables] = useState<LookupTable[]>(() =>
+    loadPersisted(PERSIST_KEYS.lookupTables, LOOKUP_TABLES)
+  );
+  const [specMaster, setSpecMaster] = useState<SpecMasterRow[]>(() =>
+    loadPersisted(PERSIST_KEYS.specMaster, SPEC_MASTER)
+  );
+  const [lacingCatalog, setLacingCatalog] = useState<LacingCatalogRow[]>(() =>
+    loadPersisted(PERSIST_KEYS.lacingCatalog, LACING_CATALOG)
+  );
+  const [customers, setCustomers] = useState<Customer[]>(() => loadPersisted(PERSIST_KEYS.customers, CUSTOMERS));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  useEffect(() => persist(PERSIST_KEYS.quotations, quotations), [quotations]);
+  useEffect(() => persist(PERSIST_KEYS.pricingRules, pricingRules), [pricingRules]);
+  useEffect(() => persist(PERSIST_KEYS.lookupTables, lookupTables), [lookupTables]);
+  useEffect(() => persist(PERSIST_KEYS.specMaster, specMaster), [specMaster]);
+  useEffect(() => persist(PERSIST_KEYS.lacingCatalog, lacingCatalog), [lacingCatalog]);
+  useEffect(() => persist(PERSIST_KEYS.customers, customers), [customers]);
+
+  const addSpecMasterRow = useCallback((row: SpecMasterRow) => {
+    setSpecMaster((prev) => (prev.some((r) => r.code === row.code) ? prev : [row, ...prev]));
+  }, []);
+
+  const updateSpecMasterRow = useCallback((code: string, patch: Partial<SpecMasterRow>) => {
+    setSpecMaster((prev) => prev.map((r) => (r.code === code ? { ...r, ...patch } : r)));
+  }, []);
+
+  const removeSpecMasterRow = useCallback((code: string) => {
+    setSpecMaster((prev) => prev.filter((r) => r.code !== code));
+  }, []);
+
+  const addLacingRow = useCallback((row: LacingCatalogRow) => {
+    setLacingCatalog((prev) => (prev.some((r) => r.code === row.code) ? prev : [...prev, row]));
+  }, []);
+
+  const updateLacingRow = useCallback((code: string, patch: Partial<LacingCatalogRow>) => {
+    setLacingCatalog((prev) => prev.map((r) => (r.code === code ? { ...r, ...patch } : r)));
+  }, []);
+
+  const removeLacingRow = useCallback((code: string) => {
+    setLacingCatalog((prev) => prev.filter((r) => r.code !== code));
+  }, []);
+
+  const addPricingRule = useCallback((rule: PricingRule) => {
+    setPricingRules((prev) => [...prev, rule]);
+  }, []);
+
+  const removePricingRule = useCallback((id: string) => {
+    setPricingRules((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const addLookupRowToTable = useCallback((tableId: string, key: string, value: number) => {
+    setLookupTables((prev) =>
+      prev.map((t) =>
+        t.id !== tableId || t.rows.some((r) => r.key === key)
+          ? t
+          : // "default" stays last so it reads as the fallback it is.
+            { ...t, rows: [...t.rows.filter((r) => r.key !== "default"), { key, value }, ...t.rows.filter((r) => r.key === "default")] }
+      )
+    );
+  }, []);
+
+  const removeLookupRowFromTable = useCallback((tableId: string, key: string) => {
+    setLookupTables((prev) =>
+      prev.map((t) => (t.id !== tableId ? t : { ...t, rows: t.rows.filter((r) => r.key !== key) }))
+    );
+  }, []);
+
+  const addCustomer = useCallback((customer: Omit<Customer, "id">): string => {
+    const id = nextId("CUS");
+    setCustomers((prev) => [{ ...customer, id }, ...prev]);
+    return id;
+  }, []);
+
+  const updateCustomer = useCallback((id: string, patch: Partial<Customer>) => {
+    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }, []);
+
+  const removeCustomer = useCallback((id: string) => {
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+
+  const updateQuotation = useCallback((id: string, patch: Partial<Quotation>) => {
+    setQuotations((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  }, []);
+
+  const removeQuotation = useCallback((id: string) => {
+    setQuotations((prev) => prev.filter((q) => q.id !== id));
+  }, []);
+
+  const addPayment = useCallback((payment: Omit<PaymentRecord, "id">): string => {
+    const id = nextId("PAY");
+    setPayments((prev) => [...prev, { ...payment, id }]);
+    return id;
+  }, []);
+
+  const updatePayment = useCallback((id: string, patch: Partial<PaymentRecord>) => {
+    setPayments((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }, []);
+
+  const removePayment = useCallback((id: string) => {
+    setPayments((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
+  const updateInvoice = useCallback((id: string, patch: Partial<CommercialInvoice>) => {
+    setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  }, []);
+
+  const removeInvoice = useCallback((id: string) => {
+    setInvoices((prev) => prev.filter((i) => i.id !== id));
+    // Clear the back-reference so the sales order stops offering "view invoice" for a record that
+    // no longer exists.
+    setSalesOrders((prev) => prev.map((so) => (so.invoiceId === id ? { ...so, invoiceId: undefined } : so)));
+  }, []);
+
+  const updateSalesOrder = useCallback((id: string, patch: Partial<SalesOrder>) => {
+    setSalesOrders((prev) => prev.map((so) => (so.id === id ? { ...so, ...patch } : so)));
+  }, []);
+
+  const removeSalesOrder = useCallback((id: string) => {
+    setSalesOrders((prev) => prev.filter((so) => so.id !== id));
+    setPayments((prev) => prev.filter((p) => p.salesOrderId !== id));
+    setQuotations((prev) => prev.map((q) => (q.salesOrderId === id ? { ...q, salesOrderId: undefined } : q)));
+  }, []);
+
+  const resetDemoData = useCallback(() => {
+    clearPersisted();
+    setQuotations(QUOTATIONS);
+    setPricingRules(PRICING_RULES);
+    setLookupTables(LOOKUP_TABLES);
+    setSpecMaster(SPEC_MASTER);
+    setLacingCatalog(LACING_CATALOG);
+    setCustomers(CUSTOMERS);
+  }, []);
 
   const addContact = useCallback((customerId: string, contact: Omit<Contact, "id">) => {
     setCustomers((prev) =>
@@ -516,6 +693,31 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       lookupTables,
       updatePricingRule,
       updateLookupRow,
+      specMaster,
+      lacingCatalog,
+      addSpecMasterRow,
+      updateSpecMasterRow,
+      removeSpecMasterRow,
+      addLacingRow,
+      updateLacingRow,
+      removeLacingRow,
+      addPricingRule,
+      removePricingRule,
+      addLookupRowToTable,
+      removeLookupRowFromTable,
+      addCustomer,
+      updateCustomer,
+      removeCustomer,
+      updateQuotation,
+      removeQuotation,
+      addPayment,
+      updatePayment,
+      removePayment,
+      updateInvoice,
+      removeInvoice,
+      updateSalesOrder,
+      removeSalesOrder,
+      resetDemoData,
       customers,
       addContact,
       updateContact,
@@ -547,6 +749,31 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       lookupTables,
       updatePricingRule,
       updateLookupRow,
+      specMaster,
+      lacingCatalog,
+      addSpecMasterRow,
+      updateSpecMasterRow,
+      removeSpecMasterRow,
+      addLacingRow,
+      updateLacingRow,
+      removeLacingRow,
+      addPricingRule,
+      removePricingRule,
+      addLookupRowToTable,
+      removeLookupRowFromTable,
+      addCustomer,
+      updateCustomer,
+      removeCustomer,
+      updateQuotation,
+      removeQuotation,
+      addPayment,
+      updatePayment,
+      removePayment,
+      updateInvoice,
+      removeInvoice,
+      updateSalesOrder,
+      removeSalesOrder,
+      resetDemoData,
       customers,
       addContact,
       updateContact,

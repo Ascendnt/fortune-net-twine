@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, Search } from "lucide-react";
+import { Wallet, Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
@@ -8,7 +9,22 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/format";
-import type { PaymentStatus } from "@/lib/types";
+import type { PaymentRecord, PaymentStatus, PaymentType } from "@/lib/types";
+
+const formClass =
+  "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
+const formLabel = "mb-1 block text-xs font-medium text-paper-600";
+
+type PaymentDraft = Omit<PaymentRecord, "id">;
+
+const PAYMENT_STATUSES: PaymentStatus[] = [
+  "expected",
+  "submitted_for_verification",
+  "partially_paid",
+  "verified",
+  "rejected",
+  "overdue",
+];
 
 const FILTERS: { id: PaymentStatus | "all"; label: string }[] = [
   { id: "all", label: "All" },
@@ -20,9 +36,51 @@ const FILTERS: { id: PaymentStatus | "all"; label: string }[] = [
 ];
 
 export function PaymentsPage() {
-  const { payments, salesOrders, verifyPayment, rejectPayment, role, pushToast, customers: CUSTOMERS } = useStore();
+  const {
+    payments,
+    salesOrders,
+    verifyPayment,
+    rejectPayment,
+    addPayment,
+    updatePayment,
+    removePayment,
+    role,
+    pushToast,
+    customers: CUSTOMERS,
+  } = useStore();
   const [filter, setFilter] = useState<PaymentStatus | "all">("all");
   const [query, setQuery] = useState("");
+  const [form, setForm] = useState<{ draft: PaymentDraft; id: string | null } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<PaymentRecord | null>(null);
+
+  function emptyDraft(): PaymentDraft {
+    return {
+      salesOrderId: salesOrders[0]?.id ?? "",
+      type: "deposit",
+      expectedAmount: 0,
+      amountReceived: 0,
+      status: "expected",
+      dueDate: new Date().toISOString().slice(0, 10),
+      method: "Telegraphic Transfer",
+      remarks: "",
+    };
+  }
+
+  function saveForm() {
+    if (!form) return;
+    if (!form.draft.salesOrderId) {
+      pushToast({ tone: "warning", title: "Pick a sales order" });
+      return;
+    }
+    if (form.id) {
+      updatePayment(form.id, form.draft);
+      pushToast({ tone: "success", title: "Payment updated", description: form.id });
+    } else {
+      const id = addPayment(form.draft);
+      pushToast({ tone: "success", title: "Payment added", description: id });
+    }
+    setForm(null);
+  }
 
   const rows = useMemo(() => {
     return payments
@@ -58,6 +116,16 @@ export function PaymentsPage() {
         eyebrow="Remittance & Payment Entry"
         title="Payments"
         description="Deposit and balance milestones across every sales order, with finance verification."
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus className="h-3.5 w-3.5" />}
+            onClick={() => setForm({ draft: emptyDraft(), id: null })}
+          >
+            Record Payment
+          </Button>
+        }
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -106,6 +174,7 @@ export function PaymentsPage() {
             <TH>Bank Ref.</TH>
             <TH>Status</TH>
             <TH>Action</TH>
+            <TH> </TH>
           </THead>
           <tbody>
             {rows.map(({ p, order, customer }) => (
@@ -147,11 +216,205 @@ export function PaymentsPage() {
                     </span>
                   )}
                 </TD>
+                <TD>
+                  <div className="flex justify-end gap-1">
+                    <button
+                      onClick={() => {
+                        const { id, ...draft } = p;
+                        void id;
+                        setForm({ draft, id: p.id });
+                      }}
+                      className="rounded p-1 text-paper-400 hover:bg-paper-100 hover:text-manifest-700"
+                      aria-label={`Edit ${p.id}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(p)}
+                      className="rounded p-1 text-paper-400 hover:bg-paper-100 hover:text-alert-600"
+                      aria-label={`Delete ${p.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </TD>
               </TR>
             ))}
           </tbody>
         </Table>
       )}
+
+      <Modal
+        open={form !== null}
+        onClose={() => setForm(null)}
+        title={form?.id ? `Edit ${form.id}` : "Record payment"}
+        subtitle="Deposit and balance milestones are normally generated on conversion — add one here for adjustments or corrections."
+        width="max-w-2xl"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setForm(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={saveForm}>
+              {form?.id ? "Save changes" : "Add payment"}
+            </Button>
+          </>
+        }
+      >
+        {form && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className={formLabel}>Sales order</label>
+              <select
+                value={form.draft.salesOrderId}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, salesOrderId: e.target.value } })}
+                className={formClass}
+              >
+                {salesOrders.map((so) => (
+                  <option key={so.id} value={so.id}>
+                    {so.id} — {so.consignee}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={formLabel}>Type</label>
+              <select
+                value={form.draft.type}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, type: e.target.value as PaymentType } })}
+                className={formClass}
+              >
+                <option value="deposit">Deposit</option>
+                <option value="balance">Balance</option>
+                <option value="adjustment">Adjustment</option>
+              </select>
+            </div>
+            <div>
+              <label className={formLabel}>Expected amount</label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.draft.expectedAmount}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, expectedAmount: Number(e.target.value) } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Amount received</label>
+              <input
+                type="number"
+                step="0.01"
+                value={form.draft.amountReceived}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, amountReceived: Number(e.target.value) } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Status</label>
+              <select
+                value={form.draft.status}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, status: e.target.value as PaymentStatus } })}
+                className={formClass}
+              >
+                {PAYMENT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={formLabel}>Method</label>
+              <select
+                value={form.draft.method ?? "Telegraphic Transfer"}
+                onChange={(e) =>
+                  setForm({ ...form, draft: { ...form.draft, method: e.target.value as PaymentRecord["method"] } })
+                }
+                className={formClass}
+              >
+                {["Wire Transfer", "Telegraphic Transfer", "LC", "Check", "Cash"].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={formLabel}>Due date</label>
+              <input
+                type="date"
+                value={form.draft.dueDate ?? ""}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, dueDate: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Date received</label>
+              <input
+                type="date"
+                value={form.draft.dateReceived ?? ""}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, dateReceived: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Bank reference</label>
+              <input
+                value={form.draft.bankRef ?? ""}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, bankRef: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Verified by</label>
+              <input
+                value={form.draft.verifiedBy ?? ""}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, verifiedBy: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={formLabel}>Remarks</label>
+              <input
+                value={form.draft.remarks ?? ""}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, remarks: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={confirmDelete !== null}
+        onClose={() => setConfirmDelete(null)}
+        title={`Delete ${confirmDelete?.id}?`}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                if (confirmDelete) {
+                  removePayment(confirmDelete.id);
+                  pushToast({ tone: "info", title: "Payment deleted", description: confirmDelete.id });
+                }
+                setConfirmDelete(null);
+              }}
+            >
+              Delete payment
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-paper-600">
+          Removing a payment milestone affects the deposit gate on its sales order — the loading authorization checks
+          verified payments.
+        </p>
+      </Modal>
     </div>
   );
 }

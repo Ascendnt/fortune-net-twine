@@ -4,6 +4,8 @@ import { Dashboard } from "@/pages/Dashboard";
 import { QuotationsList } from "@/pages/quotations/QuotationsList";
 import { QuotationDetail } from "@/pages/quotations/QuotationDetail";
 import { NewQuotation } from "@/pages/quotations/NewQuotation";
+import { EditQuotation } from "@/pages/quotations/EditQuotation";
+import { MasterDataPage } from "@/pages/masterdata/MasterDataPage";
 import { OrdersList } from "@/pages/orders/OrdersList";
 import { OrderDetail } from "@/pages/orders/OrderDetail";
 import { PaymentsPage } from "@/pages/payments/PaymentsPage";
@@ -26,6 +28,7 @@ export default function App() {
           <Route path="/quotations" element={<QuotationsList />} />
           <Route path="/quotations/new" element={<NewQuotation />} />
           <Route path="/quotations/:id" element={<QuotationDetail />} />
+          <Route path="/quotations/:id/edit" element={<EditQuotation />} />
 
           <Route path="/orders" element={<OrdersList />} />
           <Route path="/orders/:id" element={<OrderDetail />} />
@@ -34,6 +37,7 @@ export default function App() {
           <Route path="/invoices/:id" element={<InvoiceDetail />} />
 
           <Route path="/customers" element={<CustomersList />} />
+          <Route path="/master-data" element={<MasterDataPage />} />
           <Route path="/documents" element={<DocumentCenter />} />
           <Route path="/approvals" element={<ApprovalsInbox />} />
           <Route path="/activity" element={<ActivityLog />} />

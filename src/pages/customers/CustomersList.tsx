@@ -8,13 +8,39 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate, initials } from "@/lib/format";
-import type { Contact } from "@/lib/types";
+import type { Contact, Currency, Customer } from "@/lib/types";
 
 const fieldClass =
   "w-full rounded-md border border-paper-200 bg-white px-2 py-1.5 text-xs focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
+const formClass =
+  "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
+const formLabel = "mb-1 block text-xs font-medium text-paper-600";
+
+type CustomerDraft = Omit<Customer, "id">;
+
+const EMPTY_CUSTOMER: CustomerDraft = {
+  name: "",
+  consignee: "",
+  country: "",
+  address: "",
+  contactPerson: "",
+  email: "",
+  phone: "",
+  defaultPaymentTerms: "T/T 30% deposit, 70% before shipment",
+  defaultCurrency: "USD",
+  totalOrders: 0,
+  totalValueUSD: 0,
+  outstandingBalanceUSD: 0,
+  since: new Date().toISOString().slice(0, 10),
+  letterhead: "FORTUNE NET & TWINE MFG. CORP.",
+  agent: "HOUSE ACCOUNT",
+};
 
 export function CustomersList() {
-  const { customers, addContact, updateContact, removeContact } = useStore();
+  const { customers, addContact, updateContact, removeContact, addCustomer, updateCustomer, removeCustomer, pushToast } =
+    useStore();
+  const [customerForm, setCustomerForm] = useState<{ draft: CustomerDraft; id: string | null } | null>(null);
+  const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
@@ -84,6 +110,29 @@ export function CustomersList() {
 
   const contactList: Contact[] = selected?.contacts ?? (selected ? [{ id: "primary", name: selected.contactPerson, isPrimary: true }] : []);
 
+  function saveCustomer() {
+    if (!customerForm) return;
+    const { draft, id } = customerForm;
+    if (!draft.name.trim() || !draft.country.trim()) {
+      pushToast({ tone: "warning", title: "Name and country are required" });
+      return;
+    }
+    const normalized: CustomerDraft = {
+      ...draft,
+      name: draft.name.trim(),
+      country: draft.country.trim(),
+      consignee: draft.consignee.trim() || draft.name.trim(),
+    };
+    if (id) {
+      updateCustomer(id, normalized);
+      pushToast({ tone: "success", title: "Customer updated", description: normalized.name });
+    } else {
+      addCustomer(normalized);
+      pushToast({ tone: "success", title: "Customer added", description: normalized.name });
+    }
+    setCustomerForm(null);
+  }
+
   return (
     <div>
       <PageHeader
@@ -91,6 +140,16 @@ export function CustomersList() {
         eyebrow="Customer Master"
         title="Customers"
         description="Company profiles, default terms, contacts, and outstanding balances."
+        actions={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus className="h-3.5 w-3.5" />}
+            onClick={() => setCustomerForm({ draft: { ...EMPTY_CUSTOMER }, id: null })}
+          >
+            Add Customer
+          </Button>
+        }
       />
 
       <div className="mb-4 relative w-full max-w-xs">
@@ -111,6 +170,7 @@ export function CustomersList() {
           <TH>Total Orders</TH>
           <TH>Total Value</TH>
           <TH>Outstanding</TH>
+          <TH> </TH>
         </THead>
         <tbody>
           {filtered.map((c) => (
@@ -132,6 +192,32 @@ export function CustomersList() {
               <TD className="font-mono font-medium">{formatMoney(c.totalValueUSD)}</TD>
               <TD className={`font-mono font-medium ${c.outstandingBalanceUSD > 0 ? "text-alert-600" : "text-pine-600"}`}>
                 {formatMoney(c.outstandingBalanceUSD)}
+              </TD>
+              <TD>
+                <div className="flex justify-end gap-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const { id, ...draft } = c;
+                      void id;
+                      setCustomerForm({ draft, id: c.id });
+                    }}
+                    className="rounded p-1 text-paper-400 hover:bg-paper-100 hover:text-manifest-700"
+                    aria-label={`Edit ${c.name}`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDeleteCustomer(c);
+                    }}
+                    className="rounded p-1 text-paper-400 hover:bg-paper-100 hover:text-alert-600"
+                    aria-label={`Delete ${c.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </TD>
             </TR>
           ))}
@@ -241,6 +327,195 @@ export function CustomersList() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={customerForm !== null}
+        onClose={() => setCustomerForm(null)}
+        title={customerForm?.id ? "Edit customer" : "Add customer"}
+        subtitle="Defaults pre-fill new quotations but stay editable per quotation."
+        width="max-w-2xl"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setCustomerForm(null)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onClick={saveCustomer}>
+              {customerForm?.id ? "Save changes" : "Add customer"}
+            </Button>
+          </>
+        }
+      >
+        {customerForm && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className={formLabel}>Company name</label>
+              <input
+                value={customerForm.draft.name}
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, name: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Country</label>
+              <input
+                value={customerForm.draft.country}
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, country: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Consignee</label>
+              <input
+                value={customerForm.draft.consignee}
+                placeholder="Defaults to the company name"
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, consignee: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={formLabel}>Address</label>
+              <input
+                value={customerForm.draft.address}
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, address: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Primary contact</label>
+              <input
+                value={customerForm.draft.contactPerson}
+                onChange={(e) =>
+                  setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, contactPerson: e.target.value } })
+                }
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Email</label>
+              <input
+                value={customerForm.draft.email}
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, email: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Phone</label>
+              <input
+                value={customerForm.draft.phone}
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, phone: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Default currency</label>
+              <select
+                value={customerForm.draft.defaultCurrency}
+                onChange={(e) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    draft: { ...customerForm.draft, defaultCurrency: e.target.value as Currency },
+                  })
+                }
+                className={formClass}
+              >
+                {(["USD", "KRW", "EUR"] as Currency[]).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className={formLabel}>Default payment terms</label>
+              <input
+                value={customerForm.draft.defaultPaymentTerms}
+                onChange={(e) =>
+                  setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, defaultPaymentTerms: e.target.value } })
+                }
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Issuing entity (letterhead)</label>
+              <select
+                value={customerForm.draft.letterhead ?? "FORTUNE NET & TWINE MFG. CORP."}
+                onChange={(e) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    draft: { ...customerForm.draft, letterhead: e.target.value as Customer["letterhead"] },
+                  })
+                }
+                className={formClass}
+              >
+                <option value="FORTUNE NET & TWINE MFG. CORP.">Fortune Net &amp; Twine Mfg. Corp.</option>
+                <option value="NETTEX MFG. AND EXPORT CORP.">Nettex Mfg. and Export Corp.</option>
+              </select>
+            </div>
+            <div>
+              <label className={formLabel}>Agent</label>
+              <input
+                value={customerForm.draft.agent ?? ""}
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, agent: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Outstanding balance (USD)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={customerForm.draft.outstandingBalanceUSD}
+                onChange={(e) =>
+                  setCustomerForm({
+                    ...customerForm,
+                    draft: { ...customerForm.draft, outstandingBalanceUSD: Number(e.target.value) },
+                  })
+                }
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Customer since</label>
+              <input
+                type="date"
+                value={customerForm.draft.since}
+                onChange={(e) => setCustomerForm({ ...customerForm, draft: { ...customerForm.draft, since: e.target.value } })}
+                className={formClass}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={confirmDeleteCustomer !== null}
+        onClose={() => setConfirmDeleteCustomer(null)}
+        title={`Delete ${confirmDeleteCustomer?.name}?`}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmDeleteCustomer(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                if (confirmDeleteCustomer) {
+                  removeCustomer(confirmDeleteCustomer.id);
+                  pushToast({ tone: "info", title: "Customer deleted", description: confirmDeleteCustomer.name });
+                }
+                setConfirmDeleteCustomer(null);
+              }}
+            >
+              Delete customer
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-paper-600">
+          Quotations and sales orders already raised for this customer stay in place, but will show an unknown customer.
+        </p>
       </Modal>
 
       {filtered.length === 0 && (

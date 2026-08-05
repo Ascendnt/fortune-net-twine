@@ -1,22 +1,34 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ChevronLeft, Printer, FileDown, Loader2 } from "lucide-react";
+import { ChevronLeft, Printer, FileDown, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { InvoiceDocumentPreview } from "@/components/domain/InvoiceDocumentPreview";
 import { useStore } from "@/lib/store";
 import { formatDate, formatMoney } from "@/lib/format";
 import { downloadElementAsPdf } from "@/lib/pdf";
+import type { InvoiceStatus } from "@/lib/types";
+
+const formClass =
+  "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
+const miniClass =
+  "w-24 rounded-md border border-paper-200 bg-white px-2 py-1 text-right text-xs font-mono focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
+const formLabel = "mb-1 block text-xs font-medium text-paper-600";
+
+const INVOICE_STATUSES: InvoiceStatus[] = ["draft", "issued", "sent", "paid", "overdue"];
 
 export function InvoiceDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { invoices, customers, pushToast } = useStore();
+  const { invoices, customers, updateInvoice, removeInvoice, pushToast } = useStore();
   const inv = invoices.find((i) => i.id === id);
   const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (!inv) {
     return (
@@ -77,6 +89,18 @@ export function InvoiceDetail() {
             >
               {pdfLoading ? "Generating…" : "Download PDF"}
             </Button>
+            <Button variant="secondary" size="sm" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-alert-600"
+              icon={<Trash2 className="h-3.5 w-3.5" />}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete
+            </Button>
           </div>
         }
       />
@@ -103,6 +127,189 @@ export function InvoiceDetail() {
         </div>
         <InvoiceDocumentPreview inv={inv} customer={customer} />
       </div>
+
+      <Modal
+        open={editing}
+        onClose={() => setEditing(false)}
+        title={`Edit ${inv.id}`}
+        subtitle="Adjust shipped quantities for a partial shipment, or correct the charges and shipping references."
+        width="max-w-3xl"
+        footer={
+          <Button variant="primary" size="sm" onClick={() => setEditing(false)}>
+            Done
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <p className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-wide text-paper-400">
+              Shipped quantity per line
+            </p>
+            <div className="overflow-hidden rounded-lg border border-paper-200">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-paper-50 text-left font-mono text-[10px] uppercase tracking-wide text-paper-500">
+                    <th className="px-2 py-1.5">Code</th>
+                    <th className="px-2 py-1.5">Description</th>
+                    <th className="w-20 px-2 py-1.5 text-right">Quoted</th>
+                    <th className="w-28 px-2 py-1.5 text-right">Shipped</th>
+                    <th className="w-28 px-2 py-1.5 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inv.items.map((li) => {
+                    const shipped = li.shippedQtyPcs ?? li.qtyPcs;
+                    return (
+                      <tr key={li.id} className="border-t border-paper-100">
+                        <td className="px-2 py-1.5 font-mono text-pine-800">{li.itemCode}</td>
+                        <td className="px-2 py-1.5 text-paper-600">{li.description}</td>
+                        <td className="px-2 py-1.5 text-right font-mono text-paper-400">{li.qtyPcs}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          <input
+                            type="number"
+                            min={0}
+                            value={shipped}
+                            onChange={(e) => {
+                              const qty = Number(e.target.value);
+                              updateInvoice(inv.id, {
+                                items: inv.items.map((x) =>
+                                  x.id === li.id
+                                    ? { ...x, shippedQtyPcs: qty, totalPrice: x.unitPrice * qty }
+                                    : x
+                                ),
+                              });
+                            }}
+                            className={miniClass}
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono font-semibold text-pine-800">
+                          {formatMoney(li.totalPrice, inv.currency)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label className={formLabel}>Freight</label>
+              <input
+                type="number"
+                step="0.01"
+                value={inv.freight}
+                onChange={(e) => updateInvoice(inv.id, { freight: Number(e.target.value) })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Discount</label>
+              <input
+                type="number"
+                step="0.01"
+                value={inv.discount}
+                onChange={(e) => updateInvoice(inv.id, { discount: Number(e.target.value) })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Tax</label>
+              <input
+                type="number"
+                step="0.01"
+                value={inv.tax}
+                onChange={(e) => updateInvoice(inv.id, { tax: Number(e.target.value) })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Shipped weight (kg)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={inv.shippedWeightKg}
+                onChange={(e) => updateInvoice(inv.id, { shippedWeightKg: Number(e.target.value) })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Bill of lading no.</label>
+              <input
+                value={inv.billOfLadingNo ?? ""}
+                onChange={(e) => updateInvoice(inv.id, { billOfLadingNo: e.target.value })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Container no.</label>
+              <input
+                value={inv.containerNo ?? ""}
+                onChange={(e) => updateInvoice(inv.id, { containerNo: e.target.value })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Issue date</label>
+              <input
+                type="date"
+                value={inv.issueDate}
+                onChange={(e) => updateInvoice(inv.id, { issueDate: e.target.value })}
+                className={formClass}
+              />
+            </div>
+            <div>
+              <label className={formLabel}>Status</label>
+              <select
+                value={inv.status}
+                onChange={(e) => updateInvoice(inv.id, { status: e.target.value as InvoiceStatus })}
+                className={formClass}
+              >
+                {INVOICE_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-end">
+              <p className="text-xs text-paper-500">
+                Total due{" "}
+                <span className="font-mono font-semibold text-pine-800">{formatMoney(total, inv.currency)}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={`Delete ${inv.id}?`}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                removeInvoice(inv.id);
+                pushToast({ tone: "info", title: "Invoice deleted", description: inv.id });
+                navigate(`/orders/${inv.salesOrderId}`);
+              }}
+            >
+              Delete invoice
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-paper-600">
+          {inv.salesOrderId} will no longer link to a commercial invoice, and you'll be able to generate a fresh one.
+        </p>
+      </Modal>
     </div>
   );
 }

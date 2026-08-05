@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   History,
   Settings,
+  Library,
   ChevronsLeft,
   ChevronsRight,
   Lock,
@@ -75,7 +76,10 @@ const groups: NavGroup[] = [
   },
   {
     label: "System",
-    items: [{ to: "/settings", label: "Settings", icon: Settings }],
+    items: [
+      { to: "/master-data", label: "Master Data", icon: Library },
+      { to: "/settings", label: "Settings", icon: Settings },
+    ],
   },
 ];
 

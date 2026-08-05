@@ -105,6 +105,11 @@ export interface LookupTableRow {
 export interface LookupTable {
   id: string;
   name: string;
+  // How this table's row values are interpreted. MD/DW tables hold currency amounts added to the
+  // running price; the insurance table holds a percentage of it (0.66 means 0.66%, per the system
+  // simulation doc §7: `ADD INSURANCE : P -> P + P x 0.0066`). Without this the engine treated
+  // 0.66 as $0.66 — roughly 8.6x the intended step on an 11.60 base.
+  valueKind: "amount" | "percent";
   rows: LookupTableRow[];
 }
 
@@ -132,6 +137,60 @@ export interface LinePricing {
   laborCost: number;
   wastageCost: number;
   twineCost: number;
+}
+
+// ---------- Batch tree (see lib/batches.ts for factories and flattening) ----------
+// Re-exported here so `Quotation` can reference QuotationBatch without a circular import:
+// batches.ts imports QuotationLineItem/LinePricing from this module.
+
+export type BatchType = "assembled" | "normal" | "lacing" | "note";
+
+/** The priced unit. One row per specification code picked from the master. */
+export interface SpecLine {
+  id: string;
+  specCode: string;
+  /** Composed dimension label, e.g. `NO.120(210/22x16) 3-1/2"STR 122MD x 70FL(1656ML)`. */
+  description: string;
+  meshDepth: string;
+  length: string;
+  weightPerPc: number; // readonly, from the master row
+  givenPriceKg: number;
+  qtyPcs: number;
+  pricing: LinePricing; // always populated — see spec §6.2.1
+  unitPrice: number; // U/P, always derived
+  amount: number; // U/P x qty
+  weightKg: number; // weightPerPc x qty
+}
+
+/** One Item Selection result: a composed specification string plus the spec rows priced under it. */
+export interface BatchItem {
+  id: string;
+  specification: string;
+  /** Retained so Add Specification can filter the master and the spec stays re-editable. */
+  material: string;
+  netType: string;
+  weightUom: string;
+  qtyUom: string;
+  specs: SpecLine[];
+}
+
+export interface LacingLine {
+  id: string;
+  code: string;
+  description: string;
+  kind: "twine" | "charge";
+  kgs: number; // 0 for a flat charge
+  rate: number; // per-kg for twine; the flat amount for a charge
+  amount: number;
+}
+
+export interface QuotationBatch {
+  id: string;
+  type: BatchType;
+  title?: string; // assembled only
+  items?: BatchItem[]; // assembled | normal
+  lacing?: LacingLine[]; // lacing only
+  note?: string; // note only
 }
 
 // ---------- Quotation / Proforma Invoice ----------
@@ -163,6 +222,10 @@ export interface QuotationLineItem {
   // Set once a Commercial Invoice is generated against actual shipped quantity, which may differ
   // from the quoted qtyPcs on partial shipments (Part B, field mapping: Qty -> Shipped Qty).
   shippedQtyPcs?: number;
+  // Provenance within the batch tree, set by flattenBatches(). Lets the PI document regroup a flat
+  // line list back into its authored batches without duplicating the tree in the document layer.
+  batchId?: string;
+  itemId?: string;
 }
 
 export interface QuotationRevision {
@@ -186,9 +249,19 @@ export interface Quotation {
   validityDays: number;
   issueDate: string;
   paymentTerms: string;
+  // Cover-letter fields from the reference quotation header (simulation doc §2 step 1 / §3.1).
+  // Shipment is written as a phrase ("30 days from receipt of deposit"), not a date — see
+  // SHIPMENT_TERM_OPTIONS in mockData. Falls back to the computed estimatedShipmentDate when unset.
+  shipmentTerms?: string;
+  dearSirs?: string;
   moq: string;
   leadTimeWeeks: number;
   estimatedShipmentDate: string;
+  // The authored batch tree (ASSEMBLED / NORMAL / LACING / NOTE). `items` below is its flattened
+  // projection, produced by flattenBatches() on save — every downstream consumer (sales orders,
+  // commercial invoices, reports) keeps reading `items` and needs no knowledge of batches.
+  // Absent on seeded quotations authored before the batch model existed.
+  batches?: QuotationBatch[];
   items: QuotationLineItem[];
   freight: number;
   discount: number;

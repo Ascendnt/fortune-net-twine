@@ -12,6 +12,8 @@ import {
   History,
   ChevronLeft,
   Loader2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
@@ -22,14 +24,16 @@ import { PIDocumentPreview } from "@/components/domain/PIDocumentPreview";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/format";
+import { totalsForQuotation } from "@/lib/totals";
 import { downloadElementAsPdf } from "@/lib/pdf";
 
-type ModalKind = "revision" | "response" | "convert" | null;
+type ModalKind = "revision" | "response" | "convert" | "delete" | null;
 
 export function QuotationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { quotations, role, updateQuotationStatus, createRevision, convertToSalesOrder, pushToast, customers } = useStore();
+  const { quotations, role, updateQuotationStatus, createRevision, convertToSalesOrder, removeQuotation, pushToast, customers } =
+    useStore();
   const [modal, setModal] = useState<ModalKind>(null);
   const [noteText, setNoteText] = useState("");
   const [responseDecision, setResponseDecision] = useState<"accepted" | "rejected" | "under_negotiation">("accepted");
@@ -40,10 +44,9 @@ export function QuotationDetail() {
   const customer = q ? customers.find((c) => c.id === q.customerId) : undefined;
   const canApprove = role === "sales_manager" || role === "management" || role === "admin";
 
-  const total = useMemo(() => {
-    if (!q) return 0;
-    return q.items.reduce((s, li) => s + li.totalPrice, 0) + q.freight - q.discount + q.tax;
-  }, [q]);
+  // Single shared roll-up — prefers the authored batch tree, falls back to the flat line list for
+  // quotations that predate it.
+  const total = useMemo(() => (q ? totalsForQuotation(q).grandTotal : 0), [q]);
 
   if (!q) {
     return (
@@ -197,11 +200,28 @@ export function QuotationDetail() {
             </Button>
           </Link>
         )}
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Pencil className="h-3.5 w-3.5" />}
+          onClick={() => navigate(`/quotations/${q.id}/edit`)}
+        >
+          Edit
+        </Button>
         <Button variant="secondary" size="sm" icon={<GitBranch className="h-3.5 w-3.5" />} onClick={() => setModal("revision")}>
           Create Revision
         </Button>
         <Button variant="ghost" size="sm" icon={<Save className="h-3.5 w-3.5" />} onClick={() => pushToast({ tone: "info", title: "Draft saved" })}>
           Save Draft
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto text-alert-600"
+          icon={<Trash2 className="h-3.5 w-3.5" />}
+          onClick={() => setModal("delete")}
+        >
+          Delete
         </Button>
       </div>
       </div>
@@ -366,6 +386,37 @@ export function QuotationDetail() {
           placeholder="e.g. Customer requests standard selvage length be guaranteed in writing"
           className="w-full rounded-lg border border-paper-200 px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
         />
+      </Modal>
+
+      <Modal
+        open={modal === "delete"}
+        onClose={closeModal}
+        title={`Delete ${q.id}?`}
+        subtitle="This removes the quotation from this browser. It cannot be undone."
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                removeQuotation(q.id);
+                pushToast({ tone: "info", title: "Quotation deleted", description: `${q.id} removed.` });
+                navigate("/quotations");
+              }}
+            >
+              Delete quotation
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-paper-600">
+          {q.salesOrderId
+            ? `This quotation has already been converted to ${q.salesOrderId}. Deleting it leaves that sales order in place, referencing a quotation that no longer exists.`
+            : "Any batch groups, specifications and pricing on this quotation will be discarded."}
+        </p>
       </Modal>
 
       <Modal

@@ -2,11 +2,16 @@
 // ("1st selection" through "8th selection"). The original discovery doc frames item building as
 // Category -> Material -> Net Type -> Knots -> Selvages -> Stretching -> Reinforcement -> Others ->
 // Color -> UOM, auto-generating a descriptive spec string, rather than picking from a fixed catalog
-// row. These lists back that flow: SpecBuilderModal composes a selection from each category into a
-// specification string that can override a line's catalog-derived spec on a quotation.
+// row. These lists back that flow: ItemSelectionModal composes a selection from each category into
+// the specification sentence that heads a batch item, and the item's Material + Net Type then
+// filter which specification codes the Add Specification picker offers.
 //
 // Each category is an independent, deduplicated pick-list (not a nested per-material tree) — the
 // source sheet's "Nth selection" header names a sequence of choices, not a hierarchy.
+
+// First selection in the Item Selection flow (doc §3.3) — narrows what the rest of the sheet is
+// describing before any material is chosen.
+export const SPEC_CATEGORIES = ["NET", "SPORTS NET", "TWINE"];
 
 export const SPEC_MATERIALS = ["Nylon", "HDPE", "Hi-Ex", "Polyester", "HTPE"] as const;
 
@@ -233,9 +238,13 @@ export const SPEC_COLORS = [
   "Smoke Grey Color",
 ];
 
-export const SPEC_WEIGHT_UNITS = ["lbs", "kgs"];
+export const SPEC_WEIGHT_UNITS = ["KGS", "LBS"];
+
+/** Last selection — the unit the quoted QTY is expressed in. Nets ship by the piece, twine by kilo. */
+export const SPEC_QTY_UNITS = ["PCS", "KGS"];
 
 export interface SpecSelection {
+  category: string;
   material: string;
   netType: string;
   knots: string;
@@ -245,9 +254,11 @@ export interface SpecSelection {
   others: string;
   color: string;
   weightUnit: string;
+  qtyUnit: string;
 }
 
 export const EMPTY_SPEC_SELECTION: SpecSelection = {
+  category: "",
   material: "",
   netType: "",
   knots: "",
@@ -256,14 +267,20 @@ export const EMPTY_SPEC_SELECTION: SpecSelection = {
   reinforcement: "",
   others: "",
   color: "",
-  weightUnit: "",
+  weightUnit: "KGS",
+  qtyUnit: "PCS",
 };
 
 // Joins whichever categories are actually picked, in the sheet's own "1st..8th selection" order.
 // Every category is optional except Material — a spec with just a material and color is valid,
 // matching how not every real item needs a knot/reinforcement/etc. called out.
+//
+// The reference app renders the result as one upper-cased sentence with no separators
+// ("NYLON BRAIDED NET SK DSTB DOUBLE SELVAGE ON TOP ONLY DWS REINFORCED BY THICKER TWINE …"),
+// so that is what this produces. The weight/quantity UOMs are deliberately excluded — they are
+// column headers on the item row, not part of the specification sentence.
 export function buildSpecString(sel: SpecSelection): string {
-  const parts = [
+  return [
     sel.material,
     sel.netType,
     sel.knots,
@@ -272,7 +289,8 @@ export function buildSpecString(sel: SpecSelection): string {
     sel.reinforcement,
     sel.others,
     sel.color,
-  ].filter(Boolean);
-  if (parts.length === 0) return "";
-  return sel.weightUnit ? `${parts.join(", ")} (${sel.weightUnit})` : parts.join(", ");
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase();
 }
