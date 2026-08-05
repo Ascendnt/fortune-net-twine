@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyPricing, newBatch, newSpecLine } from "./batches";
 import { LOOKUP_TABLES, PRICING_RULES } from "./mockData";
 import { SPEC_MASTER } from "./specMaster";
-import { batchTotal, batchWeight, quotationTotals, recomputeSpecLine, totalsFromItems } from "./totals";
+import { batchTotal, batchWeight, quotationTotals, recomputeSpecLine, resolveDiscount, totalsFromItems } from "./totals";
 import type { QuotationBatch, SpecLine } from "./types";
 
 const N1596 = SPEC_MASTER.find((r) => r.code === "N-1596")!;
@@ -101,6 +101,33 @@ describe("batch roll-ups", () => {
       expect(batchTotal(newBatch(type))).toBe(0);
       expect(batchWeight(newBatch(type))).toBe(0);
     }
+  });
+});
+
+describe("discount mode", () => {
+  it("treats a discount without a mode as money, so older records are unaffected", () => {
+    expect(resolveDiscount(1000, 150)).toBe(150);
+    expect(resolveDiscount(1000, 150, "amount")).toBe(150);
+  });
+
+  it("resolves a percentage against the items total", () => {
+    expect(resolveDiscount(1000, 12)).toBe(12);
+    expect(resolveDiscount(1000, 12, "percent")).toBe(120);
+  });
+
+  it("subtracts the resolved percentage from the grand total", () => {
+    const batch = normalBatch([pricedLine({ id: "a", amount: 1000, weightKg: 10 })]);
+    const asAmount = quotationTotals([batch], 0, 10, 0, "amount");
+    const asPercent = quotationTotals([batch], 0, 10, 0, "percent");
+    expect(asAmount.discountValue).toBe(10);
+    expect(asAmount.grandTotal).toBe(990);
+    expect(asPercent.discountValue).toBe(100);
+    expect(asPercent.grandTotal).toBe(900);
+  });
+
+  it("reports the resolved discount so the UI never recomputes it separately", () => {
+    const batch = normalBatch([pricedLine({ id: "a", amount: 250, weightKg: 5 })]);
+    expect(quotationTotals([batch], 0, 20, 0, "percent").discountValue).toBe(50);
   });
 });
 

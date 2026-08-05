@@ -126,7 +126,7 @@ export function ItemSelectionModal({
         </p>
         {ready && (
           <p className="mt-1.5 text-[11px] text-paper-500">
-            Specifications will be filtered to {sel.material} · {sel.netType}.
+            Specifications will be filtered to {sel.material} {sel.netType}.
           </p>
         )}
       </div>

@@ -38,7 +38,7 @@ export function DocumentCenter() {
         breadcrumb={["Fortune Net & Twine ERP", "Records"]}
         eyebrow="Centralized Repository"
         title="Document Center"
-        description="Every PI, PO, packing list, and remittance copy — with version history so only the current revision is authoritative."
+        description="Every PI, PO, packing list, and remittance copy, with version history so only the current revision is authoritative."
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-3">

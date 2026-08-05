@@ -105,7 +105,7 @@ export function ApprovalsInbox() {
       <Modal
         open={!!target}
         onClose={() => setTarget(null)}
-        title={`${target?.type} — ${target?.referenceId}`}
+        title={`${target?.type}: ${target?.referenceId}`}
         subtitle={target?.reason}
         footer={
           <>

@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate, initials } from "@/lib/format";
+import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
 import type { Contact, Currency, Customer } from "@/lib/types";
 
 const fieldClass =
@@ -265,7 +266,7 @@ export function CustomersList() {
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-paper-500">
-                  Contacts — pick who a quotation is addressed to
+                  Contacts, pick who a quotation is addressed to
                 </p>
                 {!addingContact && !editingContactId && (
                   <button
@@ -463,13 +464,12 @@ export function CustomersList() {
             <div>
               <label className={formLabel}>Outstanding balance (USD)</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={customerForm.draft.outstandingBalanceUSD}
                 onChange={(e) =>
                   setCustomerForm({
                     ...customerForm,
-                    draft: { ...customerForm.draft, outstandingBalanceUSD: Number(e.target.value) },
+                    draft: { ...customerForm.draft, outstandingBalanceUSD: toNonNegative(e.target.value) },
                   })
                 }
                 className={formClass}

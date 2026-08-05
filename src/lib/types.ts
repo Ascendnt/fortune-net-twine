@@ -265,6 +265,11 @@ export interface Quotation {
   items: QuotationLineItem[];
   freight: number;
   discount: number;
+  /**
+   * How `discount` is read. "amount" subtracts it as money; "percent" subtracts that percentage
+   * of the items total. Absent on older records, which were always amounts.
+   */
+  discountMode?: "amount" | "percent";
   tax: number;
   depositPercent: number;
   assignedSalesperson: string;
@@ -393,6 +398,7 @@ export interface CommercialInvoice {
   items: QuotationLineItem[];
   freight: number;
   discount: number;
+  discountMode?: "amount" | "percent";
   tax: number;
   status: InvoiceStatus;
   shippedWeightKg: number;

@@ -9,6 +9,7 @@ import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
 import { SPEC_MATERIALS, SPEC_NET_TYPES } from "@/lib/specOptions";
 import type { LacingCatalogRow, SpecMasterRow } from "@/lib/specMaster";
+import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
 
 // Master data maintenance. The specification catalog and the lacing catalog drive every price and
 // weight on a quotation, so the client needs to add, correct and retire rows themselves rather than
@@ -43,7 +44,7 @@ export function MasterDataPage() {
         breadcrumb={["Fortune Net & Twine ERP", "Master Data"]}
         eyebrow="Catalog Maintenance"
         title="Master Data"
-        description="The specification and lacing catalogs behind every quotation. Add, edit and retire rows here — changes apply immediately and are saved in this browser."
+        description="The specification and lacing catalogs behind every quotation. Add, edit and retire rows here; changes apply immediately and are saved in this browser."
       />
 
       <div className="mb-4 flex gap-1 rounded-lg border border-paper-200 bg-white p-1">
@@ -71,7 +72,7 @@ export function MasterDataPage() {
       <div className="mt-5">
         <ProcessDiscoveryNote
           items={[
-            "Specification codes beyond N-1595…N-1603 are extrapolated from the families in the item master — the factory's real export should replace them before any live use.",
+            "Specification codes beyond N-1595 to N-1603 are extrapolated from the families in the item master. The factory's real export should replace them before any live use.",
             "Deleting a specification does not touch quotations that already reference it; their saved lines keep their own weight and price snapshot.",
             "Lacing rates default to 2.50/kg from the simulation sample; a per-code rate card is still to be confirmed.",
           ]}
@@ -276,10 +277,9 @@ function SpecTab() {
             <div>
               <label className={label}>Weight / pc (kg)</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={editing.weightPerPc}
-                onChange={(e) => setEditing({ ...editing, weightPerPc: Number(e.target.value) })}
+                onChange={(e) => setEditing({ ...editing, weightPerPc: toNonNegative(e.target.value) })}
                 className={input}
               />
             </div>
@@ -436,7 +436,7 @@ function LacingTab() {
                         r.kind === "twine" ? "bg-pine-100 text-pine-800" : "bg-paper-100 text-paper-600"
                       )}
                     >
-                      {r.kind === "twine" ? "Twine · adds weight" : "Charge · no weight"}
+                      {r.kind === "twine" ? "Twine, adds weight" : "Charge, no weight"}
                     </span>
                   </td>
                   <td className="px-2 py-1.5 text-right font-mono">{r.defaultRate.toFixed(2)}</td>
@@ -506,17 +506,16 @@ function LacingTab() {
                 onChange={(e) => setEditing({ ...editing, kind: e.target.value as LacingCatalogRow["kind"] })}
                 className={input}
               >
-                <option value="twine">Twine — priced by the kilo, adds to Total Weight</option>
-                <option value="charge">Charge — flat amount, adds no weight</option>
+                <option value="twine">Twine, priced by the kilo, adds to Total Weight</option>
+                <option value="charge">Charge, flat amount, adds no weight</option>
               </select>
             </div>
             <div>
               <label className={label}>{editing.kind === "twine" ? "Default rate per kg" : "Default charge amount"}</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={editing.defaultRate}
-                onChange={(e) => setEditing({ ...editing, defaultRate: Number(e.target.value) })}
+                onChange={(e) => setEditing({ ...editing, defaultRate: toNonNegative(e.target.value) })}
                 className={input}
               />
             </div>

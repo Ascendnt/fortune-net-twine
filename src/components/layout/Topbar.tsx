@@ -16,8 +16,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const activeRole = ROLES.find((r) => r.id === role)!;
 
   const notifications = [
-    { title: "Remaining balance overdue — SO-1048", tone: "Finance", time: "2h ago" },
-    { title: "Deposit remittance submitted — SO-1046", tone: "Finance", time: "5h ago" },
+    { title: "Remaining balance overdue on SO-1048", tone: "Finance", time: "2h ago" },
+    { title: "Deposit remittance submitted for SO-1046", tone: "Finance", time: "5h ago" },
     { title: "PI-33011 awaiting your approval", tone: "Sales", time: "1d ago" },
   ];
 

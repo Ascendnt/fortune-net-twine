@@ -140,7 +140,7 @@ export function ReportsPage() {
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-2 rounded-lg border border-dashed border-paper-300 px-3 py-6 text-center text-paper-400">
               <BarChart3 className="h-4 w-4" />
-              Statement of Account preview — orders, payments received, and current balance for this customer would
+              Statement of Account preview. Orders, payments received, and current balance for this customer would
               render here in the full build.
             </div>
             <p className="text-xs text-paper-400">

@@ -23,10 +23,22 @@ import type {
   SpecLine,
 } from "./types";
 
+export type DiscountMode = "amount" | "percent";
+
 export interface QuotationTotals {
   itemsTotal: number;
   totalWeightKg: number;
+  /** The discount as money, after resolving a percentage against the items total. */
+  discountValue: number;
   grandTotal: number;
+}
+
+/**
+ * A discount is entered either as money or as a percentage of the items total. Records written
+ * before the percentage option existed have no mode and are always amounts.
+ */
+export function resolveDiscount(itemsTotal: number, discount: number, mode?: DiscountMode): number {
+  return mode === "percent" ? (itemsTotal * discount) / 100 : discount;
 }
 
 /**
@@ -100,11 +112,13 @@ export function quotationTotals(
   batches: QuotationBatch[],
   freight = 0,
   discount = 0,
-  tax = 0
+  tax = 0,
+  discountMode?: DiscountMode
 ): QuotationTotals {
   const itemsTotal = batches.reduce((s, b) => s + batchTotal(b), 0);
   const totalWeightKg = batches.reduce((s, b) => s + batchWeight(b), 0);
-  return { itemsTotal, totalWeightKg, grandTotal: itemsTotal + freight - discount + tax };
+  const discountValue = resolveDiscount(itemsTotal, discount, discountMode);
+  return { itemsTotal, totalWeightKg, discountValue, grandTotal: itemsTotal + freight - discountValue + tax };
 }
 
 /** The same roll-up over an already-flattened line list, for quotations authored before batches. */
@@ -112,16 +126,18 @@ export function totalsFromItems(
   items: QuotationLineItem[],
   freight = 0,
   discount = 0,
-  tax = 0
+  tax = 0,
+  discountMode?: DiscountMode
 ): QuotationTotals {
   const itemsTotal = items.reduce((s, li) => s + li.totalPrice, 0);
   const totalWeightKg = items.reduce((s, li) => s + li.weightKg, 0);
-  return { itemsTotal, totalWeightKg, grandTotal: itemsTotal + freight - discount + tax };
+  const discountValue = resolveDiscount(itemsTotal, discount, discountMode);
+  return { itemsTotal, totalWeightKg, discountValue, grandTotal: itemsTotal + freight - discountValue + tax };
 }
 
 /** Prefers the authored tree when present, falls back to the flat projection otherwise. */
 export function totalsForQuotation(q: Quotation): QuotationTotals {
   return q.batches?.length
-    ? quotationTotals(q.batches, q.freight, q.discount, q.tax)
-    : totalsFromItems(q.items, q.freight, q.discount, q.tax);
+    ? quotationTotals(q.batches, q.freight, q.discount, q.tax, q.discountMode)
+    : totalsFromItems(q.items, q.freight, q.discount, q.tax, q.discountMode);
 }

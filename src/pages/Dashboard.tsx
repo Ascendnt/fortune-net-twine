@@ -94,10 +94,10 @@ export function Dashboard() {
     const alerts: { text: string; orderId: string; tone: "alert" | "amber" }[] = [];
     salesOrders.forEach((o) => {
       const blocked = o.stages.find((s) => s.status === "blocked");
-      if (blocked) alerts.push({ text: `${o.id} — ${blocked.blocker}`, orderId: o.id, tone: "alert" });
+      if (blocked) alerts.push({ text: `${o.id}: ${blocked.blocker}`, orderId: o.id, tone: "alert" });
     });
     payments.filter((p) => p.status === "overdue").forEach((p) => {
-      alerts.push({ text: `${p.salesOrderId} — remaining balance overdue`, orderId: p.salesOrderId, tone: "alert" });
+      alerts.push({ text: `${p.salesOrderId}: remaining balance overdue`, orderId: p.salesOrderId, tone: "alert" });
     });
     return alerts.slice(0, 5);
   }, [salesOrders, payments]);
@@ -127,7 +127,7 @@ export function Dashboard() {
 
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard label="Total active order value" value={formatMoney(stats.totalValue)} sublabel="Across all open sales orders" />
-        <StatCard label="Expected shipments — this cycle" value={String(stats.expectedThisMonth)} sublabel="Orders currently at Shipment stage" />
+        <StatCard label="Expected shipments this cycle" value={String(stats.expectedThisMonth)} sublabel="Orders currently at Shipment stage" />
         <StatCard label="Payment collection rate" value={`${stats.collectionRate}%`} sublabel="Of total expected across active orders" tone={stats.collectionRate > 70 ? "pine" : "amber"} />
       </div>
 

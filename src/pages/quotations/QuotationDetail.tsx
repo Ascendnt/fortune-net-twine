@@ -270,7 +270,7 @@ export function QuotationDetail() {
 
           {q.items.some((li) => li.pricing) && (
             <Card>
-              <CardHeader title="Pricing Breakdown" eyebrow="Internal — margin review" />
+              <CardHeader title="Pricing Breakdown" eyebrow="Internal margin review" />
               <div className="space-y-4">
                 {q.items
                   .filter((li) => li.pricing)
@@ -312,7 +312,7 @@ export function QuotationDetail() {
           <ProcessDiscoveryNote
             items={[
               "Is customer acceptance received as a signed PI, email confirmation, or separate PO?",
-              "Discount approval threshold above which Sales Manager sign-off is mandatory — to be confirmed.",
+              "Discount approval threshold above which Sales Manager sign-off is mandatory, still to be confirmed.",
               "PI validity auto-expiry: should the system auto-flag expired PIs, or is this manual today?",
             ]}
           />

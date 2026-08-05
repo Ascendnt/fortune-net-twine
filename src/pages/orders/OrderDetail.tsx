@@ -100,7 +100,7 @@ export function OrderDetail() {
       pushToast({
         tone: "success",
         title: "Commercial Invoice generated",
-        description: isPartial ? `${invId} — partial shipment recalculated on actual qty.` : invId,
+        description: isPartial ? `${invId}: partial shipment recalculated on actual qty.` : invId,
       });
       navigate(`/invoices/${invId}`);
     }
@@ -143,7 +143,7 @@ export function OrderDetail() {
           <div className="flex gap-3">
             <ArrowRightCircle className="mt-0.5 h-4 w-4 shrink-0 text-manifest-600" />
             <div>
-              <p className="text-sm font-semibold text-manifest-800">Next action — {currentStageMeta.role}</p>
+              <p className="text-sm font-semibold text-manifest-800">Next action for {currentStageMeta.role}</p>
               <p className="text-sm text-manifest-700">{currentStageRec.pendingAction}</p>
             </div>
           </div>
@@ -267,7 +267,7 @@ export function OrderDetail() {
               <ProcessDiscoveryNote
                 items={[
                   "Should Production Planner be notified automatically once deposit clears, or is this still a manual handoff?",
-                  "Retention period for superseded PI/PL versions — to confirm with client for audit purposes.",
+                  "Retention period for superseded PI/PL versions, to confirm with client for audit purposes.",
                 ]}
               />
             </div>
@@ -406,7 +406,7 @@ export function OrderDetail() {
                     <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-paper-300" />
                     <div>
                       <p className="text-paper-800">
-                        <span className="font-semibold">{a.user}</span> ({a.department}) — {a.action}
+                        <span className="font-semibold">{a.user}</span> ({a.department}): {a.action}
                       </p>
                       {a.comment && <p className="mt-0.5 text-xs text-paper-500">{a.comment}</p>}
                       <p className="mt-0.5 font-mono text-[10.5px] text-paper-400">{formatDateTime(a.timestamp)}</p>
@@ -423,7 +423,7 @@ export function OrderDetail() {
         open={shipModalOpen}
         onClose={() => setShipModalOpen(false)}
         title="Confirm Shipped Quantity"
-        subtitle="Defaults to the quoted qty. Adjust any line that shipped partial — Amount recalculates from the frozen U/P."
+        subtitle="Defaults to the quoted qty. Adjust any line that shipped partial, and Amount recalculates from the frozen U/P."
         width="max-w-xl"
         footer={
           <>

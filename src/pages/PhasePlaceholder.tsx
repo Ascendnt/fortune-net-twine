@@ -10,7 +10,7 @@ export function PhasePlaceholder({ title, note }: { title: string; note: string 
       <PageHeader
         breadcrumb={["Fortune Net & Twine ERP"]}
         title={title}
-        description="Scoped for a later delivery horizon — shown here for navigation context only."
+        description="Scoped for a later delivery horizon, shown here for navigation context only."
       />
       <EmptyState
         icon={<Construction className="h-5 w-5" />}

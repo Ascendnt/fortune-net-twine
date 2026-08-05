@@ -19,7 +19,7 @@ export function ActivityLog() {
         breadcrumb={["Fortune Net & Twine ERP", "Records"]}
         eyebrow="Full Audit Trail"
         title="Activity Logs"
-        description="Every status change, approval, and payment verification — who did what, and when."
+        description="Every status change, approval, and payment verification: who did what, and when."
       />
 
       <div className="mb-4 relative w-full max-w-xs">
@@ -45,7 +45,7 @@ export function ActivityLog() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-paper-800">
                     <span className="font-semibold text-paper-900">{a.user}</span>{" "}
-                    <span className="text-paper-400">({a.department})</span> — {a.action}
+                    <span className="text-paper-400">({a.department})</span>: {a.action}
                     {a.previousStatus && a.newStatus && (
                       <span className="text-paper-400">
                         {" "}

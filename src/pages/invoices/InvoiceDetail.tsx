@@ -11,6 +11,9 @@ import { useStore } from "@/lib/store";
 import { formatDate, formatMoney } from "@/lib/format";
 import { downloadElementAsPdf } from "@/lib/pdf";
 import type { InvoiceStatus } from "@/lib/types";
+import { resolveDiscount } from "@/lib/totals";
+import { NON_NEGATIVE, NON_NEGATIVE_INT, toNonNegative, toPercent } from "@/lib/num";
+import type { DiscountMode } from "@/lib/totals";
 
 const formClass =
   "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
@@ -41,7 +44,9 @@ export function InvoiceDetail() {
     );
   }
 
-  const total = inv.items.reduce((s, li) => s + li.totalPrice, 0) + inv.freight - inv.discount + inv.tax;
+  const itemsTotal = inv.items.reduce((s, li) => s + li.totalPrice, 0);
+  const discountValue = resolveDiscount(itemsTotal, inv.discount, inv.discountMode);
+  const total = itemsTotal + inv.freight - discountValue + inv.tax;
   const isPartial = inv.items.some((li) => li.shippedQtyPcs !== undefined && li.shippedQtyPcs !== li.qtyPcs);
 
   async function handleDownloadPdf() {
@@ -111,7 +116,7 @@ export function InvoiceDetail() {
           <Card>
             <CardHeader title="Summary" eyebrow="Invoice" />
             <KeyValue label="Issue date" value={formatDate(inv.issueDate)} />
-            <KeyValue label="Shipment" value={isPartial ? "Partial — recalculated on shipped qty" : "Full quoted qty"} />
+            <KeyValue label="Shipment" value={isPartial ? "Partial, recalculated on shipped qty" : "Full quoted qty"} />
             <KeyValue label="Total due" value={formatMoney(total, inv.currency)} mono />
             <KeyValue label="Shipped weight" value={`${inv.shippedWeightKg.toFixed(1)} kg`} mono />
             <KeyValue
@@ -166,11 +171,10 @@ export function InvoiceDetail() {
                         <td className="px-2 py-1.5 text-right font-mono text-paper-400">{li.qtyPcs}</td>
                         <td className="px-2 py-1.5 text-right">
                           <input
-                            type="number"
-                            min={0}
+                            {...NON_NEGATIVE_INT}
                             value={shipped}
                             onChange={(e) => {
-                              const qty = Number(e.target.value);
+                              const qty = toNonNegative(e.target.value);
                               updateInvoice(inv.id, {
                                 items: inv.items.map((x) =>
                                   x.id === li.id
@@ -197,40 +201,62 @@ export function InvoiceDetail() {
             <div>
               <label className={formLabel}>Freight</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={inv.freight}
-                onChange={(e) => updateInvoice(inv.id, { freight: Number(e.target.value) })}
+                onChange={(e) => updateInvoice(inv.id, { freight: toNonNegative(e.target.value) })}
                 className={formClass}
               />
             </div>
             <div>
               <label className={formLabel}>Discount</label>
-              <input
-                type="number"
-                step="0.01"
-                value={inv.discount}
-                onChange={(e) => updateInvoice(inv.id, { discount: Number(e.target.value) })}
-                className={formClass}
-              />
+              <div className="flex gap-2">
+                <input
+                  {...NON_NEGATIVE}
+                  value={inv.discount}
+                  onChange={(e) =>
+                    updateInvoice(inv.id, {
+                      discount:
+                        inv.discountMode === "percent" ? toPercent(e.target.value) : toNonNegative(e.target.value),
+                    })
+                  }
+                  className={formClass}
+                />
+                <select
+                  value={inv.discountMode ?? "amount"}
+                  onChange={(e) => {
+                    const mode = e.target.value as DiscountMode;
+                    updateInvoice(inv.id, {
+                      discountMode: mode,
+                      discount: mode === "percent" ? Math.min(100, inv.discount) : inv.discount,
+                    });
+                  }}
+                  className="w-24 shrink-0 rounded-lg border border-paper-200 bg-white px-2 py-2 text-sm"
+                >
+                  <option value="amount">{inv.currency}</option>
+                  <option value="percent">%</option>
+                </select>
+              </div>
+              {inv.discountMode === "percent" && inv.discount > 0 && (
+                <p className="mt-1 text-[11px] text-paper-500">
+                  {inv.discount}% is <span className="font-mono">{formatMoney(discountValue, inv.currency)}</span>
+                </p>
+              )}
             </div>
             <div>
               <label className={formLabel}>Tax</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={inv.tax}
-                onChange={(e) => updateInvoice(inv.id, { tax: Number(e.target.value) })}
+                onChange={(e) => updateInvoice(inv.id, { tax: toNonNegative(e.target.value) })}
                 className={formClass}
               />
             </div>
             <div>
               <label className={formLabel}>Shipped weight (kg)</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={inv.shippedWeightKg}
-                onChange={(e) => updateInvoice(inv.id, { shippedWeightKg: Number(e.target.value) })}
+                onChange={(e) => updateInvoice(inv.id, { shippedWeightKg: toNonNegative(e.target.value) })}
                 className={formClass}
               />
             </div>

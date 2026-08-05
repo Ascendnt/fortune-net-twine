@@ -6,7 +6,7 @@ import clsx from "clsx";
 
 // One searchable, filterable, paginated, multi-select table used by every picker in the quotation
 // flow (specifications, lacing, and anything added later). Written once so the lists all behave the
-// same way — the alternative was three near-identical implementations drifting apart.
+// same way. The alternative was three near-identical implementations drifting apart.
 
 export interface DataTableColumn<T> {
   key: string;

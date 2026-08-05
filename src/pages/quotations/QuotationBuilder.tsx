@@ -18,6 +18,8 @@ import { SHIPMENT_TERM_OPTIONS } from "@/lib/mockData";
 import { formatMoney } from "@/lib/format";
 import { flattenBatches, lacingAmount, newBatch, newBatchItem, newLacingLine, newSpecLine } from "@/lib/batches";
 import { quotationTotals, recomputeSpecLine } from "@/lib/totals";
+import type { DiscountMode } from "@/lib/totals";
+import { NON_NEGATIVE, NON_NEGATIVE_INT, toNonNegative, toPercent } from "@/lib/num";
 import type { BatchType, Currency, LacingLine, Quotation, QuotationBatch, SpecLine } from "@/lib/types";
 import type { SpecSelection } from "@/lib/specOptions";
 import type { LacingCatalogRow, SpecMasterRow } from "@/lib/specMaster";
@@ -74,6 +76,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
   const [dearSirs, setDearSirs] = useState(existing?.dearSirs ?? "");
   const [freight, setFreight] = useState(existing?.freight ?? 0);
   const [discount, setDiscount] = useState(existing?.discount ?? 0);
+  const [discountMode, setDiscountMode] = useState<DiscountMode>(existing?.discountMode ?? "amount");
   const [tax, setTax] = useState(existing?.tax ?? 0);
   const [remarks, setRemarks] = useState(existing?.remarks ?? "");
 
@@ -86,7 +89,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       ? [{ id: "primary", name: customer.contactPerson, isPrimary: true }]
       : [];
 
-  const totals = quotationTotals(batches, freight, discount, tax);
+  const totals = quotationTotals(batches, freight, discount, tax, discountMode);
 
   // Editing a quotation authored before the batch model would silently discard its line items, so
   // that case is blocked rather than allowed to destroy data.
@@ -293,6 +296,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       items,
       freight,
       discount,
+      discountMode,
       tax,
       depositPercent,
       remarks,
@@ -322,7 +326,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
         title={existing ? `Edit ${existing.id}` : "New Quotation"}
         description={
           existing
-            ? "Change any part of this quotation — terms, batch groups, specifications or pricing — then save."
+            ? "Change any part of this quotation: terms, batch groups, specifications or pricing, then save."
             : "Draft a new Proforma Invoice. Build it from batch groups, then price each specification."
         }
         actions={
@@ -355,7 +359,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                     value={customerId}
                     onChange={handleCustomerChange}
                     placeholder="Select a customer…"
-                    options={customers.map((c) => ({ value: c.id, label: c.name, sublabel: `— ${c.country}` }))}
+                    options={customers.map((c) => ({ value: c.id, label: c.name, sublabel: c.country }))}
                   />
                 </Field>
               </div>
@@ -367,7 +371,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                   {contactOptions.map((c) => (
                     <option key={c.id} value={c.name}>
                       {c.name}
-                      {c.title ? ` — ${c.title}` : ""}
+                      {c.title ? `, ${c.title}` : ""}
                     </option>
                   ))}
                 </select>
@@ -412,22 +416,76 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                 <input value={moq} onChange={(e) => setMoq(e.target.value)} className={inputClass} />
               </Field>
               <Field label="Deposit required (%)">
-                <input type="number" value={depositPercent} onChange={(e) => setDepositPercent(Number(e.target.value))} className={inputClass} />
+                <input
+                  {...NON_NEGATIVE}
+                  value={depositPercent}
+                  onChange={(e) => setDepositPercent(toPercent(e.target.value))}
+                  className={inputClass}
+                />
               </Field>
               <Field label="Lead time (weeks)">
-                <input type="number" value={leadTimeWeeks} onChange={(e) => setLeadTimeWeeks(Number(e.target.value))} className={inputClass} />
+                <input
+                  {...NON_NEGATIVE_INT}
+                  value={leadTimeWeeks}
+                  onChange={(e) => setLeadTimeWeeks(toNonNegative(e.target.value))}
+                  className={inputClass}
+                />
               </Field>
               <Field label="Validity (days)">
-                <input type="number" value={validityDays} onChange={(e) => setValidityDays(Number(e.target.value))} className={inputClass} />
+                <input
+                  {...NON_NEGATIVE_INT}
+                  value={validityDays}
+                  onChange={(e) => setValidityDays(toNonNegative(e.target.value))}
+                  className={inputClass}
+                />
               </Field>
               <Field label="Freight / additional charges">
-                <input type="number" value={freight} onChange={(e) => setFreight(Number(e.target.value))} className={inputClass} />
+                <input
+                  {...NON_NEGATIVE}
+                  value={freight}
+                  onChange={(e) => setFreight(toNonNegative(e.target.value))}
+                  className={inputClass}
+                />
               </Field>
               <Field label="Discount">
-                <input type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className={inputClass} />
+                <div className="flex gap-2">
+                  <input
+                    {...NON_NEGATIVE}
+                    value={discount}
+                    onChange={(e) =>
+                      setDiscount(discountMode === "percent" ? toPercent(e.target.value) : toNonNegative(e.target.value))
+                    }
+                    className={inputClass}
+                  />
+                  <select
+                    value={discountMode}
+                    onChange={(e) => {
+                      const mode = e.target.value as DiscountMode;
+                      setDiscountMode(mode);
+                      // Switching to percent would otherwise carry a money figure straight into a
+                      // percentage field, so a value above 100 is capped as it changes meaning.
+                      if (mode === "percent") setDiscount((d) => Math.min(100, d));
+                    }}
+                    className="w-24 shrink-0 rounded-lg border border-paper-200 bg-white px-2 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+                  >
+                    <option value="amount">{currency}</option>
+                    <option value="percent">%</option>
+                  </select>
+                </div>
+                {discountMode === "percent" && discount > 0 && (
+                  <p className="mt-1 text-[11px] text-paper-500">
+                    {discount}% of {formatMoney(totals.itemsTotal, currency)} is{" "}
+                    <span className="font-mono">{formatMoney(totals.discountValue, currency)}</span>
+                  </p>
+                )}
               </Field>
               <Field label="Tax">
-                <input type="number" value={tax} onChange={(e) => setTax(Number(e.target.value))} className={inputClass} />
+                <input
+                  {...NON_NEGATIVE}
+                  value={tax}
+                  onChange={(e) => setTax(toNonNegative(e.target.value))}
+                  className={inputClass}
+                />
               </Field>
             </div>
           </Card>
@@ -435,13 +493,13 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
           <Card>
             <CardHeader
               title="Batch Items"
-              eyebrow="Step 2 — Quotation Builder"
-              subtitle="Each batch group holds items; each item holds the specification codes that carry price and weight. Pricing rules start off — apply them per specification."
+              eyebrow="Step 2 · Quotation Builder"
+              subtitle="Each batch group holds items; each item holds the specification codes that carry price and weight. Pricing rules start off, so apply them per specification."
             />
 
             {batches.length === 0 ? (
               <p className="rounded-lg border border-dashed border-paper-300 py-8 text-center text-sm text-paper-400">
-                No batch groups yet — generate one to begin.
+                No batch groups yet. Generate one to begin.
               </p>
             ) : (
               <div className="space-y-3">
@@ -474,6 +532,15 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                 <span className="text-paper-500">Items:&nbsp;</span>
                 <span className="font-mono text-paper-700">{formatMoney(totals.itemsTotal, currency)}</span>
               </span>
+              {totals.discountValue > 0 && (
+                <span>
+                  <span className="text-paper-500">Discount:&nbsp;</span>
+                  <span className="font-mono text-alert-600">
+                    -{formatMoney(totals.discountValue, currency)}
+                    {discountMode === "percent" && ` (${discount}%)`}
+                  </span>
+                </span>
+              )}
               <span>
                 <span className="text-paper-500">Total weight:&nbsp;</span>
                 <span className="font-mono font-semibold text-paper-700">{totals.totalWeightKg.toFixed(2)} KGS</span>
@@ -523,10 +590,10 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
           )}
           <ProcessDiscoveryNote
             items={[
-              "Which fields are mandatory before submission — is a technical assessment always required first?",
+              "Which fields are mandatory before submission? Is a technical assessment always required first?",
               "Should freight be entered manually per quotation or pulled from a shipping-line rate table?",
               "Given Price/kg is typed per specification line; whether the factory expects a default per spec code is still open.",
-              "Material narrows Net Type using whatever the specification master actually carries — the factory's real material/net-type dependency table should replace that inference.",
+              "Material narrows Net Type using whatever the specification master actually carries. The factory's real material and net-type dependency table should replace that inference.",
               "Lacing twine rates default to 2.50/kg from the simulation sample; the real per-code rate card is still to come.",
             ]}
           />

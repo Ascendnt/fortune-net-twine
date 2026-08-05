@@ -3,14 +3,14 @@ import { Button } from "@/components/ui/Button";
 import { BATCH_LABEL } from "@/lib/batches";
 import type { BatchType } from "@/lib/types";
 
-// Batch Selection (doc §3.2). One type per click — picking a type appends a single batch group and
+// Batch Selection (doc §3.2). One type per click: picking a type appends a single batch group and
 // closes. Build a quotation out of as many groups as it needs by clicking Generate Batch Item again.
 
 const TYPES: { type: BatchType; hint: string }[] = [
   { type: "assembled", hint: "A titled product built from several nets or twines" },
   { type: "normal", hint: "Standard net and twine line items" },
   { type: "lacing", hint: "Lacing twines priced by the kilo, plus flat lacing charges" },
-  { type: "note", hint: "Free text — no pricing, no weight" },
+  { type: "note", hint: "Free text with no pricing and no weight" },
 ];
 
 export function BatchSelectionModal({

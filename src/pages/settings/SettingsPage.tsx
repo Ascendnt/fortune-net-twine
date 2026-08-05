@@ -9,6 +9,7 @@ import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
 import { ROLES } from "@/lib/mockData";
 import type { PricingRule, PricingRuleBasis } from "@/lib/types";
+import { toNonNegative } from "@/lib/num";
 
 const BASIS_LABEL: Record<PricingRuleBasis, string> = {
   percent_of_base: "% of base",
@@ -85,7 +86,7 @@ export function SettingsPage() {
         breadcrumb={["Fortune Net & Twine ERP", "System"]}
         eyebrow="Configuration"
         title="Settings"
-        description="Prototype-level configuration only — full role permissions and business rules ship with Phase 1."
+        description="Prototype-level configuration only. Full role permissions and business rules ship with Phase 1."
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -93,7 +94,7 @@ export function SettingsPage() {
           <CardHeader
             title="Company Profile"
             eyebrow="Static"
-            subtitle="The export client master shows PIs/CIs actually issue under one of two entities, chosen per customer — not a single fixed name."
+            subtitle="The export client master shows PIs/CIs actually issue under one of two entities, chosen per customer, not a single fixed name."
           />
           <KeyValue label="Issuing entity A" value="Fortune Net & Twine Manufacturing Corp." />
           <KeyValue label="Issuing entity B" value="Nettex Mfg. and Export Corp." />
@@ -126,7 +127,7 @@ export function SettingsPage() {
           <CardHeader
             title="Pricing Rules"
             eyebrow="Quotation → Invoice engine"
-            subtitle="Each rule declares its own basis (of-base vs. of-result) instead of leaving it implied by the label — retune rates, add rules or retire them here without a code change."
+            subtitle="Each rule declares its own basis (of-base vs. of-result) instead of leaving it implied by the label. Retune rates, add rules or retire them here without a code change."
             action={
               <Button
                 variant="primary"
@@ -169,9 +170,10 @@ export function SettingsPage() {
                       <div className="flex items-center gap-1">
                         <input
                           type="number"
+                          min={0}
                           step="0.01"
                           value={r.rate}
-                          onChange={(e) => updatePricingRule(r.id, { rate: Number(e.target.value) })}
+                          onChange={(e) => updatePricingRule(r.id, { rate: toNonNegative(e.target.value) })}
                           className="w-20 rounded-md border border-paper-200 px-2 py-1 text-xs font-mono focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
                         />
                         <span className="text-[11px] text-paper-400">{r.basis === "flat_amount" ? "USD" : "%"}</span>
@@ -266,10 +268,10 @@ export function SettingsPage() {
                 onChange={(e) => setNewRule({ ...newRule, basis: e.target.value as PricingRuleBasis })}
                 className="w-full rounded-lg border border-paper-200 px-3 py-2 text-sm"
               >
-                <option value="percent_of_base">% of base — simple markup, P × (1 + r)</option>
-                <option value="percent_of_result">% of running result — margin-inclusive, P ÷ (1 − r)</option>
-                <option value="flat_amount">Flat amount — P ± a</option>
-                <option value="lookup_table">Lookup table — value comes from a rate table</option>
+                <option value="percent_of_base">% of base, a simple markup of P × (1 + r)</option>
+                <option value="percent_of_result">% of running result, margin-inclusive, P ÷ (1 − r)</option>
+                <option value="flat_amount">Flat amount, P ± a</option>
+                <option value="lookup_table">Lookup table, the value comes from a rate table</option>
               </select>
             </div>
             {newRule.basis === "lookup_table" ? (
@@ -340,7 +342,7 @@ export function SettingsPage() {
         }
       >
         <p className="text-sm text-paper-600">
-          Quotation lines that already applied this rule keep their saved price — the rule simply stops being offered.
+          Quotation lines that already applied this rule keep their saved price; the rule simply stops being offered.
           If you only want to retire it, untick <strong>Enabled</strong> instead.
         </p>
       </Modal>
@@ -353,7 +355,7 @@ export function SettingsPage() {
               eyebrow="Lookup table"
               subtitle={
                 t.valueKind === "percent"
-                  ? "Values are percentages of the running price per kg — 0.66 means 0.66%."
+                  ? "Values are percentages of the running price per kg, so 0.66 means 0.66%."
                   : "Values are currency amounts added to the running price per kg."
               }
             />
@@ -467,11 +469,11 @@ export function SettingsPage() {
       <div className="mt-5">
         <ProcessDiscoveryNote
           items={[
-            "Real authentication, SSO, and per-role permission enforcement are not part of this prototype — the role switcher only changes what's visible for demonstration.",
-            "Pricing rules and lookup tables are now editable data (rate, enabled, lookup values) — adding or removing whole rule/lookup rows is the next increment once the factory confirms which adjustment types are actually in play.",
+            "Real authentication, SSO, and per-role permission enforcement are not part of this prototype. The role switcher only changes what's visible for demonstration.",
+            "Pricing rules and lookup tables are fully editable here, including adding and retiring whole rules and lookup rows, pending the factory confirming which adjustment types are actually in play.",
             "MD and DW lookup values are interpolated from the two figures the simulation observed live (122MD -> 0.1750, 50FL -> 0.5000); the factory's real rate card should replace them.",
             "Deposit %, approval thresholds, and discount limits are still per-quotation fields; centralizing their defaults here is pending discovery.",
-            "Customers now include the real export client master (~50 accounts) with a per-customer \"letterhead\" field driving which entity issues the PI/CI — need to confirm this two-entity split with the business rather than the assumption baked in here.",
+            "Customers now include the real export client master (~50 accounts) with a per-customer \"letterhead\" field driving which entity issues the PI/CI. This two-entity split needs confirming with the business rather than resting on the assumption baked in here.",
             "Shipment and Validity are still free-text/numeric fields; the client master's standard phrasing (SHIPMENT_TERM_OPTIONS / VALIDITY_TERM_OPTIONS in mockData.ts) isn't wired into the quotation form yet.",
           ]}
         />

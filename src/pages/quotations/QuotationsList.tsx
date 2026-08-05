@@ -44,7 +44,7 @@ export function QuotationsList() {
         breadcrumb={["Fortune Net & Twine ERP", "Sales"]}
         eyebrow="Quotation Management"
         title="Quotations / Proforma Invoices"
-        description="Every PI issued to a customer — from first draft through revision and acceptance."
+        description="Every PI issued to a customer, from first draft through revision and acceptance."
         actions={
           <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => navigate("/quotations/new")}>
             New Quotation

@@ -8,6 +8,31 @@
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "@fontsource/ibm-plex-mono/600.css";
 
+/* Number inputs ship with browser spinner arrows that crowd an already tight cell and let a
+   value be nudged below zero without typing. Every numeric field in this app is a quantity,
+   weight, rate or amount, so the arrows are removed everywhere and the fields are typed into. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Anything actionable should say so under the cursor. Browsers default buttons to an arrow,
+   which makes clickable rows and inline edit affordances read as static text. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label[for] {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+
 @theme {
   /* ---- Brand: pulled from the FORTUNE NET & TWINE mark ----
      "pine" keeps its name (it touches every primary button, active tab,

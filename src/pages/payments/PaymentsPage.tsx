@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Wallet, Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
@@ -248,7 +249,7 @@ export function PaymentsPage() {
         open={form !== null}
         onClose={() => setForm(null)}
         title={form?.id ? `Edit ${form.id}` : "Record payment"}
-        subtitle="Deposit and balance milestones are normally generated on conversion — add one here for adjustments or corrections."
+        subtitle="Deposit and balance milestones are normally generated on conversion. Add one here for adjustments or corrections."
         width="max-w-2xl"
         footer={
           <>
@@ -272,7 +273,7 @@ export function PaymentsPage() {
               >
                 {salesOrders.map((so) => (
                   <option key={so.id} value={so.id}>
-                    {so.id} — {so.consignee}
+                    {so.id}: {so.consignee}
                   </option>
                 ))}
               </select>
@@ -292,20 +293,18 @@ export function PaymentsPage() {
             <div>
               <label className={formLabel}>Expected amount</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={form.draft.expectedAmount}
-                onChange={(e) => setForm({ ...form, draft: { ...form.draft, expectedAmount: Number(e.target.value) } })}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, expectedAmount: toNonNegative(e.target.value) } })}
                 className={formClass}
               />
             </div>
             <div>
               <label className={formLabel}>Amount received</label>
               <input
-                type="number"
-                step="0.01"
+                {...NON_NEGATIVE}
                 value={form.draft.amountReceived}
-                onChange={(e) => setForm({ ...form, draft: { ...form.draft, amountReceived: Number(e.target.value) } })}
+                onChange={(e) => setForm({ ...form, draft: { ...form.draft, amountReceived: toNonNegative(e.target.value) } })}
                 className={formClass}
               />
             </div>
@@ -411,8 +410,8 @@ export function PaymentsPage() {
         }
       >
         <p className="text-sm text-paper-600">
-          Removing a payment milestone affects the deposit gate on its sales order — the loading authorization checks
-          verified payments.
+          Removing a payment milestone affects the deposit gate on its sales order, because the loading authorization
+          checks verified payments.
         </p>
       </Modal>
     </div>

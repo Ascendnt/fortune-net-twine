@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { computeLinePricing, formatRuleRate, lookupKeyForSpecRow } from "@/lib/pricing";
+import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
 import type { LinePricing, SpecLine } from "@/lib/types";
 
 // Specification Pricing (doc §3.5) and Price / Piece (§3.6), as two stages behind one modal.
@@ -162,7 +163,7 @@ export function SpecificationPricingModal({
                 {enabledRules.length === 0 && (
                   <tr>
                     <td colSpan={5} className="py-6 text-center text-paper-400">
-                      No rules enabled — see Settings → Pricing Rules.
+                      No rules enabled. See Settings, then Pricing Rules.
                     </td>
                   </tr>
                 )}
@@ -211,7 +212,7 @@ export function SpecificationPricingModal({
 
           <div className="mt-3 flex items-center justify-between rounded-lg border border-pine-200 bg-pine-50 px-3 py-2.5">
             <div>
-              <p className="text-[11px] text-paper-500">New price / kg = Given + Σ additional values</p>
+              <p className="text-[11px] text-paper-500">New price / kg = Given price plus the sum of the additional values</p>
               <p className="text-[11px] text-paper-400">
                 Additional: <span className="font-mono">{additional >= 0 ? "+" : ""}{additional.toFixed(4)}</span> ·{" "}
                 {draft.appliedRuleIds.length} of {enabledRules.length} applied
@@ -224,19 +225,19 @@ export function SpecificationPricingModal({
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label="Labor hours">
-              <input type="number" step="0.01" value={draft.laborHours} onChange={(e) => patch({ laborHours: Number(e.target.value) })} className={miniInput} />
+              <input {...NON_NEGATIVE} value={draft.laborHours} onChange={(e) => patch({ laborHours: toNonNegative(e.target.value) })} className={miniInput} />
             </Field>
             <Field label="Labor rate / hr">
-              <input type="number" step="0.01" value={draft.laborRate} onChange={(e) => patch({ laborRate: Number(e.target.value) })} className={miniInput} />
+              <input {...NON_NEGATIVE} value={draft.laborRate} onChange={(e) => patch({ laborRate: toNonNegative(e.target.value) })} className={miniInput} />
             </Field>
             <Field label="Wastage (kg)">
-              <input type="number" step="0.01" value={draft.wastageKg} onChange={(e) => patch({ wastageKg: Number(e.target.value) })} className={miniInput} />
+              <input {...NON_NEGATIVE} value={draft.wastageKg} onChange={(e) => patch({ wastageKg: toNonNegative(e.target.value) })} className={miniInput} />
             </Field>
             <Field label="Sewing twine (kg)">
-              <input type="number" step="0.01" value={draft.twineKg} onChange={(e) => patch({ twineKg: Number(e.target.value) })} className={miniInput} />
+              <input {...NON_NEGATIVE} value={draft.twineKg} onChange={(e) => patch({ twineKg: toNonNegative(e.target.value) })} className={miniInput} />
             </Field>
             <Field label="Sewing rate / kg">
-              <input type="number" step="0.01" value={draft.twineRate} onChange={(e) => patch({ twineRate: Number(e.target.value) })} className={miniInput} />
+              <input {...NON_NEGATIVE} value={draft.twineRate} onChange={(e) => patch({ twineRate: toNonNegative(e.target.value) })} className={miniInput} />
             </Field>
           </div>
 

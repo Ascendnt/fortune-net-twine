@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import type { SpecMasterRow } from "@/lib/specMaster";
 
-// Item Specification picker (doc §3.4). Multi-select, searchable, paginated — and pre-filtered to
-// the parent item's Material + Net Type, because "if I add specification it will be based on what
-// was picked" in Item Selection. Picking NYLON + BRAIDED NET should not offer Hi-Ex rows.
+// Item Specification picker (doc §3.4). Multi-select, searchable, paginated, and pre-filtered to
+// the parent item's Material and Net Type, because "if I add specification it will be based on what
+// was picked" in Item Selection. Picking NYLON with BRAIDED NET should not offer Hi-Ex rows.
 
 const miniInput =
   "w-full rounded-md border border-paper-200 bg-white px-2 py-1.5 text-xs focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
@@ -86,7 +86,7 @@ export function SpecificationPickerModal({
       open={open}
       onClose={onClose}
       title="Item Specification"
-      subtitle={material && netType ? `Filtered to ${material} · ${netType}` : undefined}
+      subtitle={material && netType ? `Filtered to ${material} ${netType}` : undefined}
       rows={rows}
       rowKey={(r) => r.code}
       searchText={(r) => `${r.code} ${r.description} ${r.twine} ${r.meshSize} ${r.meshDepth} ${r.length}`}
@@ -110,7 +110,7 @@ export function SpecificationPickerModal({
       confirmLabel="Add Specification"
       emptyMessage={
         rows.length === 0
-          ? "No specifications on file for this material and net type — create one below."
+          ? "No specifications on file for this material and net type. Create one below."
           : "Nothing matches those filters."
       }
       headerAction={
@@ -122,7 +122,7 @@ export function SpecificationPickerModal({
       {creating && (
         <div className="mb-3 rounded-lg border border-manifest-200 bg-manifest-50/50 p-3">
           <p className="mb-2 text-[11px] font-semibold text-manifest-900">
-            New specification — {material} {netType}
+            New specification for {material} {netType}
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
             <input value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} placeholder="Code" className={miniInput} />
@@ -130,7 +130,7 @@ export function SpecificationPickerModal({
             <input value={draft.meshSize} onChange={(e) => setDraft({ ...draft, meshSize: e.target.value })} placeholder="Mesh size" className={miniInput} />
             <input value={draft.meshDepth} onChange={(e) => setDraft({ ...draft, meshDepth: e.target.value })} placeholder="Mesh depth" className={miniInput} />
             <input value={draft.length} onChange={(e) => setDraft({ ...draft, length: e.target.value })} placeholder="Length" className={miniInput} />
-            <input value={draft.weightPerPc} onChange={(e) => setDraft({ ...draft, weightPerPc: e.target.value })} placeholder="Weight/pc" type="number" step="0.01" className={miniInput} />
+            <input value={draft.weightPerPc} onChange={(e) => setDraft({ ...draft, weightPerPc: e.target.value })} placeholder="Weight/pc" type="number" min={0} step="0.01" className={miniInput} />
           </div>
           <div className="mt-2 flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setCreating(false)}>
