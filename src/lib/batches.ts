@@ -2,7 +2,7 @@
 //
 // The quotation is authored as a tree (FORTUNE_NET_TWINE_System_Simulation.md §3.2):
 //
-//   batch (ASSEMBLED | NORMAL | LACING | NOTE)
+//   batch (ASSEMBLED | NORMAL | LACING)
 //     └─ item        — a composed specification string from the Item Selection modal
 //          └─ spec   — an N-code from the specification master; THIS is the priced row
 //
@@ -105,7 +105,6 @@ export function newLacingLine(row: LacingCatalogRow): LacingLine {
 export function newBatch(type: BatchType): QuotationBatch {
   const base = { id: nextId("b"), type };
   if (type === "lacing") return { ...base, lacing: [] };
-  if (type === "note") return { ...base, note: "" };
   if (type === "assembled") return { ...base, title: "", items: [] };
   return { ...base, items: [] };
 }
@@ -114,7 +113,6 @@ export const BATCH_LABEL: Record<BatchType, string> = {
   assembled: "ASSEMBLED",
   normal: "NORMAL",
   lacing: "LACING",
-  note: "NOTE",
 };
 
 /** Recomputes a lacing line's amount. Twine bills KGS x rate; a charge is the flat rate itself. */
@@ -129,15 +127,12 @@ export function lacingWeight(line: Pick<LacingLine, "kind" | "kgs">): number {
 
 /**
  * Flattens the authored tree into the line list every downstream consumer already understands.
- * Batch and item order is preserved. NOTE batches emit nothing — they contribute to neither the
- * grand total nor the total weight (doc §3.2, verified in §6).
+ * Batch and item order is preserved.
  */
 export function flattenBatches(batches: QuotationBatch[]): QuotationLineItem[] {
   const out: QuotationLineItem[] = [];
 
   for (const batch of batches) {
-    if (batch.type === "note") continue;
-
     if (batch.type === "lacing") {
       for (const line of batch.lacing ?? []) {
         out.push({

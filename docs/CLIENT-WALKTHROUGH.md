@@ -32,11 +32,14 @@ Quotations / PI, then **New Quotation**.
      from several nets or twines.
    - **NORMAL**, standard net and twine items.
    - **LACING**, lacing twines billed by the kilo, plus flat lacing charges.
-   - **NOTE**, free text. Contributes to neither the grand total nor the total weight.
+
+   Narrative text goes in the **Remarks** field in Step 3, which prints on the PI. The reference
+   system also had a NOTE group, but that was a second way to do the same job.
 3. Inside an ASSEMBLED or NORMAL group, **Add Item** opens *Item Selection*: Category, Material,
    Net Type, Knots, Selvages, Stretching, Reinforcement, Others, Color and the two UOMs. Every field
    is type-to-search. Choosing a Material narrows Net Type to the types that actually have
-   specification codes on file. Confirming composes the item's specification sentence.
+   specification codes on file. Confirming composes the item's specification sentence. Shipment in
+   Step 1 is the same style of searchable dropdown, backed by the client master's standard wordings.
 4. **Add Specification** opens the specification master, filtered to the Material and Net Type you
    just picked. Search it, filter by mesh size, depth or length, and tick as many codes as you need.
    Weight lands immediately; the grand total stays at zero until you price.
@@ -130,7 +133,6 @@ Weight = Weight/pc × Qty    (plus lacing twine KGS; flat lacing charges add non
 
 Grand total  = every batch total, less discount, plus freight and tax
 Total weight = every line's weight
-               (NOTE groups are excluded from both)
 ```
 
 Run `npm test` to check these against the documented figures.

@@ -143,7 +143,10 @@ export interface LinePricing {
 // Re-exported here so `Quotation` can reference QuotationBatch without a circular import:
 // batches.ts imports QuotationLineItem/LinePricing from this module.
 
-export type BatchType = "assembled" | "normal" | "lacing" | "note";
+// The reference system also offered a NOTE group, but the quotation header already carries a
+// Remarks field that prints on the PI, so a second free-text mechanism was two ways to do one job.
+// Remarks is the single place narrative text belongs.
+export type BatchType = "assembled" | "normal" | "lacing";
 
 /** The priced unit. One row per specification code picked from the master. */
 export interface SpecLine {
@@ -190,7 +193,6 @@ export interface QuotationBatch {
   title?: string; // assembled only
   items?: BatchItem[]; // assembled | normal
   lacing?: LacingLine[]; // lacing only
-  note?: string; // note only
 }
 
 // ---------- Quotation / Proforma Invoice ----------
@@ -257,7 +259,7 @@ export interface Quotation {
   moq: string;
   leadTimeWeeks: number;
   estimatedShipmentDate: string;
-  // The authored batch tree (ASSEMBLED / NORMAL / LACING / NOTE). `items` below is its flattened
+  // The authored batch tree (ASSEMBLED / NORMAL / LACING). `items` below is its flattened
   // projection, produced by flattenBatches() on save — every downstream consumer (sales orders,
   // commercial invoices, reports) keeps reading `items` and needs no knowledge of batches.
   // Absent on seeded quotations authored before the batch model existed.

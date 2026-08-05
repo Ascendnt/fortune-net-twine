@@ -115,6 +115,22 @@ interface StoreState {
 
 const StoreContext = createContext<StoreState | null>(null);
 
+const KNOWN_BATCH_TYPES = new Set(["assembled", "normal", "lacing"]);
+
+/**
+ * Brings quotations saved by an earlier build forward. Right now that means dropping NOTE groups,
+ * which no longer exist: a quotation saved before they were removed would otherwise render an
+ * unlabelled empty band. They contributed to neither the grand total nor the total weight, so
+ * removing them cannot change a figure.
+ */
+function migrateQuotations(quotations: Quotation[]): Quotation[] {
+  return quotations.map((q) =>
+    q.batches?.some((b) => !KNOWN_BATCH_TYPES.has(b.type))
+      ? { ...q, batches: q.batches.filter((b) => KNOWN_BATCH_TYPES.has(b.type)) }
+      : q
+  );
+}
+
 let idCounter = 1000;
 function nextId(prefix: string) {
   idCounter += 1;
@@ -125,7 +141,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>("sales_manager");
   // Slices that a user can meaningfully change are restored from localStorage; the rest stay as
   // seeded demo fixtures. See lib/persist.ts for the degradation rules.
-  const [quotations, setQuotations] = useState<Quotation[]>(() => loadPersisted(PERSIST_KEYS.quotations, QUOTATIONS));
+  const [quotations, setQuotations] = useState<Quotation[]>(() =>
+    migrateQuotations(loadPersisted(PERSIST_KEYS.quotations, QUOTATIONS))
+  );
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>(SALES_ORDERS);
   const [payments, setPayments] = useState<PaymentRecord[]>(PAYMENTS);
   const [invoices, setInvoices] = useState<CommercialInvoice[]>(INVOICES);

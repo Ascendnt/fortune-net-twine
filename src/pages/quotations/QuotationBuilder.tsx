@@ -91,6 +91,13 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
 
   const totals = quotationTotals(batches, freight, discount, tax, discountMode);
 
+  // The standard phrasings from the client master, plus whatever this quotation already carries so
+  // an older or hand-written value still shows rather than reading as empty.
+  const shipmentOptions =
+    shipmentTerms && !SHIPMENT_TERM_OPTIONS.includes(shipmentTerms)
+      ? [shipmentTerms, ...SHIPMENT_TERM_OPTIONS]
+      : SHIPMENT_TERM_OPTIONS;
+
   // Editing a quotation authored before the batch model would silently discard its line items, so
   // that case is blocked rather than allowed to destroy data.
   const legacyWithoutBatches = isEdit && !existing?.batches?.length && (existing?.items.length ?? 0) > 0;
@@ -389,18 +396,12 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                 <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} className={inputClass} />
               </Field>
               <Field label="Shipment">
-                <input
-                  list="shipment-terms"
+                <SearchableSelect
                   value={shipmentTerms}
-                  onChange={(e) => setShipmentTerms(e.target.value)}
-                  placeholder="e.g. 30 days from receipt of deposit"
-                  className={inputClass}
+                  onChange={setShipmentTerms}
+                  placeholder="Select shipment terms…"
+                  options={shipmentOptions.map((o) => ({ value: o, label: o }))}
                 />
-                <datalist id="shipment-terms">
-                  {SHIPMENT_TERM_OPTIONS.map((o) => (
-                    <option key={o} value={o} />
-                  ))}
-                </datalist>
               </Field>
               <div className="sm:col-span-2">
                 <Field label="Dear Sirs (salutation line)">

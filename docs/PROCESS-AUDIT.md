@@ -20,7 +20,7 @@ code and doing the arithmetic, not by running it.
 | 3. Given Price + QTY on the sub-line | ✅ | The specification row is the priced row. |
 | 3. Add Pricing → Proceed to Price / Piece | ✅ | Two-stage modal, all rules off on open. |
 | 3. LACING → Add Lacing → LC-001…LC-006 | ✅ | Twine bills KGS × rate; LC-006 is a flat charge. |
-| 3. NOTE → free text only | ✅ | Contributes to neither total. |
+| 3. NOTE → free text only | ⛔ dropped by decision | The quotation header's Remarks field already prints narrative text on the PI, so a NOTE group was a second mechanism for one job. Removed at Kenneth's request. Totals are unaffected: NOTE contributed to neither figure. |
 | 4. Totals roll up | ✅ | Batch total, total weight, grand total. |
 | 5. Export as PDF | ✅ | Customer letter, grouped by batch. |
 
@@ -28,7 +28,7 @@ code and doing the arithmetic, not by running it.
 
 | Doc | Status | Notes |
 |---|---|---|
-| 3.2 Batch Selection | ✅ | ASSEMBLED / NORMAL / LACING / NOTE. |
+| 3.2 Batch Selection | ✅ | ASSEMBLED / NORMAL / LACING. NOTE dropped by decision, see above. |
 | 3.3 Item Selection | ✅ | Category, Material, Net Type, Knots, Selvages, Stretching, Reinforcement, Others, Color, Weight UOM, Quantity UOM. |
 | 3.3 "Material dynamically populates Net Type" | ⚠️ inferred | Now cascades, but derived from the specification master rather than a real dependency table — a material offers only net types that have codes on file. Guarantees Add Specification never opens empty. |
 | 3.4 Item Specification | ✅ | CODE, DESCRIPTION, TWINE, MESH SIZE, MESH DEPTH, LENGTH, WEIGHT/PC, search, Create New Specs, pagination. |

@@ -10,7 +10,6 @@ const TYPES: { type: BatchType; hint: string }[] = [
   { type: "assembled", hint: "A titled product built from several nets or twines" },
   { type: "normal", hint: "Standard net and twine line items" },
   { type: "lacing", hint: "Lacing twines priced by the kilo, plus flat lacing charges" },
-  { type: "note", hint: "Free text with no pricing and no weight" },
 ];
 
 export function BatchSelectionModal({

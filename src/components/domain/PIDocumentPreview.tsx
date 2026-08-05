@@ -13,7 +13,6 @@ import fntLogo from "@/assets/fnt-logo.png";
 type PrintRow =
   | { kind: "assembledTitle"; key: string; text: string }
   | { kind: "banner"; key: string; text: string; weightUom?: string; qtyUom?: string }
-  | { kind: "note"; key: string; text: string }
   | {
       kind: "line";
       key: string;
@@ -31,11 +30,6 @@ function buildRows(q: Quotation): PrintRow[] {
 
   if (q.batches?.length) {
     for (const batch of q.batches) {
-      if (batch.type === "note") {
-        if (batch.note?.trim()) rows.push({ kind: "note", key: batch.id, text: batch.note });
-        continue;
-      }
-
       if (batch.type === "lacing") {
         const lines = batch.lacing ?? [];
         if (lines.length === 0) continue;
@@ -219,17 +213,6 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
                     <tr key={row.key} className="break-inside-avoid bg-pine-700/90">
                       <td className="py-1 pl-2" />
                       <td colSpan={5} className="py-1 px-2 text-[11px] font-semibold uppercase leading-snug text-white">
-                        {row.text}
-                      </td>
-                    </tr>
-                  );
-                }
-
-                if (row.kind === "note") {
-                  return (
-                    <tr key={row.key} className="break-inside-avoid border-b border-paper-100">
-                      <td className="py-1 pl-2" />
-                      <td colSpan={5} className="py-1 px-2 text-[10.5px] italic leading-snug text-paper-600">
                         {row.text}
                       </td>
                     </tr>

@@ -4,7 +4,7 @@
 //   AMOUNT (line)      = U/P x QTY
 //   WEIGHT (line)      = Weight/PC x QTY   (+ lacing twine KGS)
 //   BATCH TOTAL        = sum of line AMOUNT in the group
-//   GRAND TOTAL        = sum of all batch totals (NORMAL + ASSEMBLED + LACING; NOTE excluded)
+//   GRAND TOTAL        = sum of all batch totals (NORMAL + ASSEMBLED + LACING)
 //   TOTAL WEIGHT       = sum of all line weights + lacing twine KGS
 //
 // One implementation, used by NewQuotation, QuotationDetail and PIDocumentPreview alike. Before
@@ -95,15 +95,12 @@ export function itemWeight(item: BatchItem): number {
   return item.specs.reduce((s, spec) => s + spec.weightKg, 0);
 }
 
-/** A NOTE batch contributes nothing. */
 export function batchTotal(batch: QuotationBatch): number {
-  if (batch.type === "note") return 0;
   if (batch.type === "lacing") return (batch.lacing ?? []).reduce((s, l) => s + lacingAmount(l), 0);
   return (batch.items ?? []).reduce((s, item) => s + itemTotal(item), 0);
 }
 
 export function batchWeight(batch: QuotationBatch): number {
-  if (batch.type === "note") return 0;
   if (batch.type === "lacing") return (batch.lacing ?? []).reduce((s, l) => s + lacingWeight(l), 0);
   return (batch.items ?? []).reduce((s, item) => s + itemWeight(item), 0);
 }

@@ -37,17 +37,18 @@ describe("factories", () => {
     expect(newBatch("normal").items).toEqual([]);
     expect(newBatch("normal").title).toBeUndefined();
     expect(newBatch("lacing")).toMatchObject({ type: "lacing", lacing: [] });
-    expect(newBatch("note")).toMatchObject({ type: "note", note: "" });
   });
 
   it("gives every batch a distinct id", () => {
-    const ids = new Set([newBatch("normal").id, newBatch("normal").id, newBatch("note").id]);
+    const ids = new Set([newBatch("normal").id, newBatch("normal").id, newBatch("lacing").id]);
     expect(ids.size).toBe(3);
   });
 
   it("labels batches for the UI banner", () => {
     expect(BATCH_LABEL.assembled).toBe("ASSEMBLED");
-    expect(BATCH_LABEL.note).toBe("NOTE");
+    expect(BATCH_LABEL.lacing).toBe("LACING");
+    // NOTE was dropped: the header's Remarks field is the single place narrative text belongs.
+    expect(Object.keys(BATCH_LABEL)).toEqual(["assembled", "normal", "lacing"]);
   });
 
   it("creates spec lines at documented defaults", () => {
@@ -111,10 +112,9 @@ describe("flattenBatches", () => {
         { id: "l2", code: "LC-006", description: "Lacing Charge", kind: "charge", kgs: 0, rate: 50, amount: 50 },
       ],
     },
-    { id: "b3", type: "note", note: "Prices are FOB Manila and valid for 30 days." },
   ];
 
-  it("emits one line per spec row and per lacing entry, and none for notes", () => {
+  it("emits one line per spec row and per lacing entry", () => {
     expect(flattenBatches(batches)).toHaveLength(3);
   });
 
@@ -138,14 +138,14 @@ describe("flattenBatches", () => {
   });
 
   it("preserves batch and item order", () => {
-    const reordered: QuotationBatch[] = [batches[2], batches[1], batches[0]];
+    const reordered: QuotationBatch[] = [batches[1], batches[0]];
     expect(flattenBatches(reordered).map((l) => l.itemCode)).toEqual(["LC-001", "LC-006", "N-1596"]);
   });
 
-  it("returns nothing for an empty or note-only quotation", () => {
+  it("returns nothing for an empty quotation or one with only empty groups", () => {
     expect(flattenBatches([])).toEqual([]);
-    expect(flattenBatches([{ id: "b", type: "note", note: "hi" }])).toEqual([]);
     expect(flattenBatches([newBatch("assembled")])).toEqual([]);
+    expect(flattenBatches([newBatch("lacing")])).toEqual([]);
   });
 });
 

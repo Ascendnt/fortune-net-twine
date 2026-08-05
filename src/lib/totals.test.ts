@@ -77,10 +77,9 @@ describe("batch roll-ups", () => {
     expect(batchWeight(batch)).toBe(35);
   });
 
-  it("excludes NOTE batches from both totals", () => {
-    const note: QuotationBatch = { id: "n", type: "note", note: "Prices are FOB Manila." };
-    expect(batchTotal(note)).toBe(0);
-    expect(batchWeight(note)).toBe(0);
+  it("treats a group with no items as zero rather than throwing", () => {
+    expect(batchTotal({ id: "e", type: "normal" })).toBe(0);
+    expect(batchWeight({ id: "e", type: "lacing" })).toBe(0);
   });
 
   it("counts lacing twine KGS as weight but a flat charge as none", () => {
@@ -97,7 +96,7 @@ describe("batch roll-ups", () => {
   });
 
   it("treats an empty batch of any type as zero", () => {
-    for (const type of ["assembled", "normal", "lacing", "note"] as const) {
+    for (const type of ["assembled", "normal", "lacing"] as const) {
       expect(batchTotal(newBatch(type))).toBe(0);
       expect(batchWeight(newBatch(type))).toBe(0);
     }
@@ -133,8 +132,10 @@ describe("discount mode", () => {
 
 describe("quotation roll-up — doc §6 end-to-end", () => {
   // Built in the live app: a NORMAL N-1596 line at Given 5.00 with MD Computation, qty 10;
-  // a LACING group of LC-001 (100 KGS, 250.00) and LC-006 (50.00); an empty ASSEMBLED group;
-  // and a NOTE. Observed: TOTAL WEIGHT 5,050.00 KGS, GRAND TOTAL $25,916.25.
+  // a LACING group of LC-001 (100 KGS, 250.00) and LC-006 (50.00); and an empty ASSEMBLED group.
+  // Observed: TOTAL WEIGHT 5,050.00 KGS, GRAND TOTAL $25,916.25.
+  // (The doc's run also carried a NOTE group, which contributed nothing to either figure. NOTE
+  // groups no longer exist, so the expected totals are unchanged.)
   const priced = recomputeSpecLine(
     { ...pricedLine(), pricing: { ...emptyPricing(5), appliedRuleIds: ["r_md"] } },
     PRICING_RULES,
@@ -152,7 +153,6 @@ describe("quotation roll-up — doc §6 end-to-end", () => {
       ],
     },
     { id: "b3", type: "assembled", title: "COMPLETE SOCCER GOAL NET ASSEMBLY", items: [] },
-    { id: "b4", type: "note", note: "Prices are FOB Manila and valid for 30 days." },
   ];
 
   it("matches the observed grand total and total weight", () => {

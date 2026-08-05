@@ -8,13 +8,15 @@ import { formatRuleRate, lookupKeyForSpecRow } from "@/lib/pricing";
 import { NON_NEGATIVE, NON_NEGATIVE_INT, toNonNegative } from "@/lib/num";
 import type { BatchItem, Currency, LacingLine, LookupTable, PricingRule, QuotationBatch, SpecLine } from "@/lib/types";
 
-// Renders one batch group. All four types share the banner, delete and footer-total frame; the body
+// Renders one batch group. All three types share the banner, delete and footer-total frame; the body
 // differs by type, per doc §3.2:
 //
 //   ASSEMBLED  editable product title, then items      contributes to total and weight
 //   NORMAL     items only                              contributes to total and weight
 //   LACING     twine (KGS x rate) and flat charges     twine contributes weight, charges do not
-//   NOTE       free text                               contributes to neither
+//
+// The reference system's NOTE group is deliberately absent: the quotation header's Remarks field
+// already carries narrative text onto the PI, and two mechanisms for one job invites drift.
 
 const miniInput =
   "w-full rounded-md border border-paper-200 bg-white px-2 py-1 text-xs font-mono focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
@@ -65,16 +67,6 @@ export function BatchEditor({
       </div>
 
       <div className="p-3">
-        {batch.type === "note" && (
-          <textarea
-            value={batch.note ?? ""}
-            onChange={(e) => handlers.onPatchBatch({ note: e.target.value })}
-            rows={3}
-            placeholder="Type your note description here…"
-            className="w-full rounded-lg border border-paper-200 px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
-          />
-        )}
-
         {batch.type === "lacing" && (
           <LacingBody batch={batch} currency={currency} handlers={handlers} />
         )}
@@ -111,12 +103,10 @@ export function BatchEditor({
         )}
       </div>
 
-      {batch.type !== "note" && (
-        <div className="flex items-center justify-end gap-2 border-t border-paper-100 bg-paper-50/70 px-3 py-2 text-xs">
-          <span className="font-mono uppercase tracking-wide text-paper-500">{BATCH_LABEL[batch.type]} total</span>
-          <span className="font-mono text-sm font-semibold text-pine-800">{formatMoney(total, currency)}</span>
-        </div>
-      )}
+      <div className="flex items-center justify-end gap-2 border-t border-paper-100 bg-paper-50/70 px-3 py-2 text-xs">
+        <span className="font-mono uppercase tracking-wide text-paper-500">{BATCH_LABEL[batch.type]} total</span>
+        <span className="font-mono text-sm font-semibold text-pine-800">{formatMoney(total, currency)}</span>
+      </div>
     </div>
   );
 }
