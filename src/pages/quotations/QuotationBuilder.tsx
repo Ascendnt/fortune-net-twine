@@ -32,6 +32,12 @@ import type { LacingCatalogRow, SpecMasterRow } from "@/lib/specMaster";
 const CURRENCIES: Currency[] = ["USD", "KRW", "EUR"];
 const INCOTERMS = ["FOB", "CIF"];
 
+/** Today, from the machine's clock, as an ISO date. */
+const TODAY = new Date().toISOString().slice(0, 10);
+
+/** How long a quotation stays valid after its date, unless overridden. */
+const VALIDITY_DAYS = 7;
+
 /** ISO date `days` after `from`, defaulting to today. Used to carry legacy durations forward. */
 function addDays(from: string | undefined, days: number): string {
   const base = from ? new Date(from).getTime() : Date.now();
@@ -83,14 +89,34 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
   const [consignee, setConsignee] = useState(existing?.consignee ?? customer?.consignee ?? "");
   const [attentionContact, setAttentionContact] = useState(existing?.attentionContact ?? customer?.contactPerson ?? "");
   const [depositPercent, setDepositPercent] = useState(existing?.depositPercent ?? 30);
-  // Lead time and validity are dates. Older quotations stored durations, so those are converted
-  // forward from the issue date rather than shown as blank.
+  // A new quotation is dated today, from the machine's own clock. Editing an existing one keeps
+  // whatever it was saved with; older records stored durations, so those convert forward.
   const [leadTimeDate, setLeadTimeDate] = useState(
-    existing?.leadTimeDate ?? addDays(existing?.issueDate, (existing?.leadTimeWeeks ?? 6) * 7)
+    existing?.leadTimeDate ?? (existing ? addDays(existing.issueDate, existing.leadTimeWeeks * 7) : TODAY)
   );
   const [validityDate, setValidityDate] = useState(
-    existing?.validityDate ?? addDays(existing?.issueDate, existing?.validityDays ?? 7)
+    existing?.validityDate ?? addDays(existing?.issueDate ?? TODAY, existing?.validityDays ?? VALIDITY_DAYS)
   );
+
+  /**
+   * Validity always follows the Date by a week. Setting or changing the Date resets it, since a
+   * validity carried over from a previous date is almost never what was meant. It stays editable
+   * afterwards for the cases where it genuinely differs.
+   */
+  // The Date cannot be in the past. An existing quotation may legitimately carry a date that has
+  // since passed, so the floor drops to whatever it already holds rather than invalidating a saved
+  // record the moment it is opened.
+  const minDate = existing?.leadTimeDate && existing.leadTimeDate < TODAY ? existing.leadTimeDate : TODAY;
+
+  function handleDateChange(raw: string) {
+    // Clamped as well as bounded by `min`, because a typed or pasted date bypasses the picker.
+    const value = raw && raw < minDate ? minDate : raw;
+    setLeadTimeDate(value);
+    if (value) setValidityDate(addDays(value, VALIDITY_DAYS));
+  }
+
+  /** Validity cannot precede the Date. ISO strings compare correctly, so no parsing is needed. */
+  const notBeforeDate = (value: string) => (value && leadTimeDate && value < leadTimeDate ? leadTimeDate : value);
   // Cover-letter fields the reference quotation header carries (doc §3.1). Shipment is a phrase,
   // not a date; the client master's standard wordings back the dropdown.
   const [shipmentTerms, setShipmentTerms] = useState(existing?.shipmentTerms ?? "");
@@ -382,7 +408,9 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       shipmentTerms,
       incoterms,
       leadTimeDate,
-      validityDate,
+      // Clamped again on save: a quotation loaded from storage could carry a validity that
+      // precedes its date from before this rule existed, and it would otherwise be written back.
+      validityDate: notBeforeDate(validityDate),
       // Legacy duration fields, derived from the dates so anything still reading them stays sane.
       validityDays: daysBetweenIso(existing?.issueDate, validityDate),
       leadTimeWeeks: Math.round(daysBetweenIso(existing?.issueDate, leadTimeDate) / 7),
@@ -405,7 +433,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
 
     const id = createQuotation({
       ...shared,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: TODAY,
       assignedSalesperson: currentUser,
     });
     pushToast({ tone: "success", title: "Quotation drafted", description: `${id} saved as draft.` });
@@ -521,16 +549,18 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
               <Field label="Date">
                 <input
                   type="date"
+                  min={minDate}
                   value={leadTimeDate}
-                  onChange={(e) => setLeadTimeDate(e.target.value)}
+                  onChange={(e) => handleDateChange(e.target.value)}
                   className={inputClass}
                 />
               </Field>
               <Field label="Validity">
                 <input
                   type="date"
+                  min={leadTimeDate}
                   value={validityDate}
-                  onChange={(e) => setValidityDate(e.target.value)}
+                  onChange={(e) => setValidityDate(notBeforeDate(e.target.value))}
                   className={inputClass}
                 />
               </Field>

@@ -1,36 +1,40 @@
-// One-click PDF download for the PI/CI document previews, alongside the browser Print flow.
+// One-click PDF download for the PI/CI document previews, alongside the browser's Print flow.
 //
-// The document is rasterised by html2canvas and placed into a jsPDF page. Two things decide whether
-// the result matches what Print produces:
+// The rule this file follows: photograph the document exactly as it is laid out on screen, then
+// scale that picture proportionally onto the page. Nothing about the document's geometry is
+// touched.
 //
-//  1. Resolution. The capture runs at 3x, so an A4 page lands at roughly 288dpi, and the image is
-//     encoded as lossless PNG. JPEG was visibly worse here: its chroma subsampling is tuned for
-//     photographs and smears exactly this kind of content, small text and hairline rules on flat
-//     white.
+// Earlier versions rewrote the cloned sheet's width and padding to imitate the `print:` utility
+// classes. That was the mistake. Changing width makes the document *reflow*, not scale: text
+// re-wraps, columns redistribute, and anything sized in fixed pixels (the logo box, the type
+// scale) lands at a different proportion to everything around it. The result reads as stretched
+// or squashed even though every individual rule was "correct". Capturing at natural size and
+// letting one uniform scale factor do the fitting keeps every proportion identical to the screen.
 //
-//  2. Layout. This is what actually made the PDF look unlike the printout. html2canvas renders
-//     SCREEN styles, so every `print:` variant the document relies on was being ignored, and the
-//     decorative mesh watermark (hidden by `print:hidden`) was being captured. The clone is now
-//     given the print layout by hand in onclone, so both routes render the same geometry.
+// Only two things are changed in the clone, and neither affects layout:
+//   1. Colours are pinned to their already-resolved values (html2canvas cannot parse the
+//      color-mix() that Tailwind v4 emits for every /opacity utility).
+//   2. The letterhead PNG is re-encoded through the browser's own decoder (html2canvas's bundled
+//      zlib fails on this particular file and hangs the export).
 //
-// Note that a rasterised page can never be quite as sharp as the browser's own print-to-PDF, which
-// emits real vector text. If the difference still matters, the next step is generating the PDF from
-// the quotation data with jsPDF's text primitives rather than photographing the DOM.
+// Purely decorative nodes that the printout omits are removed, which is a visual match, not a
+// layout change: the watermark is absolutely positioned and `.no-print` elements are outside the
+// captured element anyway.
+
 /**
- * Page geometry, kept identical to the `@page` rule in src/index.css so that Ctrl+P and this
- * export produce the same document. If you change one, change the other: they are the two halves
- * of a single setting that CSS and JS cannot share.
+ * Page geometry, mirrored from the `@page` rule in src/index.css so Ctrl+P and this export land on
+ * the same paper with the same margins. CSS and this module cannot share a constant, so if you
+ * change one, change the other.
  */
-const PAGE_SIZE = "a4";
+const PAGE_FORMAT = "a4";
 const PAGE_MARGIN_MM = 14;
 
 /**
- * A4 content width in CSS pixels: the 210mm page less both margins, at the CSS reference 96dpi.
- * This is the width the browser lays the document out at when printing, so pinning the export
- * clone to it makes fixed-px sizes (the logo box, type sizes) occupy the same fraction of the
- * page in both routes.
+ * Capture resolution. The document is rasterised at this multiple of CSS pixels before being
+ * placed on the page, so it sets how sharp the text is: 3x puts an A4 page at roughly 288dpi.
+ * Raising it further mostly grows the file.
  */
-const A4_CONTENT_WIDTH_PX = Math.round(((210 - PAGE_MARGIN_MM * 2) / 25.4) * 96); // 688
+const CAPTURE_SCALE = 3;
 
 export async function downloadElementAsPdf(elementId: string, filename: string): Promise<void> {
   const el = document.getElementById(elementId);
@@ -38,77 +42,47 @@ export async function downloadElementAsPdf(elementId: string, filename: string):
 
   const html2pdf = (await import("html2pdf.js")).default;
 
-  // The canvas render below is heavy, synchronous, main-thread work — without yielding first,
-  // a "loading" state set by the caller right before this call would never actually get painted
-  // before the freeze hits. Two animation frames guarantees the browser has painted at least once.
+  // The canvas render is heavy, synchronous, main-thread work. Without yielding first, a "loading"
+  // state set by the caller immediately before this call would never get painted before the freeze
+  // hits. Two animation frames guarantees at least one paint.
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
   await html2pdf()
     .set({
       margin: PAGE_MARGIN_MM,
       filename,
+      // Lossless. JPEG's chroma subsampling is tuned for photographs and visibly smears this kind
+      // of content: small text and hairline rules on flat white.
       image: { type: "png", quality: 1 },
       html2canvas: {
-        scale: 3,
+        scale: CAPTURE_SCALE,
         useCORS: true,
         backgroundColor: "#ffffff",
-        // Deliberately no width/windowWidth override: pinning them to the document's own width
-        // makes html2canvas lay the clone out as if the viewport were that narrow, tripping the
-        // responsive breakpoints and rendering the page small in a corner of the sheet.
+        // No width, windowWidth, or style overrides anywhere in here. Every one of them causes a
+        // reflow instead of a scale. See the note at the top of this file.
         onclone: (clonedDoc: Document) => {
           const clonedRoot = clonedDoc.getElementById(elementId);
           if (!clonedRoot) return;
 
-          // ---- Match the print layout -------------------------------------------------------
-          // The document carries `print:min-w-0 print:max-w-none print:w-full print:p-0` on its
-          // inner sheet. Those only apply under the print media query, which html2canvas never
-          // enters, so they are applied directly here instead.
-          const sheet = clonedRoot.firstElementChild as HTMLElement | null;
-          if (sheet) {
-            sheet.style.minWidth = "0";
-            sheet.style.maxWidth = "none";
-            // NOT 100%. Under print, "full width" means the width of the A4 page; here it would
-            // mean the width of the on-screen container, which is wider. Everything fixed in px
-            // (the 56px logo box most visibly) would then shrink relative to the page. Pinning the
-            // clone to the A4 content width makes px sizes land at the same proportion of the page
-            // that Print gives them.
-            sheet.style.width = `${A4_CONTENT_WIDTH_PX}px`;
-            sheet.style.padding = "0";
-          }
-          clonedRoot.style.overflow = "visible";
-
-          // ---- Work around two html2canvas defects ------------------------------------------
-          //
-          // ORDER MATTERS. The style pass below pairs original and cloned elements by index, so it
-          // has to run while the two trees still match. Removing the watermark first shifted every
-          // subsequent clone by one and handed each element another element's colors and sizing.
-          //
-          // 1. It can't parse the modern CSS color functions this app's Tailwind v4 build relies
-          //    on — every "/opacity" utility (e.g. bg-pine-50/60) compiles to color-mix(), which
-          //    crashes its color parser. Fix: ask the *browser* for each element's already-
-          //    resolved color (getComputedStyle always returns plain rgb()/rgba()) and pin that
-          //    inline on the clone.
-          //
-          // 2. Its bundled PNG decoder chokes on the letterhead logo (a zlib "invalid distance
-          //    code" inside its own inflate implementation), which hung the export. Fix: redraw
-          //    the logo through the browser's own image decoder onto a canvas and swap the src to
-          //    that data URL, so html2canvas never parses the original PNG bytes.
+          // This pass pairs original and cloned elements by index, so it must run while the two
+          // trees still have identical shape. Any node removal has to come afterwards.
           const originalNodes = el.querySelectorAll<HTMLElement>("*");
           const clonedNodes = clonedRoot.querySelectorAll<HTMLElement>("*");
+
           clonedNodes.forEach((clone, i) => {
             const source = originalNodes[i];
             if (!source) return;
             const cs = window.getComputedStyle(source);
+
+            // getComputedStyle always returns plain rgb()/rgba(), never color-mix().
             clone.style.backgroundColor = cs.backgroundColor;
             clone.style.backgroundImage = "none";
             clone.style.color = cs.color;
             clone.style.borderColor = cs.borderColor;
 
             if (source instanceof HTMLImageElement && clone instanceof HTMLImageElement && source.complete) {
-              // Pin the box the browser actually gave this image. html2canvas resolves image
-              // sizing less faithfully than the browser does, and the letterhead logo is sized by
-              // utility classes with object-contain, so without this it can land far smaller than
-              // it appears on screen.
+              // Pin the box the browser actually computed. html2canvas infers image sizing less
+              // faithfully than the browser, particularly with object-contain.
               clone.style.width = cs.width;
               clone.style.height = cs.height;
               clone.style.objectFit = cs.objectFit;
@@ -123,20 +97,28 @@ export async function downloadElementAsPdf(elementId: string, filename: string):
                   clone.src = canvas.toDataURL("image/png");
                 }
               } catch {
-                // Same-origin bundled asset — this shouldn't throw, but if it ever does, leave
-                // the original src rather than breaking the whole export over a logo image.
+                // Same-origin bundled asset, so this shouldn't throw. If it ever does, keep the
+                // original src rather than failing the whole export over a logo.
               }
             }
           });
 
-          // Only now that the trees have been walked in step: drop the decorative watermark and
-          // anything marked no-print, neither of which appears on the printout.
+          // Safe to remove now the walk is done. The watermark is absolutely positioned and
+          // `.no-print` nodes sit outside the captured element, so neither shifts the layout.
           clonedDoc.querySelectorAll(".mesh-lattice, .no-print").forEach((n) => n.remove());
 
           clonedRoot.style.backgroundColor = "#ffffff";
+          // Screen chrome on the sheet itself. The commercial invoice carries a rounded border and
+          // drop shadow that print drops; none of these three affect layout, so neutralising them
+          // is a colour change rather than a reflow. The border is made transparent rather than
+          // removed, since removing it would shift the contents by a pixel.
+          clonedRoot.style.boxShadow = "none";
+          clonedRoot.style.borderRadius = "0";
+          clonedRoot.style.borderColor = "transparent";
         },
       },
-      jsPDF: { unit: "mm", format: PAGE_SIZE, orientation: "portrait", compress: true },
+      jsPDF: { unit: "mm", format: PAGE_FORMAT, orientation: "portrait", compress: true },
+      // Never split a table row or a block marked to stay whole across a page boundary.
       pagebreak: { mode: ["css", "legacy"], avoid: ["tr", ".break-inside-avoid"] },
     })
     .from(el)

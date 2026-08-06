@@ -4,14 +4,12 @@ import {
   Save,
   Send,
   CheckCircle2,
-  FileDown,
   Printer,
   GitBranch,
   MessageSquareReply,
   ArrowRightCircle,
   History,
   ChevronLeft,
-  Loader2,
   Pencil,
   Trash2,
   Copy,
@@ -28,7 +26,6 @@ import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/format";
 import { totalsForQuotation } from "@/lib/totals";
-import { downloadElementAsPdf } from "@/lib/pdf";
 
 type ModalKind = "revision" | "response" | "convert" | "delete" | "restore" | "preview" | null;
 
@@ -55,7 +52,6 @@ export function QuotationDetail() {
   const [noteDraft, setNoteDraft] = useState("");
   const [noteText, setNoteText] = useState("");
   const [responseDecision, setResponseDecision] = useState<"accepted" | "rejected" | "under_negotiation">("accepted");
-  const [pdfLoading, setPdfLoading] = useState(false);
 
   const q = quotations.find((x) => x.id === id);
 
@@ -111,22 +107,6 @@ export function QuotationDetail() {
     pushToast({ tone: "info", title: "Marked as sent", description: `${q!.id} recorded as sent to customer.` });
   }
 
-  async function handleDownloadPdf() {
-    setPdfLoading(true);
-    try {
-      await downloadElementAsPdf("pi-document-root", `${q!.id}.pdf`);
-      pushToast({ tone: "success", title: "PDF downloaded", description: `${q!.id}.pdf saved to your downloads.` });
-    } catch (err) {
-      pushToast({
-        tone: "danger",
-        title: "PDF download failed",
-        description: err instanceof Error ? err.message : "Unexpected error while generating the PDF.",
-      });
-    } finally {
-      setPdfLoading(false);
-    }
-  }
-
   function handleCreateRevision() {
     if (!noteText.trim()) return;
     createRevision(q!.id, noteText.trim());
@@ -164,21 +144,6 @@ export function QuotationDetail() {
             <Badge status={q.status} />
             <Button variant="secondary" size="sm" icon={<Printer className="h-3.5 w-3.5" />} onClick={() => window.print()}>
               Print
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={pdfLoading}
-              icon={
-                pdfLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <FileDown className="h-3.5 w-3.5" />
-                )
-              }
-              onClick={handleDownloadPdf}
-            >
-              {pdfLoading ? "Generating…" : "Download PDF"}
             </Button>
           </div>
         }
@@ -285,7 +250,7 @@ export function QuotationDetail() {
             <KeyValue label="Payment terms" value={q.paymentTerms} />
             <KeyValue label="Deposit required" value={`${q.depositPercent}%`} />
             {q.incoterms && <KeyValue label="Incoterms" value={q.incoterms} />}
-            <KeyValue label="Lead time" value={q.leadTimeDate ? formatDate(q.leadTimeDate) : `${q.leadTimeWeeks} weeks`} />
+            <KeyValue label="Date" value={q.leadTimeDate ? formatDate(q.leadTimeDate) : `${q.leadTimeWeeks} weeks`} />
             <KeyValue label="Est. shipment" value={formatDate(q.estimatedShipmentDate)} />
             <KeyValue label="Validity" value={q.validityDate ? formatDate(q.validityDate) : `${q.validityDays} days`} />
             <div className="my-2 border-t border-paper-100" />

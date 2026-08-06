@@ -148,8 +148,14 @@ export function PIDocumentPreview({
   const rows = buildRows(q);
 
   return (
-    <div id={domId} className="overflow-x-auto">
-      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden bg-white p-8 font-sans text-[13px] text-paper-900 print:min-w-0 print:max-w-none print:w-full print:p-0">
+    <div className="overflow-x-auto">
+      {/* The export id sits on the SHEET, not the scroll wrapper above it. The wrapper is as wide
+          as its column, while the sheet is centred at max-w-820, so capturing the wrapper
+          photographed the empty space either side and scaled that dead margin into the page. */}
+      <div
+        id={domId}
+        className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden bg-white p-8 font-sans text-[13px] text-paper-900 print:min-w-0 print:max-w-none print:w-full print:p-0"
+      >
         <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40 print:hidden" />
         <div className="relative">
           <div className="flex items-start justify-between border-b-2 border-pine-800 pb-4 break-inside-avoid">
@@ -190,7 +196,7 @@ export function PIDocumentPreview({
               <Row label="Validity" value={q.validityDate ? formatDate(q.validityDate) : `${q.validityDays} days from issue`} />
               {q.incoterms && <Row label="Incoterms" value={q.incoterms} />}
               <Row
-                label="Lead time"
+                label="Date"
                 value={q.leadTimeDate ? formatDate(q.leadTimeDate) : `${q.leadTimeWeeks} weeks from confirmation`}
               />
             </div>

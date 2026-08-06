@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { ChevronLeft, Printer, FileDown, Loader2, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, Printer, Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -9,7 +9,6 @@ import { Modal } from "@/components/ui/Modal";
 import { InvoiceDocumentPreview } from "@/components/domain/InvoiceDocumentPreview";
 import { useStore } from "@/lib/store";
 import { formatDate, formatMoney } from "@/lib/format";
-import { downloadElementAsPdf } from "@/lib/pdf";
 import type { InvoiceStatus } from "@/lib/types";
 import { resolveDiscount } from "@/lib/totals";
 import { NON_NEGATIVE, NON_NEGATIVE_INT, toNonNegative, toPercent } from "@/lib/num";
@@ -29,7 +28,6 @@ export function InvoiceDetail() {
   const { invoices, customers, updateInvoice, removeInvoice, pushToast } = useStore();
   const inv = invoices.find((i) => i.id === id);
   const customer = inv ? customers.find((c) => c.id === inv.customerId) : undefined;
-  const [pdfLoading, setPdfLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -49,22 +47,6 @@ export function InvoiceDetail() {
   const total = itemsTotal + inv.freight - discountValue + inv.tax;
   const isPartial = inv.items.some((li) => li.shippedQtyPcs !== undefined && li.shippedQtyPcs !== li.qtyPcs);
 
-  async function handleDownloadPdf() {
-    setPdfLoading(true);
-    try {
-      await downloadElementAsPdf("ci-document-root", `${inv!.id}.pdf`);
-      pushToast({ tone: "success", title: "PDF downloaded", description: `${inv!.id}.pdf saved to your downloads.` });
-    } catch (err) {
-      pushToast({
-        tone: "danger",
-        title: "PDF download failed",
-        description: err instanceof Error ? err.message : "Unexpected error while generating the PDF.",
-      });
-    } finally {
-      setPdfLoading(false);
-    }
-  }
-
   return (
     <div>
       <div className="no-print">
@@ -78,21 +60,6 @@ export function InvoiceDetail() {
             <Badge status={inv.status} />
             <Button variant="secondary" size="sm" icon={<Printer className="h-3.5 w-3.5" />} onClick={() => window.print()}>
               Print
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={pdfLoading}
-              icon={
-                pdfLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <FileDown className="h-3.5 w-3.5" />
-                )
-              }
-              onClick={handleDownloadPdf}
-            >
-              {pdfLoading ? "Generating…" : "Download PDF"}
             </Button>
             <Button variant="secondary" size="sm" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(true)}>
               Edit

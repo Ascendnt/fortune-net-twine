@@ -9,8 +9,12 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
   const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
 
   return (
-    <div id="ci-document-root" className="overflow-x-auto">
-      <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:min-w-0 print:max-w-none print:w-full print:rounded-none print:border-0 print:p-0 print:shadow-none">
+    <div className="overflow-x-auto">
+      {/* Export id on the sheet, not the scroll wrapper. See the note in PIDocumentPreview. */}
+      <div
+        id="ci-document-root"
+        className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden rounded-lg border border-paper-200 bg-white p-8 font-sans text-[13px] text-paper-900 shadow-[var(--shadow-panel)] print:min-w-0 print:max-w-none print:w-full print:rounded-none print:border-0 print:p-0 print:shadow-none"
+      >
         <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40 print:hidden" />
         <div className="relative">
         <div className="flex items-start justify-between border-b-2 border-vermillion-700 pb-4 break-inside-avoid">
