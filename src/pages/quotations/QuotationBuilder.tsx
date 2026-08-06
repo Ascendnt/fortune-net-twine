@@ -4,6 +4,7 @@ import { ChevronLeft, FolderPlus } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { BatchSelectionModal } from "@/components/domain/BatchSelectionModal";
@@ -98,6 +99,15 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
 
   const [batches, setBatches] = useState<QuotationBatch[]>(existing?.batches ?? []);
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
+  // Held when re-running Specification Selection would invalidate the items already listed under
+  // an item, so the user can confirm before anything is discarded.
+  const [pendingSpecChange, setPendingSpecChange] = useState<{
+    batchId: string;
+    itemId: string;
+    selection: SpecSelection;
+    specification: string;
+    lostCount: number;
+  } | null>(null);
 
   const contactOptions = customer?.contacts?.length
     ? customer.contacts
@@ -162,26 +172,47 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
     setModal({ kind: "none" });
   }
 
+  /** Applies a re-run of Specification Selection to an existing item. */
+  function applyItemSelection(batchId: string, itemId: string, selection: SpecSelection, specification: string, clearSpecs: boolean) {
+    mapItems(batchId, (items) =>
+      items.map((it) =>
+        it.id !== itemId
+          ? it
+          : {
+              ...it,
+              specification,
+              material: selection.material,
+              netType: selection.netType,
+              weightUom: selection.weightUnit || "KG",
+              qtyUom: selection.qtyUnit || "PCS",
+              specs: clearSpecs ? [] : it.specs,
+            }
+      )
+    );
+  }
+
   function confirmItemSelection(selection: SpecSelection, specification: string) {
     if (modal.kind !== "item") return;
     const { batchId, itemId } = modal;
     if (itemId) {
-      // Editing an existing item's specification. Its spec rows are kept — the user chose to re-run
-      // the selection, not to discard their work.
-      mapItems(batchId, (items) =>
-        items.map((it) =>
-          it.id !== itemId
-            ? it
-            : {
-                ...it,
-                specification,
-                material: selection.material,
-                netType: selection.netType,
-                weightUom: selection.weightUnit || "KG",
-                qtyUom: selection.qtyUnit || "PCS",
-              }
-        )
-      );
+      const item = batches.find((b) => b.id === batchId)?.items?.find((i) => i.id === itemId);
+      // Item codes belong to a specific material and net type. Changing either leaves the listed
+      // codes describing a product this specification no longer is, so they cannot be carried
+      // over. Confirm before discarding rather than silently dropping priced rows.
+      const materialChanged =
+        !!item && (item.material !== selection.material || item.netType !== selection.netType);
+      if (item && materialChanged && item.specs.length > 0) {
+        setPendingSpecChange({
+          batchId,
+          itemId,
+          selection,
+          specification,
+          lostCount: item.specs.length,
+        });
+        setModal({ kind: "none" });
+        return;
+      }
+      applyItemSelection(batchId, itemId, selection, specification, false);
     } else {
       mapItems(batchId, (items) => [
         ...items,
@@ -487,7 +518,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Lead time">
+              <Field label="Date">
                 <input
                   type="date"
                   value={leadTimeDate}
@@ -644,6 +675,58 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       />
 
       <LacingSelectionModal open={modal.kind === "lacing"} onClose={() => setModal({ kind: "none" })} onConfirm={confirmLacing} />
+
+      <Modal
+        open={pendingSpecChange !== null}
+        onClose={() => setPendingSpecChange(null)}
+        title="Changing this will clear the listed items"
+        subtitle="Item codes only exist for a given material and net type."
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setPendingSpecChange(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                if (pendingSpecChange) {
+                  const { batchId, itemId, selection, specification } = pendingSpecChange;
+                  applyItemSelection(batchId, itemId, selection, specification, true);
+                  pushToast({
+                    tone: "warning",
+                    title: `${pendingSpecChange.lostCount} item${pendingSpecChange.lostCount === 1 ? "" : "s"} removed`,
+                    description: `Add items for ${selection.material} ${selection.netType}.`,
+                  });
+                }
+                setPendingSpecChange(null);
+              }}
+            >
+              Change and clear items
+            </Button>
+          </>
+        }
+      >
+        {pendingSpecChange && (
+          <div className="space-y-3">
+            <p className="text-sm text-paper-600">
+              You changed the material or net type, so the{" "}
+              <span className="font-semibold text-alert-700">
+                {pendingSpecChange.lostCount} item{pendingSpecChange.lostCount === 1 ? "" : "s"}
+              </span>{" "}
+              listed under this specification no longer describe it. They will be removed, along with any price and
+              quantity entered against them.
+            </p>
+            <p className="text-xs text-paper-500">
+              The specification becomes{" "}
+              <span className="font-medium text-paper-700">
+                {pendingSpecChange.selection.material} {pendingSpecChange.selection.netType}
+              </span>
+              , and Add Item will offer codes for it. Cancel to keep what you have.
+            </p>
+          </div>
+        )}
+      </Modal>
 
       <SpecificationPricingModal
         open={modal.kind === "pricing"}

@@ -98,7 +98,7 @@ export function BatchEditor({
 
             <div className="flex justify-center">
               <Button variant="secondary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={handlers.onAddItem}>
-                Add Specification
+                Add Description
               </Button>
             </div>
           </div>

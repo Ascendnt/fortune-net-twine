@@ -67,12 +67,18 @@ export function QuotationDetail() {
   const total = useMemo(() => (q ? totalsForQuotation(q).grandTotal : 0), [q]);
 
   const previewRevision = q?.revisions.find((r) => r.revisionNo === previewNo);
-  // The snapshot laid over the current record, so the preview renders through the same document
-  // component the real PI uses rather than a second, drifting implementation.
-  const previewQuotation =
-    q && previewRevision?.snapshot
-      ? { ...q, ...previewRevision.snapshot, revisionNo: previewRevision.revisionNo }
-      : undefined;
+  // Viewing the CURRENT revision shows the live record, not its snapshot. A snapshot is captured
+  // when its revision is created and only refreshed when the history next changes, so for the
+  // revision you are actively editing it is stale by definition. Earlier revisions are closed
+  // books, so those render from their snapshot laid over the current record. Either way it goes
+  // through the same document component as the real PI, so the two cannot drift apart.
+  const previewQuotation = !q
+    ? undefined
+    : previewNo === q.revisionNo
+      ? q
+      : previewRevision?.snapshot
+        ? { ...q, ...previewRevision.snapshot, revisionNo: previewRevision.revisionNo }
+        : undefined;
 
   if (!q) {
     return (
@@ -109,7 +115,11 @@ export function QuotationDetail() {
     setPdfLoading(true);
     try {
       await downloadElementAsPdf("pi-document-root", `${q!.id}.pdf`);
-      pushToast({ tone: "success", title: "PDF downloaded", description: `${q!.id}.pdf saved to your downloads.` });
+      pushToast({
+        tone: "info",
+        title: "Save as PDF",
+        description: `Choose "Save as PDF" as the destination. The file is named ${q!.id}.`,
+      });
     } catch (err) {
       pushToast({
         tone: "danger",
@@ -514,7 +524,7 @@ export function QuotationDetail() {
           closeModal();
           setPreviewNo(null);
         }}
-        title={`Revision ${previewNo} preview`}
+        title={`Revision ${previewNo} preview${previewNo === q.revisionNo ? " (current, live)" : ""}`}
         subtitle={
           previewRevision
             ? `${previewRevision.note} · ${previewRevision.changedBy} · ${formatDate(previewRevision.date)}`
@@ -524,7 +534,9 @@ export function QuotationDetail() {
         footer={
           <>
             <span className="mr-auto text-xs text-paper-500">
-              Read only. Nothing is changed by viewing a revision.
+              {previewNo === q.revisionNo
+                ? "The current revision, shown live as it stands now."
+                : "Read only. Nothing is changed by viewing a revision."}
             </span>
             <Button
               variant="secondary"

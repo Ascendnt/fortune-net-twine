@@ -132,7 +132,12 @@ export function ItemSelectionModal({
         </p>
         {ready && (
           <p className="mt-1.5 text-[11px] text-paper-500">
-            Specifications will be filtered to {sel.material} {sel.netType}.
+            Items will be filtered to {sel.material} {sel.netType}.
+          </p>
+        )}
+        {ready && initial && (initial.material !== sel.material || initial.netType !== sel.netType) && (
+          <p className="mt-1.5 text-[11px] font-medium text-amber-700">
+            Material or net type changed. Any items already listed under this specification will be removed on confirm.
           </p>
         )}
       </div>
