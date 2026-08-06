@@ -21,7 +21,7 @@ function normalBatch(specs: SpecLine[], id = "b1"): QuotationBatch {
         specification: "NYLON BRAIDED NET SK DSTB DWS",
         material: "Nylon",
         netType: "Braided Net",
-        weightUom: "KGS",
+        weightUom: "KG",
         qtyUom: "PCS",
         specs,
       },
@@ -172,8 +172,8 @@ describe("quotation roll-up — doc §6 end-to-end", () => {
     const flat = totalsFromItems(
       [
         { id: "1", itemCode: "N-1596", description: "", specification: "", qtyPcs: 10, unit: "PCS", unitPrice: priced.unitPrice, weightKg: 4950, totalPrice: priced.amount },
-        { id: "2", itemCode: "LC-001", description: "", specification: "", qtyPcs: 100, unit: "KGS", unitPrice: 2.5, weightKg: 100, totalPrice: 250 },
-        { id: "3", itemCode: "LC-006", description: "", specification: "", qtyPcs: 1, unit: "KGS", unitPrice: 50, weightKg: 0, totalPrice: 50 },
+        { id: "2", itemCode: "LC-001", description: "", specification: "", qtyPcs: 100, unit: "KG", unitPrice: 2.5, weightKg: 100, totalPrice: 250 },
+        { id: "3", itemCode: "LC-006", description: "", specification: "", qtyPcs: 1, unit: "KG", unitPrice: 50, weightKg: 0, totalPrice: 50 },
       ],
       100,
       50,

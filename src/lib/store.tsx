@@ -13,6 +13,8 @@ import type {
   LookupTable,
   Customer,
   Contact,
+  QuotationSnapshot,
+  QuotationRevision,
 } from "./types";
 import { ORDER_STAGES } from "./types";
 import {
@@ -73,6 +75,11 @@ interface StoreState {
 
   updateQuotation: (id: string, patch: Partial<Quotation>) => void;
   removeQuotation: (id: string) => void;
+  /** Copies a quotation for the same customer as a fresh draft, and returns the new PI number. */
+  duplicateQuotation: (id: string) => string;
+  /** Restores a revision's captured content as a new current revision. Nothing is destroyed. */
+  restoreRevision: (id: string, revisionNo: number) => void;
+  updateRevisionNote: (id: string, revisionNo: number, note: string) => void;
 
   addPayment: (payment: Omit<PaymentRecord, "id">) => string;
   updatePayment: (id: string, patch: Partial<PaymentRecord>) => void;
@@ -143,12 +150,70 @@ function normalizeCustomers(customers: Customer[]): Customer[] {
  * unlabelled empty band. They contributed to neither the grand total nor the total weight, so
  * removing them cannot change a figure.
  */
+/** Captures the content a revision needs in order to be restored later. */
+function snapshotOf(q: Quotation): QuotationSnapshot {
+  return {
+    batches: q.batches,
+    items: q.items,
+    paymentTerms: q.paymentTerms,
+    shipmentTerms: q.shipmentTerms,
+    incoterms: q.incoterms,
+    leadTimeDate: q.leadTimeDate,
+    validityDate: q.validityDate,
+    depositPercent: q.depositPercent,
+    remarks: q.remarks,
+    consignee: q.consignee,
+    attentionContact: q.attentionContact,
+    currency: q.currency,
+  };
+}
+
+/**
+ * Next unused PI number. Now that a sales order derives its number from its quotation
+ * (PI-33011 becomes SO-33011), a duplicate PI number would produce a duplicate SO number, so
+ * numbers are checked against the existing set rather than trusting a counter.
+ */
+function nextPiNumber(existing: Quotation[]): string {
+  const taken = new Set(existing.map((q) => q.id));
+  let n = 33001;
+  while (taken.has(`PI-${n}`)) n += 1;
+  return `PI-${n}`;
+}
+
+/**
+ * Re-captures the current revision's snapshot from the quotation's live content before the history
+ * grows. A snapshot is taken when its revision is created, but the quotation keeps being edited
+ * afterwards, so without this refresh those edits would never reach the history and restoring an
+ * earlier revision would silently discard them.
+ */
+function refreshCurrentSnapshot(q: Quotation): QuotationRevision[] {
+  return q.revisions.map((r) => (r.revisionNo === q.revisionNo ? { ...r, snapshot: snapshotOf(q) } : r));
+}
+
+/** Weight units are written singular now: KGS/LBS saved by an earlier build become KG/LB. */
+const UNIT_FIX: Record<string, string> = { KGS: "KG", LBS: "LB" };
+const singular = (u: string) => UNIT_FIX[u] ?? u;
+
 function migrateQuotations(quotations: Quotation[]): Quotation[] {
-  return quotations.map((q) =>
-    q.batches?.some((b) => !KNOWN_BATCH_TYPES.has(b.type))
-      ? { ...q, batches: q.batches.filter((b) => KNOWN_BATCH_TYPES.has(b.type)) }
-      : q
-  );
+  return quotations.map((q) => {
+    // Revisions used to be numbered from 0. Shift any zero-based history up by one so the first
+    // issue reads as Revision 1 everywhere.
+    const zeroBased = q.revisions.some((r) => r.revisionNo === 0);
+    const revisions = zeroBased ? q.revisions.map((r) => ({ ...r, revisionNo: r.revisionNo + 1 })) : q.revisions;
+    return {
+    ...q,
+    revisionNo: zeroBased ? q.revisionNo + 1 : q.revisionNo,
+    revisions,
+    items: q.items.map((li) => (UNIT_FIX[li.unit] ? { ...li, unit: singular(li.unit) } : li)),
+    batches: q.batches
+      ?.filter((b) => KNOWN_BATCH_TYPES.has(b.type))
+      .map((b) =>
+        b.items
+          ? { ...b, items: b.items.map((i) => ({ ...i, weightUom: singular(i.weightUom), qtyUom: singular(i.qtyUom) })) }
+          : b
+      ),
+    };
+  });
 }
 
 let idCounter = 1000;
@@ -262,6 +327,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const removeQuotation = useCallback((id: string) => {
     setQuotations((prev) => prev.filter((q) => q.id !== id));
+  }, []);
+
+  // duplicateQuotation and restoreRevision need `currentUser` and `logActivity`, which are declared
+  // further down. They live alongside createRevision for that reason — see below.
+
+  const updateRevisionNote = useCallback((id: string, revisionNo: number, note: string) => {
+    setQuotations((prev) =>
+      prev.map((q) =>
+        q.id !== id
+          ? q
+          : { ...q, revisions: q.revisions.map((r) => (r.revisionNo === revisionNo ? { ...r, note } : r)) }
+      )
+    );
   }, []);
 
   const addPayment = useCallback((payment: Omit<PaymentRecord, "id">): string => {
@@ -391,14 +469,25 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const createQuotation = useCallback(
     (q: Omit<Quotation, "id" | "revisionNo" | "revisions" | "status">): string => {
-      idCounter += 1;
-      const id = `PI-${33000 + (idCounter % 1000)}`;
+      // Computed synchronously, not inside the setState updater: React may defer that updater
+      // until render, and StrictMode runs it twice, so an id assigned in there would still be
+      // empty when this function returns it to the caller for navigation.
+      const id = nextPiNumber(quotations);
+      // Revisions are numbered from 1: the first issue is Revision 1, not Revision 0.
       const newQ: Quotation = {
         ...q,
         id,
-        revisionNo: 0,
+        revisionNo: 1,
         status: "draft",
-        revisions: [{ revisionNo: 0, date: new Date().toISOString().slice(0, 10), changedBy: currentUser, note: "Initial issue" }],
+        revisions: [
+          {
+            revisionNo: 1,
+            date: new Date().toISOString().slice(0, 10),
+            changedBy: currentUser,
+            note: "Initial issue",
+            snapshot: snapshotOf({ ...q, id } as Quotation),
+          },
+        ],
       };
       setQuotations((prev) => [newQ, ...prev]);
       logActivity({
@@ -408,7 +497,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       });
       return id;
     },
-    [currentUser, logActivity]
+    [quotations, currentUser, logActivity]
   );
 
   const updateQuotationStatus = useCallback(
@@ -446,9 +535,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             ...q,
             revisionNo: newRevNo,
             status: "revised",
+            // A revision invalidates the previous sign-off. Leaving these set kept the old
+            // approver's name printed on a document they never saw, and left the quotation
+            // looking approved when it now needs approving again.
+            approver: undefined,
+            approvedDate: undefined,
             revisions: [
-              ...q.revisions,
-              { revisionNo: newRevNo, date: new Date().toISOString().slice(0, 10), changedBy: currentUser, note },
+              ...refreshCurrentSnapshot(q),
+              {
+                revisionNo: newRevNo,
+                date: new Date().toISOString().slice(0, 10),
+                changedBy: currentUser,
+                note,
+                snapshot: snapshotOf(q),
+              },
             ],
           };
         })
@@ -463,11 +563,86 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [currentUser, logActivity]
   );
 
+  const duplicateQuotation = useCallback(
+    (id: string): string => {
+      const source = quotations.find((q) => q.id === id);
+      if (!source) return "";
+      const newId = nextPiNumber(quotations);
+      const today = new Date().toISOString().slice(0, 10);
+      // Same customer and terms, but a brand new document: back to draft at Revision 1, with the
+      // approval trail and any sales-order link cleared so the copy stands on its own.
+      const copy: Quotation = {
+        ...source,
+        id: newId,
+        issueDate: today,
+        status: "draft",
+        revisionNo: 1,
+        revisions: [
+          {
+            revisionNo: 1,
+            date: today,
+            changedBy: currentUser,
+            note: `Duplicated from ${source.id}`,
+            snapshot: snapshotOf({ ...source, id: newId }),
+          },
+        ],
+        approver: undefined,
+        approvedDate: undefined,
+        customerResponseNote: undefined,
+        salesOrderId: undefined,
+      };
+      setQuotations((prev) => [copy, ...prev]);
+      logActivity({ action: `Duplicated ${id}`, recordType: "Quotation", recordId: newId });
+      return newId;
+    },
+    [quotations, currentUser, logActivity]
+  );
+
+  const restoreRevision = useCallback(
+    (id: string, revisionNo: number) => {
+      const today = new Date().toISOString().slice(0, 10);
+      setQuotations((prev) =>
+        prev.map((q) => {
+          if (q.id !== id) return q;
+          const target = q.revisions.find((r) => r.revisionNo === revisionNo);
+          if (!target?.snapshot) return q;
+          const nextNo = q.revisionNo + 1;
+          return {
+            ...q,
+            ...target.snapshot,
+            revisionNo: nextNo,
+            status: "revised",
+            approver: undefined,
+            approvedDate: undefined,
+            revisions: [
+              // The live content is captured into the outgoing revision first, so a restore never
+              // loses whatever was on screen. The new revision then holds the restored content,
+              // which keeps the rule "a revision's snapshot is that revision's content" true for
+              // every entry, and makes the restore itself reversible.
+              ...refreshCurrentSnapshot(q),
+              {
+                revisionNo: nextNo,
+                date: today,
+                changedBy: currentUser,
+                note: `Restored from Revision ${revisionNo}`,
+                snapshot: target.snapshot,
+              },
+            ],
+          };
+        })
+      );
+      logActivity({ action: `Restored Revision ${revisionNo}`, recordType: "Quotation", recordId: id });
+    },
+    [currentUser, logActivity]
+  );
+
   const convertToSalesOrder = useCallback(
     (quotationId: string): string => {
       const q = quotations.find((x) => x.id === quotationId);
       if (!q) return "";
-      const soId = nextId("SO");
+      // The sales order carries its quotation's number: PI-33011 becomes SO-33011. An arbitrary
+      // sequence meant nothing on the SO tied it back to the PI it came from.
+      const soId = q.id.startsWith("PI-") ? q.id.replace(/^PI-/, "SO-") : nextId("SO");
       const totalValue =
         q.items.reduce((sum, li) => sum + li.totalPrice, 0) + q.freight - q.discount + q.tax;
 
@@ -750,6 +925,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeCustomer,
       updateQuotation,
       removeQuotation,
+      duplicateQuotation,
+      restoreRevision,
+      updateRevisionNote,
       addPayment,
       updatePayment,
       removePayment,
@@ -806,6 +984,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       removeCustomer,
       updateQuotation,
       removeQuotation,
+      duplicateQuotation,
+      restoreRevision,
+      updateRevisionNote,
       addPayment,
       updatePayment,
       removePayment,

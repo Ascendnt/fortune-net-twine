@@ -142,7 +142,7 @@ export function flattenBatches(batches: QuotationBatch[]): QuotationLineItem[] {
           description: line.description,
           specification: "LACING",
           qtyPcs: line.kind === "twine" ? line.kgs : 1,
-          unit: "KGS",
+          unit: "KG",
           unitPrice: line.rate,
           weightKg: lacingWeight(line),
           totalPrice: lacingAmount(line),

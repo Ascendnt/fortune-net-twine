@@ -397,7 +397,7 @@ function LacingTab() {
         <CardHeader
           title="Lacing Catalog"
           eyebrow={`${lacingCatalog.length} codes on file`}
-          subtitle="Twine rows bill KGS × rate and add to Total Weight. Charge rows are a flat amount and add no weight."
+          subtitle="Twine rows bill KG × rate and add to Total Weight. Charge rows are a flat amount and add no weight."
           action={
             <Button
               variant="primary"

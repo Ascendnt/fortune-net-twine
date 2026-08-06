@@ -28,6 +28,8 @@ export interface BatchEditorHandlers {
   onEditItemSpec: (itemId: string) => void;
   onRemoveItem: (itemId: string) => void;
   onAddSpecification: (itemId: string) => void;
+  /** Reopens Item Selection to swap this row's code in place, keeping its price and quantity. */
+  onReplaceSpec: (itemId: string, specId: string) => void;
   onPatchSpec: (itemId: string, specId: string, patch: Partial<SpecLine>) => void;
   onRemoveSpec: (itemId: string, specId: string) => void;
   onOpenPricing: (itemId: string, specId: string) => void;
@@ -96,7 +98,7 @@ export function BatchEditor({
 
             <div className="flex justify-center">
               <Button variant="secondary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={handlers.onAddItem}>
-                Add Item
+                Add Specification
               </Button>
             </div>
           </div>
@@ -173,9 +175,9 @@ function ItemBlock({
             <thead>
               <tr className="border-b border-paper-100 text-left font-mono text-[9.5px] uppercase tracking-wide text-paper-400">
                 <th className="w-24 px-2 py-1.5">Code</th>
-                <th className="px-2 py-1.5">Specification</th>
+                <th className="px-2 py-1.5">Item</th>
                 <th className="w-20 px-2 py-1.5 text-right">Weight/pc</th>
-                <th className="w-24 px-2 py-1.5 text-right">Given</th>
+                <th className="w-24 px-2 py-1.5 text-right">USD/WT</th>
                 <th className="w-20 px-2 py-1.5 text-right">Qty</th>
                 <th className="w-52 px-2 py-1.5">Pricing</th>
                 <th className="w-24 px-2 py-1.5 text-right">U/P</th>
@@ -207,7 +209,7 @@ function ItemBlock({
           icon={<Plus className="h-3.5 w-3.5" />}
           onClick={() => handlers.onAddSpecification(item.id)}
         >
-          Add Specification
+          Add Item
         </Button>
       </div>
     </div>
@@ -243,7 +245,18 @@ function SpecRow({
   return (
     <tr className="border-b border-paper-100 last:border-0">
       <td className="px-2 py-1.5 font-mono text-[11px] text-pine-800">{spec.specCode}</td>
-      <td className="px-2 py-1.5 text-[11px] text-paper-600">{spec.description}</td>
+      <td className="px-2 py-1.5">
+        {/* Swapping the code in place, rather than deleting and re-adding, keeps the row where it
+            sits and preserves its USD/WT, quantity and pricing. The picker stays filtered to the
+            parent item's material and net type. */}
+        <button
+          onClick={() => handlers.onReplaceSpec(itemId, spec.id)}
+          title="Click to choose a different item code"
+          className="-m-1 w-full rounded-md p-1 text-left text-[11px] text-paper-600 underline decoration-paper-300 decoration-dotted underline-offset-2 transition-colors hover:bg-manifest-50 hover:text-manifest-900 hover:decoration-manifest-500"
+        >
+          {spec.description}
+        </button>
+      </td>
       <td className="px-2 py-1.5 text-right font-mono text-[11px] text-paper-500">{spec.weightPerPc.toFixed(2)}</td>
       <td className="px-2 py-1.5">
         <input
@@ -321,7 +334,7 @@ function LacingBody({
               <tr className="border-b border-paper-100 text-left font-mono text-[9.5px] uppercase tracking-wide text-paper-400">
                 <th className="w-24 px-2 py-1.5">Code</th>
                 <th className="px-2 py-1.5">Lacing description</th>
-                <th className="w-24 px-2 py-1.5 text-right">KGS</th>
+                <th className="w-24 px-2 py-1.5 text-right">KG</th>
                 <th className="w-24 px-2 py-1.5 text-right">Rate / Amount</th>
                 <th className="w-28 px-2 py-1.5 text-right">Amount</th>
                 <th className="w-8" />

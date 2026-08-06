@@ -17,12 +17,15 @@ export function SpecificationPickerModal({
   onClose,
   material,
   netType,
+  singleSelect = false,
   onConfirm,
 }: {
   open: boolean;
   onClose: () => void;
   material: string;
   netType: string;
+  /** Replace mode: picking a code swaps one existing row, so only one may be selected. */
+  singleSelect?: boolean;
   onConfirm: (rows: SpecMasterRow[]) => void;
 }) {
   const { specMaster, addSpecMasterRow, pushToast } = useStore();
@@ -44,6 +47,10 @@ export function SpecificationPickerModal({
   );
 
   function toggle(code: string) {
+    if (singleSelect) {
+      setSelected((prev) => (prev.includes(code) ? [] : [code]));
+      return;
+    }
     setSelected((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
   }
 
@@ -85,8 +92,12 @@ export function SpecificationPickerModal({
     <DataTableModal<SpecMasterRow>
       open={open}
       onClose={onClose}
-      title="Item Specification"
-      subtitle={material && netType ? `Filtered to ${material} ${netType}` : undefined}
+      title={singleSelect ? "Replace Item" : "Item Selection"}
+      subtitle={
+        material && netType
+          ? `${singleSelect ? "Pick the replacement. " : ""}Filtered to ${material} ${netType}`
+          : undefined
+      }
       rows={rows}
       rowKey={(r) => r.code}
       searchText={(r) => `${r.code} ${r.description} ${r.twine} ${r.meshSize} ${r.meshDepth} ${r.length}`}
@@ -107,15 +118,15 @@ export function SpecificationPickerModal({
       selectedKeys={selected}
       onToggle={toggle}
       onConfirm={confirm}
-      confirmLabel="Add Specification"
+      confirmLabel={singleSelect ? "Replace Item" : "Add Item"}
       emptyMessage={
         rows.length === 0
-          ? "No specifications on file for this material and net type. Create one below."
+          ? "No items on file for this material and net type. Create one below."
           : "Nothing matches those filters."
       }
       headerAction={
         <Button variant="secondary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreating((v) => !v)}>
-          Create New Specs
+          Create New Item
         </Button>
       }
     >

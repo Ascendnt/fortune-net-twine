@@ -17,11 +17,21 @@ export async function downloadElementAsPdf(elementId: string, filename: string):
     .set({
       margin: 10,
       filename,
-      image: { type: "jpeg", quality: 0.95 },
+      // PNG rather than JPEG: the document is text and hairline rules on flat white, exactly the
+      // content JPEG's chroma subsampling smears. PNG is lossless, and on this kind of page it is
+      // not meaningfully larger.
+      image: { type: "png", quality: 1 },
       html2canvas: {
-        scale: 1.5,
+        // The page is rasterised before being placed in the PDF, so this multiplier is what
+        // decides how sharp the text lands. 1.5 was visibly soft; 3 renders at roughly 300dpi
+        // against an A4 page and matches what the screen shows.
+        scale: 3,
         useCORS: true,
         backgroundColor: "#ffffff",
+        // Deliberately NOT setting width/windowWidth. Pinning windowWidth to the document's own
+        // width makes html2canvas lay the clone out as if the viewport were that narrow, which
+        // trips the responsive breakpoints and renders the page at the wrong size in a corner of
+        // the sheet. Letting it use the real viewport keeps the export matching what Print produces.
         // Two known html2canvas failure modes, both fixed in this one pass over the cloned DOM:
         //
         // 1. It can't parse the modern CSS color functions this app's Tailwind v4 build relies
@@ -69,7 +79,7 @@ export async function downloadElementAsPdf(elementId: string, filename: string):
           clonedRoot.style.backgroundColor = "#ffffff";
         },
       },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
       pagebreak: { mode: ["css", "legacy"], avoid: ["tr", ".break-inside-avoid"] },
     })
     .from(el)

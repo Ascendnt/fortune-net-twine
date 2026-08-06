@@ -33,7 +33,7 @@ function buildRows(q: Quotation): PrintRow[] {
       if (batch.type === "lacing") {
         const lines = batch.lacing ?? [];
         if (lines.length === 0) continue;
-        rows.push({ kind: "banner", key: `${batch.id}-b`, text: BATCH_LABEL.lacing, weightUom: "KGS" });
+        rows.push({ kind: "banner", key: `${batch.id}-b`, text: BATCH_LABEL.lacing, weightUom: "KG" });
         for (const line of lines) {
           rows.push({
             kind: "line",
@@ -86,7 +86,7 @@ function buildRows(q: Quotation): PrintRow[] {
   let lastSpec: string | null = null;
   for (const li of q.items) {
     if (li.specification !== lastSpec) {
-      rows.push({ kind: "banner", key: `${li.id}-b`, text: li.specification, weightUom: "KGS", qtyUom: "PCS" });
+      rows.push({ kind: "banner", key: `${li.id}-b`, text: li.specification, weightUom: "KG", qtyUom: "PCS" });
       lastSpec = li.specification;
     }
     rows.push({
@@ -128,7 +128,17 @@ function bannerFontClass(text: string): string {
   return "text-[9px]";
 }
 
-export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Customer }) {
+export function PIDocumentPreview({
+  q,
+  customer,
+  domId = "pi-document-root",
+}: {
+  q: Quotation;
+  customer?: Customer;
+  /** Overridden when a second copy is on the page (e.g. a revision preview) so ids stay unique
+   *  and the PDF export still targets the right one. */
+  domId?: string;
+}) {
   // The export client master shows PIs actually go out under one of two legal entities depending
   // on the account, not a single fixed name — falls back to the historical default when a customer
   // record has no letterhead set (e.g. seed customers predating this field).
@@ -138,7 +148,7 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
   const rows = buildRows(q);
 
   return (
-    <div id="pi-document-root" className="overflow-x-auto">
+    <div id={domId} className="overflow-x-auto">
       <div className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden bg-white p-8 font-sans text-[13px] text-paper-900 print:min-w-0 print:max-w-none print:w-full print:p-0">
         <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40 print:hidden" />
         <div className="relative">
@@ -162,7 +172,7 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
             <div className="text-right">
               <p className="font-mono text-[11px] text-paper-400">PROFORMA INVOICE</p>
               <p className="font-mono text-lg font-bold text-pine-800">{q.id}</p>
-              {q.revisionNo > 0 && <p className="font-mono text-[11px] text-vermillion-600">Revision {q.revisionNo}</p>}
+              {/* The revision number is internal tracking; it is not printed on the customer's copy. */}
               <p className="mt-1 text-[11px] text-paper-500">{formatDate(q.issueDate)}</p>
             </div>
           </div>
@@ -173,25 +183,24 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
               <p className="text-[13px] font-semibold">{customer?.name ?? q.consignee}</p>
               <p className="text-[12px] text-paper-500">{customer?.address}</p>
               {attn && <p className="mt-1 text-[12px] text-paper-500">Attn: {attn}</p>}
-              {q.dearSirs?.trim() && <p className="mt-2 text-[12px] text-paper-700">{q.dearSirs}</p>}
             </div>
             <div className="space-y-1 text-[12px]">
               <Row label="Shipment" value={q.shipmentTerms?.trim() || formatDate(q.estimatedShipmentDate)} />
               <Row label="Payment" value={q.paymentTerms} />
-              <Row label="Validity" value={`${q.validityDays} days from issue`} />
-              <Row label="MOQ" value={q.moq} />
-              <Row label="Lead time" value={`${q.leadTimeWeeks} weeks from confirmation`} />
+              <Row label="Validity" value={q.validityDate ? formatDate(q.validityDate) : `${q.validityDays} days from issue`} />
+              {q.incoterms && <Row label="Incoterms" value={q.incoterms} />}
+              <Row
+                label="Lead time"
+                value={q.leadTimeDate ? formatDate(q.leadTimeDate) : `${q.leadTimeWeeks} weeks from confirmation`}
+              />
             </div>
           </div>
 
-          <p className="mt-5 border-b border-paper-200 pb-1 font-mono text-[10.5px] font-semibold uppercase tracking-wide text-pine-800">
-            Items
-          </p>
-          <table className="w-full table-fixed border-collapse text-[11px]">
+          <table className="mt-5 w-full table-fixed border-collapse text-[11px]">
             <thead>
               <tr className="bg-pine-700 text-left font-mono text-[10px] font-semibold uppercase tracking-wide text-white">
                 <th className="w-10 py-1.5 pl-2 text-center">Item No.</th>
-                <th className="py-1.5 px-2">Item Specification</th>
+                <th className="py-1.5 px-2">Description</th>
                 <th className="w-14 py-1.5 px-2 text-right">UOM</th>
                 <th className="w-12 py-1.5 px-2 text-right">Qty</th>
                 <th className="w-20 py-1.5 px-2 text-right">U/P</th>
@@ -266,7 +275,7 @@ export function PIDocumentPreview({ q, customer }: { q: Quotation; customer?: Cu
                   Total Weight:
                 </td>
                 <td className="whitespace-nowrap py-2 px-2 text-right font-mono text-[10.5px]">
-                  {totalWeightKg.toFixed(2)} KGS
+                  {totalWeightKg.toFixed(2)} KG
                 </td>
                 <td className="py-2 px-2 text-right" colSpan={2}>
                   Grand Total:

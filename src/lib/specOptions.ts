@@ -238,10 +238,11 @@ export const SPEC_COLORS = [
   "Smoke Grey Color",
 ];
 
-export const SPEC_WEIGHT_UNITS = ["KGS", "LBS"];
+/** Weight units are written singular: KG, not KGS. */
+export const SPEC_WEIGHT_UNITS = ["KG", "LB"];
 
-/** Last selection — the unit the quoted QTY is expressed in. Nets ship by the piece, twine by kilo. */
-export const SPEC_QTY_UNITS = ["PCS", "KGS"];
+/** The unit the quoted QTY is expressed in. Nets ship by the piece, twine by spool, hank or coil. */
+export const SPEC_QTY_UNITS = ["PCS", "SPOOLS", "HANKS", "COILS"];
 
 export interface SpecSelection {
   category: string;
@@ -267,7 +268,7 @@ export const EMPTY_SPEC_SELECTION: SpecSelection = {
   reinforcement: "",
   others: "",
   color: "",
-  weightUnit: "KGS",
+  weightUnit: "KG",
   qtyUnit: "PCS",
 };
 

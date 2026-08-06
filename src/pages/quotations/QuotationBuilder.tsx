@@ -18,8 +18,7 @@ import { SHIPMENT_TERM_OPTIONS } from "@/lib/mockData";
 import { formatMoney } from "@/lib/format";
 import { flattenBatches, lacingAmount, newBatch, newBatchItem, newLacingLine, newSpecLine } from "@/lib/batches";
 import { quotationTotals, recomputeSpecLine } from "@/lib/totals";
-import type { DiscountMode } from "@/lib/totals";
-import { NON_NEGATIVE, NON_NEGATIVE_INT, toNonNegative, toPercent } from "@/lib/num";
+import { NON_NEGATIVE, toPercent } from "@/lib/num";
 import clsx from "clsx";
 import type { BatchType, Currency, LacingLine, Quotation, QuotationBatch, SpecLine } from "@/lib/types";
 import type { SpecSelection } from "@/lib/specOptions";
@@ -30,6 +29,21 @@ import type { LacingCatalogRow, SpecMasterRow } from "@/lib/specMaster";
 // from and what Save does — so both routes render this rather than maintaining two copies.
 
 const CURRENCIES: Currency[] = ["USD", "KRW", "EUR"];
+const INCOTERMS = ["FOB", "CIF"];
+
+/** ISO date `days` after `from`, defaulting to today. Used to carry legacy durations forward. */
+function addDays(from: string | undefined, days: number): string {
+  const base = from ? new Date(from).getTime() : Date.now();
+  return new Date(base + days * 86400000).toISOString().slice(0, 10);
+}
+
+/** Whole days from `from` (default today) to an ISO date, never negative. */
+function daysBetweenIso(from: string | undefined, to: string): number {
+  const start = from ? new Date(from).getTime() : Date.now();
+  const end = new Date(to).getTime();
+  if (!Number.isFinite(end)) return 0;
+  return Math.max(0, Math.round((end - start) / 86400000));
+}
 
 const inputClass =
   "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
@@ -48,7 +62,7 @@ type ModalState =
   | { kind: "none" }
   | { kind: "batch" }
   | { kind: "item"; batchId: string; itemId?: string }
-  | { kind: "spec"; batchId: string; itemId: string }
+  | { kind: "spec"; batchId: string; itemId: string; replaceSpecId?: string }
   | { kind: "lacing"; batchId: string }
   | { kind: "pricing"; batchId: string; itemId: string; specId: string };
 
@@ -68,17 +82,18 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
   const [consignee, setConsignee] = useState(existing?.consignee ?? customer?.consignee ?? "");
   const [attentionContact, setAttentionContact] = useState(existing?.attentionContact ?? customer?.contactPerson ?? "");
   const [depositPercent, setDepositPercent] = useState(existing?.depositPercent ?? 30);
-  const [leadTimeWeeks, setLeadTimeWeeks] = useState(existing?.leadTimeWeeks ?? 6);
-  const [validityDays, setValidityDays] = useState(existing?.validityDays ?? 7);
-  const [moq, setMoq] = useState(existing?.moq ?? "Subject to confirmation");
+  // Lead time and validity are dates. Older quotations stored durations, so those are converted
+  // forward from the issue date rather than shown as blank.
+  const [leadTimeDate, setLeadTimeDate] = useState(
+    existing?.leadTimeDate ?? addDays(existing?.issueDate, (existing?.leadTimeWeeks ?? 6) * 7)
+  );
+  const [validityDate, setValidityDate] = useState(
+    existing?.validityDate ?? addDays(existing?.issueDate, existing?.validityDays ?? 7)
+  );
   // Cover-letter fields the reference quotation header carries (doc §3.1). Shipment is a phrase,
-  // not a date — the client master's standard wordings back the datalist.
+  // not a date; the client master's standard wordings back the dropdown.
   const [shipmentTerms, setShipmentTerms] = useState(existing?.shipmentTerms ?? "");
-  const [dearSirs, setDearSirs] = useState(existing?.dearSirs ?? "");
-  const [freight, setFreight] = useState(existing?.freight ?? 0);
-  const [discount, setDiscount] = useState(existing?.discount ?? 0);
-  const [discountMode, setDiscountMode] = useState<DiscountMode>(existing?.discountMode ?? "amount");
-  const [tax, setTax] = useState(existing?.tax ?? 0);
+  const [incoterms, setIncoterms] = useState(existing?.incoterms ?? "");
   const [remarks, setRemarks] = useState(existing?.remarks ?? "");
 
   const [batches, setBatches] = useState<QuotationBatch[]>(existing?.batches ?? []);
@@ -90,7 +105,9 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       ? [{ id: "primary", name: customer.contactPerson, isPrimary: true }]
       : [];
 
-  const totals = quotationTotals(batches, freight, discount, tax, discountMode);
+  // Freight, discount and tax were removed from the quotation form, so the grand total is simply
+  // the sum of the batch groups. The invoice still carries all three.
+  const totals = quotationTotals(batches);
 
   // The standard phrasings from the client master, plus whatever this quotation already carries so
   // an older or hand-written value still shows rather than reading as empty.
@@ -160,7 +177,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                 specification,
                 material: selection.material,
                 netType: selection.netType,
-                weightUom: selection.weightUnit || "KGS",
+                weightUom: selection.weightUnit || "KG",
                 qtyUom: selection.qtyUnit || "PCS",
               }
         )
@@ -172,7 +189,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
           specification,
           material: selection.material,
           netType: selection.netType,
-          weightUom: selection.weightUnit || "KGS",
+          weightUom: selection.weightUnit || "KG",
           qtyUom: selection.qtyUnit || "PCS",
         }),
       ]);
@@ -182,7 +199,40 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
 
   function confirmSpecifications(rows: SpecMasterRow[]) {
     if (modal.kind !== "spec") return;
-    const { batchId, itemId } = modal;
+    const { batchId, itemId, replaceSpecId } = modal;
+
+    // Replace mode: swap one row's code where it sits, carrying its price, quantity and pricing
+    // chain across. Appending a new row and deleting the old one would drop it to the bottom.
+    if (replaceSpecId) {
+      const row = rows[0];
+      if (!row) return setModal({ kind: "none" });
+      mapItems(batchId, (items) =>
+        items.map((item) =>
+          item.id !== itemId
+            ? item
+            : {
+                ...item,
+                specs: item.specs.map((s) =>
+                  s.id !== replaceSpecId
+                    ? s
+                    : recomputeSpecLine(
+                        {
+                          ...newSpecLine(row),
+                          id: s.id,
+                          givenPriceKg: s.givenPriceKg,
+                          qtyPcs: s.qtyPcs,
+                          pricing: s.pricing,
+                        },
+                        pricingRules,
+                        lookupTables
+                      )
+                ),
+              }
+        )
+      );
+      return setModal({ kind: "none" });
+    }
+
     mapItems(batchId, (items) =>
       items.map((item) =>
         item.id !== itemId
@@ -236,6 +286,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       onEditItemSpec: (itemId) => setModal({ kind: "item", batchId: batch.id, itemId }),
       onRemoveItem: (itemId) => mapItems(batch.id, (items) => items.filter((i) => i.id !== itemId)),
       onAddSpecification: (itemId) => setModal({ kind: "spec", batchId: batch.id, itemId }),
+      onReplaceSpec: (itemId, specId) => setModal({ kind: "spec", batchId: batch.id, itemId, replaceSpecId: specId }),
       onPatchSpec: (itemId, specId, patch) => patchSpec(batch.id, itemId, specId, patch),
       onRemoveSpec: (itemId, specId) =>
         mapItems(batch.id, (items) =>
@@ -293,22 +344,23 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       consignee: consignee || customer.name,
       attentionContact,
       currency,
-      validityDays,
       // Deliberately not falling back to the customer default here. Doing so silently refilled a
       // field the user had cleared, and an edit then round-tripped to a different value than the
       // one on screen. The field warns when blank instead.
       paymentTerms,
       shipmentTerms,
-      dearSirs,
-      moq,
-      leadTimeWeeks,
-      estimatedShipmentDate: new Date(Date.now() + leadTimeWeeks * 7 * 86400000).toISOString().slice(0, 10),
+      incoterms,
+      leadTimeDate,
+      validityDate,
+      // Legacy duration fields, derived from the dates so anything still reading them stays sane.
+      validityDays: daysBetweenIso(existing?.issueDate, validityDate),
+      leadTimeWeeks: Math.round(daysBetweenIso(existing?.issueDate, leadTimeDate) / 7),
+      estimatedShipmentDate: leadTimeDate,
       batches,
       items,
-      freight,
-      discount,
-      discountMode,
-      tax,
+      freight: 0,
+      discount: 0,
+      tax: 0,
       depositPercent,
       remarks,
     };
@@ -419,18 +471,13 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                   options={shipmentOptions.map((o) => ({ value: o, label: o }))}
                 />
               </Field>
-              <div className="sm:col-span-2">
-                <Field label="Dear Sirs (salutation line)">
-                  <input
-                    value={dearSirs}
-                    onChange={(e) => setDearSirs(e.target.value)}
-                    placeholder="e.g. We are pleased to quote you as follows:"
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
-              <Field label="MOQ">
-                <input value={moq} onChange={(e) => setMoq(e.target.value)} className={inputClass} />
+              <Field label="Incoterms">
+                <SearchableSelect
+                  value={incoterms}
+                  onChange={setIncoterms}
+                  placeholder="Select incoterms…"
+                  options={INCOTERMS.map((o) => ({ value: o, label: o }))}
+                />
               </Field>
               <Field label="Deposit required (%)">
                 <input
@@ -440,67 +487,19 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                   className={inputClass}
                 />
               </Field>
-              <Field label="Lead time (weeks)">
+              <Field label="Lead time">
                 <input
-                  {...NON_NEGATIVE_INT}
-                  value={leadTimeWeeks}
-                  onChange={(e) => setLeadTimeWeeks(toNonNegative(e.target.value))}
+                  type="date"
+                  value={leadTimeDate}
+                  onChange={(e) => setLeadTimeDate(e.target.value)}
                   className={inputClass}
                 />
               </Field>
-              <Field label="Validity (days)">
+              <Field label="Validity">
                 <input
-                  {...NON_NEGATIVE_INT}
-                  value={validityDays}
-                  onChange={(e) => setValidityDays(toNonNegative(e.target.value))}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Freight / additional charges">
-                <input
-                  {...NON_NEGATIVE}
-                  value={freight}
-                  onChange={(e) => setFreight(toNonNegative(e.target.value))}
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Discount">
-                <div className="flex gap-2">
-                  <input
-                    {...NON_NEGATIVE}
-                    value={discount}
-                    onChange={(e) =>
-                      setDiscount(discountMode === "percent" ? toPercent(e.target.value) : toNonNegative(e.target.value))
-                    }
-                    className={inputClass}
-                  />
-                  <select
-                    value={discountMode}
-                    onChange={(e) => {
-                      const mode = e.target.value as DiscountMode;
-                      setDiscountMode(mode);
-                      // Switching to percent would otherwise carry a money figure straight into a
-                      // percentage field, so a value above 100 is capped as it changes meaning.
-                      if (mode === "percent") setDiscount((d) => Math.min(100, d));
-                    }}
-                    className="w-24 shrink-0 rounded-lg border border-paper-200 bg-white px-2 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
-                  >
-                    <option value="amount">{currency}</option>
-                    <option value="percent">%</option>
-                  </select>
-                </div>
-                {discountMode === "percent" && discount > 0 && (
-                  <p className="mt-1 text-[11px] text-paper-500">
-                    {discount}% of {formatMoney(totals.itemsTotal, currency)} is{" "}
-                    <span className="font-mono">{formatMoney(totals.discountValue, currency)}</span>
-                  </p>
-                )}
-              </Field>
-              <Field label="Tax">
-                <input
-                  {...NON_NEGATIVE}
-                  value={tax}
-                  onChange={(e) => setTax(toNonNegative(e.target.value))}
+                  type="date"
+                  value={validityDate}
+                  onChange={(e) => setValidityDate(e.target.value)}
                   className={inputClass}
                 />
               </Field>
@@ -549,18 +548,9 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                 <span className="text-paper-500">Items:&nbsp;</span>
                 <span className="font-mono text-paper-700">{formatMoney(totals.itemsTotal, currency)}</span>
               </span>
-              {totals.discountValue > 0 && (
-                <span>
-                  <span className="text-paper-500">Discount:&nbsp;</span>
-                  <span className="font-mono text-alert-600">
-                    -{formatMoney(totals.discountValue, currency)}
-                    {discountMode === "percent" && ` (${discount}%)`}
-                  </span>
-                </span>
-              )}
               <span>
                 <span className="text-paper-500">Total weight:&nbsp;</span>
-                <span className="font-mono font-semibold text-paper-700">{totals.totalWeightKg.toFixed(2)} KGS</span>
+                <span className="font-mono font-semibold text-paper-700">{totals.totalWeightKg.toFixed(2)} KG</span>
               </span>
               <span>
                 <span className="text-paper-500">Grand total:&nbsp;</span>
@@ -649,6 +639,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
         onClose={() => setModal({ kind: "none" })}
         material={specTarget?.material ?? ""}
         netType={specTarget?.netType ?? ""}
+        singleSelect={modal.kind === "spec" && Boolean(modal.replaceSpecId)}
         onConfirm={confirmSpecifications}
       />
 

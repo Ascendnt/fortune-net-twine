@@ -230,11 +230,30 @@ export interface QuotationLineItem {
   itemId?: string;
 }
 
+/** The parts of a quotation a revision captures, so an earlier revision can be restored. */
+export interface QuotationSnapshot {
+  batches?: QuotationBatch[];
+  items: QuotationLineItem[];
+  paymentTerms: string;
+  shipmentTerms?: string;
+  incoterms?: string;
+  leadTimeDate?: string;
+  validityDate?: string;
+  depositPercent: number;
+  remarks: string;
+  consignee: string;
+  attentionContact?: string;
+  currency: Currency;
+}
+
 export interface QuotationRevision {
+  /** Revisions are numbered from 1: the first issue is Revision 1, not Revision 0. */
   revisionNo: number;
   date: string;
   changedBy: string;
   note: string;
+  /** Content as it stood when this revision was created. Absent on older records. */
+  snapshot?: QuotationSnapshot;
 }
 
 export interface Quotation {
@@ -255,8 +274,17 @@ export interface Quotation {
   // Shipment is written as a phrase ("30 days from receipt of deposit"), not a date — see
   // SHIPMENT_TERM_OPTIONS in mockData. Falls back to the computed estimatedShipmentDate when unset.
   shipmentTerms?: string;
-  dearSirs?: string;
-  moq: string;
+  /** FOB or CIF. Replaced the free-text salutation line on the quotation header. */
+  incoterms?: string;
+  /**
+   * Lead time and validity are entered as dates rather than durations. The legacy numeric
+   * `leadTimeWeeks` / `validityDays` remain for quotations authored before the change, and are
+   * used only when the corresponding date is absent.
+   */
+  leadTimeDate?: string;
+  validityDate?: string;
+  /** @deprecated Removed from the quotation form. Optional so new quotations can omit it. */
+  moq?: string;
   leadTimeWeeks: number;
   estimatedShipmentDate: string;
   // The authored batch tree (ASSEMBLED / NORMAL / LACING). `items` below is its flattened

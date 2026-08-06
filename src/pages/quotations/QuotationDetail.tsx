@@ -14,6 +14,9 @@ import {
   Loader2,
   Pencil,
   Trash2,
+  Copy,
+  Undo2,
+  Eye,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
@@ -27,14 +30,29 @@ import { formatMoney, formatDate } from "@/lib/format";
 import { totalsForQuotation } from "@/lib/totals";
 import { downloadElementAsPdf } from "@/lib/pdf";
 
-type ModalKind = "revision" | "response" | "convert" | "delete" | null;
+type ModalKind = "revision" | "response" | "convert" | "delete" | "restore" | "preview" | null;
 
 export function QuotationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { quotations, role, updateQuotationStatus, createRevision, convertToSalesOrder, removeQuotation, pushToast, customers } =
-    useStore();
+  const {
+    quotations,
+    role,
+    updateQuotationStatus,
+    createRevision,
+    convertToSalesOrder,
+    removeQuotation,
+    duplicateQuotation,
+    restoreRevision,
+    updateRevisionNote,
+    pushToast,
+    customers,
+  } = useStore();
   const [modal, setModal] = useState<ModalKind>(null);
+  const [restoreTarget, setRestoreTarget] = useState<number | null>(null);
+  const [previewNo, setPreviewNo] = useState<number | null>(null);
+  const [editingNoteNo, setEditingNoteNo] = useState<number | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
   const [noteText, setNoteText] = useState("");
   const [responseDecision, setResponseDecision] = useState<"accepted" | "rejected" | "under_negotiation">("accepted");
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -44,9 +62,17 @@ export function QuotationDetail() {
   const customer = q ? customers.find((c) => c.id === q.customerId) : undefined;
   const canApprove = role === "sales_manager" || role === "management" || role === "admin";
 
-  // Single shared roll-up — prefers the authored batch tree, falls back to the flat line list for
+  // Single shared roll-up. Prefers the authored batch tree, falls back to the flat line list for
   // quotations that predate it.
   const total = useMemo(() => (q ? totalsForQuotation(q).grandTotal : 0), [q]);
+
+  const previewRevision = q?.revisions.find((r) => r.revisionNo === previewNo);
+  // The snapshot laid over the current record, so the preview renders through the same document
+  // component the real PI uses rather than a second, drifting implementation.
+  const previewQuotation =
+    q && previewRevision?.snapshot
+      ? { ...q, ...previewRevision.snapshot, revisionNo: previewRevision.revisionNo }
+      : undefined;
 
   if (!q) {
     return (
@@ -153,9 +179,11 @@ export function QuotationDetail() {
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {q.status === "draft" && (
+        {/* A revised quotation is a draft again: it has to go back through approval, otherwise the
+            revision could be sent out carrying the previous version's sign-off. */}
+        {(q.status === "draft" || q.status === "revised") && (
           <Button variant="primary" size="sm" icon={<Send className="h-3.5 w-3.5" />} onClick={handleSubmitForApproval}>
-            Submit for Approval
+            {q.status === "revised" ? `Submit Revision ${q.revisionNo} for Approval` : "Submit for Approval"}
           </Button>
         )}
         {q.status === "for_approval" && canApprove && (
@@ -211,6 +239,23 @@ export function QuotationDetail() {
         <Button variant="secondary" size="sm" icon={<GitBranch className="h-3.5 w-3.5" />} onClick={() => setModal("revision")}>
           Create Revision
         </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Copy className="h-3.5 w-3.5" />}
+          onClick={() => {
+            const newId = duplicateQuotation(q.id);
+            if (!newId) return;
+            pushToast({
+              tone: "success",
+              title: "Quotation duplicated",
+              description: `${newId} created for ${customer?.name ?? q.consignee}.`,
+            });
+            navigate(`/quotations/${newId}`);
+          }}
+        >
+          Duplicate
+        </Button>
         <Button variant="ghost" size="sm" icon={<Save className="h-3.5 w-3.5" />} onClick={() => pushToast({ tone: "info", title: "Draft saved" })}>
           Save Draft
         </Button>
@@ -233,10 +278,10 @@ export function QuotationDetail() {
             <KeyValue label="Currency" value={q.currency} />
             <KeyValue label="Payment terms" value={q.paymentTerms} />
             <KeyValue label="Deposit required" value={`${q.depositPercent}%`} />
-            <KeyValue label="MOQ" value={q.moq} />
-            <KeyValue label="Lead time" value={`${q.leadTimeWeeks} weeks`} />
+            {q.incoterms && <KeyValue label="Incoterms" value={q.incoterms} />}
+            <KeyValue label="Lead time" value={q.leadTimeDate ? formatDate(q.leadTimeDate) : `${q.leadTimeWeeks} weeks`} />
             <KeyValue label="Est. shipment" value={formatDate(q.estimatedShipmentDate)} />
-            <KeyValue label="Valid for" value={`${q.validityDays} days`} />
+            <KeyValue label="Validity" value={q.validityDate ? formatDate(q.validityDate) : `${q.validityDays} days`} />
             <div className="my-2 border-t border-paper-100" />
             <KeyValue label="Total value" value={formatMoney(total, q.currency)} mono />
             <KeyValue label="Assigned to" value={q.assignedSalesperson} />
@@ -245,19 +290,90 @@ export function QuotationDetail() {
           <Card>
             <CardHeader title="Revision History" eyebrow="Audit" action={<History className="h-4 w-4 text-paper-300" />} />
             <div className="space-y-3">
-              {[...q.revisions].reverse().map((r) => (
-                <div key={r.revisionNo} className="flex gap-2.5 text-xs">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-pine-100 font-mono font-semibold text-pine-700">
-                    {r.revisionNo}
-                  </span>
-                  <div>
-                    <p className="text-paper-700">{r.note}</p>
-                    <p className="mt-0.5 text-[10.5px] text-paper-400">
-                      {r.changedBy} · {formatDate(r.date)}
-                    </p>
+              {[...q.revisions].reverse().map((r) => {
+                const isCurrent = r.revisionNo === q.revisionNo;
+                return (
+                  <div key={r.revisionNo} className="flex gap-2.5 text-xs">
+                    <span
+                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono font-semibold ${
+                        isCurrent ? "bg-pine-700 text-white" : "bg-pine-100 text-pine-700"
+                      }`}
+                    >
+                      {r.revisionNo}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {editingNoteNo === r.revisionNo ? (
+                        <div className="flex items-start gap-1.5">
+                          <input
+                            value={noteDraft}
+                            onChange={(e) => setNoteDraft(e.target.value)}
+                            className="w-full rounded-md border border-paper-200 px-2 py-1 text-xs focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+                          />
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => {
+                              updateRevisionNote(q.id, r.revisionNo, noteDraft.trim() || r.note);
+                              setEditingNoteNo(null);
+                            }}
+                          >
+                            Save
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditingNoteNo(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingNoteNo(r.revisionNo);
+                            setNoteDraft(r.note);
+                          }}
+                          title="Click to edit this note"
+                          className="-m-0.5 block w-full rounded p-0.5 text-left text-paper-700 hover:bg-paper-50"
+                        >
+                          {r.note}
+                        </button>
+                      )}
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <p className="text-[10.5px] text-paper-400">
+                          {r.changedBy} · {formatDate(r.date)}
+                          {isCurrent && <span className="ml-1 font-medium text-pine-700">· current</span>}
+                        </p>
+                        {/* View first, restore second. Checking what an old revision looked like
+                            should not require restoring it and adding a pointless audit entry. */}
+                        {r.snapshot && (
+                          <button
+                            onClick={() => {
+                              setPreviewNo(r.revisionNo);
+                              setModal("preview");
+                            }}
+                            className="flex items-center gap-1 text-[10.5px] font-medium text-manifest-600 hover:text-manifest-800"
+                          >
+                            <Eye className="h-3 w-3" /> View
+                          </button>
+                        )}
+                        {!isCurrent && r.snapshot && (
+                          <button
+                            onClick={() => {
+                              setRestoreTarget(r.revisionNo);
+                              setModal("restore");
+                            }}
+                            className="flex items-center gap-1 text-[10.5px] font-medium text-paper-500 hover:text-manifest-800"
+                          >
+                            <Undo2 className="h-3 w-3" /> Restore
+                          </button>
+                        )}
+                        {!isCurrent && !r.snapshot && (
+                          <span className="text-[10.5px] text-paper-300" title="Saved before revision snapshots existed">
+                            no snapshot
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
 
@@ -386,6 +502,111 @@ export function QuotationDetail() {
           placeholder="e.g. Customer requests standard selvage length be guaranteed in writing"
           className="w-full rounded-lg border border-paper-200 px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
         />
+      </Modal>
+
+      {/* A read-only rendering of the document as it stood at the chosen revision, built by laying
+          that revision's snapshot over the current record. Nothing is written, so looking costs
+          nothing in the audit trail. Restore is offered from here for when looking was enough to
+          decide. */}
+      <Modal
+        open={modal === "preview" && previewRevision !== undefined}
+        onClose={() => {
+          closeModal();
+          setPreviewNo(null);
+        }}
+        title={`Revision ${previewNo} preview`}
+        subtitle={
+          previewRevision
+            ? `${previewRevision.note} · ${previewRevision.changedBy} · ${formatDate(previewRevision.date)}`
+            : undefined
+        }
+        width="max-w-4xl"
+        footer={
+          <>
+            <span className="mr-auto text-xs text-paper-500">
+              Read only. Nothing is changed by viewing a revision.
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                closeModal();
+                setPreviewNo(null);
+              }}
+            >
+              Close
+            </Button>
+            {previewNo !== null && previewNo !== q.revisionNo && (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Undo2 className="h-3.5 w-3.5" />}
+                onClick={() => {
+                  setRestoreTarget(previewNo);
+                  setPreviewNo(null);
+                  setModal("restore");
+                }}
+              >
+                Restore this revision
+              </Button>
+            )}
+          </>
+        }
+      >
+        {previewQuotation && (
+          <div className="rounded-lg border border-paper-200">
+            <PIDocumentPreview q={previewQuotation} customer={customer} domId="pi-revision-preview" />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={modal === "restore"}
+        onClose={() => {
+          closeModal();
+          setRestoreTarget(null);
+        }}
+        title={`Restore Revision ${restoreTarget}?`}
+        subtitle="Nothing in the history is lost."
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                closeModal();
+                setRestoreTarget(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                if (restoreTarget !== null) {
+                  restoreRevision(q.id, restoreTarget);
+                  pushToast({
+                    tone: "success",
+                    title: "Revision restored",
+                    description: `${q.id} is now Revision ${q.revisionNo + 1}, restored from Revision ${restoreTarget}.`,
+                  });
+                }
+                closeModal();
+                setRestoreTarget(null);
+              }}
+            >
+              Restore revision
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-paper-600">
+          What's on screen now is captured into Revision {q.revisionNo} first, so nothing is lost. The batch groups,
+          items, pricing and terms from Revision {restoreTarget} then become the current content as Revision{" "}
+          {q.revisionNo + 1}, which you can restore away from again. Approval resets, so the restored version has to be
+          approved again.
+        </p>
       </Modal>
 
       <Modal

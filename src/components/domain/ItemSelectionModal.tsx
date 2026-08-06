@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
@@ -38,7 +38,7 @@ const FIELDS: { key: keyof SpecSelection; label: string; options: readonly strin
   { key: "others", label: "Others", options: SPEC_OTHERS },
   { key: "color", label: "Color", options: SPEC_COLORS },
   { key: "weightUnit", label: "Weight UOM", options: SPEC_WEIGHT_UNITS },
-  { key: "qtyUnit", label: "Quantity UOM", options: SPEC_QTY_UNITS },
+  { key: "qtyUnit", label: "Quantity QUOM", options: SPEC_QTY_UNITS },
 ];
 
 export function ItemSelectionModal({
@@ -55,8 +55,14 @@ export function ItemSelectionModal({
   const { specMaster } = useStore();
   const [sel, setSel] = useState<SpecSelection>(initial ?? EMPTY_SPEC_SELECTION);
 
+  // Reset only on the closed-to-open transition. The previous version also depended on `initial`,
+  // which the caller builds as a fresh object literal on every render, so while the modal was open
+  // the effect re-ran on each keystroke and wiped the selection straight back to its starting
+  // value. That is why Category appeared impossible to change.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) setSel(initial ?? EMPTY_SPEC_SELECTION);
+    if (open && !wasOpen.current) setSel(initial ?? EMPTY_SPEC_SELECTION);
+    wasOpen.current = open;
   }, [open, initial]);
 
   // Doc §3.3: "Selecting Material dynamically populates Net Type (cascading dependency confirmed)."
@@ -88,8 +94,8 @@ export function ItemSelectionModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Item Selection"
-      subtitle="Each choice is appended to the item's specification, in order."
+      title="Specification Selection"
+      subtitle="Each choice is appended to the specification, in order."
       width="max-w-3xl"
       footer={
         <>

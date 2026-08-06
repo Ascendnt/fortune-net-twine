@@ -25,8 +25,8 @@ fixtures and discards everything you have entered.
 Quotations / PI, then **New Quotation**.
 
 1. Pick a customer. Currency, payment terms, consignee and Attn pre-fill from their record and stay
-   editable for this quotation only. Shipment, Dear Sirs, MOQ and Validity are the cover-letter
-   fields that print on the PDF.
+   editable for this quotation only. Shipment, Incoterms (FOB or CIF), Lead time and Validity are
+   the cover-letter fields that print on the PDF. Lead time and Validity are dates.
 2. **Generate Batch Item** and choose one group type. Add as many groups as the quotation needs:
    - **ASSEMBLED**, a titled finished product such as "COMPLETE SOCCER GOAL NET ASSEMBLY", built
      from several nets or twines.
@@ -35,15 +35,15 @@ Quotations / PI, then **New Quotation**.
 
    Narrative text goes in the **Remarks** field in Step 3, which prints on the PI. The reference
    system also had a NOTE group, but that was a second way to do the same job.
-3. Inside an ASSEMBLED or NORMAL group, **Add Item** opens *Item Selection*: Category, Material,
-   Net Type, Knots, Selvages, Stretching, Reinforcement, Others, Color and the two UOMs. Every field
-   is type-to-search. Choosing a Material narrows Net Type to the types that actually have
-   specification codes on file. Confirming composes the item's specification sentence. Shipment in
-   Step 1 is the same style of searchable dropdown, backed by the client master's standard wordings.
-4. **Add Specification** opens the specification master, filtered to the Material and Net Type you
-   just picked. Search it, filter by mesh size, depth or length, and tick as many codes as you need.
-   Weight lands immediately; the grand total stays at zero until you price.
-5. Type a **Given price / kg** and **Qty** on each specification row.
+3. Inside an ASSEMBLED or NORMAL group, **Add Specification** opens *Specification Selection*:
+   Category, Material, Net Type, Knots, Selvages, Stretching, Reinforcement, Others, Color, Weight
+   UOM and Quantity QUOM. Every field is type-to-search. Choosing a Material narrows Net Type to the
+   types that actually have codes on file. Confirming composes the specification sentence. Shipment
+   and Incoterms in Step 1 are the same style of searchable dropdown.
+4. **Add Item** opens *Item Selection*, filtered to the Material and Net Type you just picked.
+   Search it, filter by mesh size, depth or length, and tick as many codes as you need. Weight lands
+   immediately; the grand total stays at zero until you price.
+5. Type a **USD/WT** rate and **Qty** on each item row.
 6. **Add Pricing** opens the two-stage pricing modal:
    - Stage 1 lists every available adjustment with its rate and the running total after each step.
      **Everything starts unticked.** Nothing is applied until you say so.
@@ -54,9 +54,9 @@ Quotations / PI, then **New Quotation**.
    hover and carries an Edit control, and it reopens Item Selection.
 8. Save as Draft.
 
-**Discount** can be entered either as a money amount or as a percentage. Use the selector beside the
-field to switch between the currency and `%`. When set to a percentage, the resolved amount is shown
-underneath and in the totals row so there is no ambiguity about what is being deducted.
+Freight, discount and tax are not part of the quotation. The grand total is the sum of the batch
+groups. The commercial invoice still carries all three, and its discount can be a money amount or a
+percentage.
 
 ### 2. Approve and send
 
@@ -100,8 +100,8 @@ Nothing in this prototype requires a developer to change:
 | **Payments** | Add, edit and delete payment records |
 | **Invoices** | Edit shipped quantities and charges, delete |
 
-Specifications can also be created from inside the quotation flow, through *Create New Specs* in the
-Add Specification picker, so you never have to leave what you are doing.
+Items can also be created from inside the quotation flow, through *Create New Item* in the Item
+Selection picker, so you never have to leave what you are doing.
 
 ## Input rules
 
@@ -131,7 +131,7 @@ U/P    = New price/kg × Weight/pc + Labor + Wastage + Sewing twine
 Amount = U/P × Qty          (from the unrounded U/P: 2561.625 × 10 = 25,616.25)
 Weight = Weight/pc × Qty    (plus lacing twine KGS; flat lacing charges add none)
 
-Grand total  = every batch total, less discount, plus freight and tax
+Grand total  = every batch total
 Total weight = every line's weight
 ```
 

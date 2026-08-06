@@ -48,10 +48,7 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
           </div>
         </div>
 
-        <p className="mt-5 border-b border-paper-200 pb-1 font-mono text-[10.5px] font-semibold uppercase tracking-wide text-vermillion-700">
-          Items
-        </p>
-        <table className="w-full border-collapse text-[12px]">
+        <table className="mt-5 w-full border-collapse text-[12px]">
           <thead>
             <tr className="border-y border-vermillion-700 bg-[#fdf4f4] text-left font-mono text-[10.5px] uppercase tracking-wide text-vermillion-700">
               <th className="py-1.5 pr-2">Item</th>

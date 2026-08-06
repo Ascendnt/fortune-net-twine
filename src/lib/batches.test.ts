@@ -98,7 +98,7 @@ describe("flattenBatches", () => {
           specification: "NYLON BRAIDED NET SK DSTB DWS",
           material: "Nylon",
           netType: "Braided Net",
-          weightUom: "KGS",
+          weightUom: "KG",
           qtyUom: "PCS",
           specs: [specLine()],
         },
@@ -129,7 +129,7 @@ describe("flattenBatches", () => {
   it("carries amount and weight through unchanged", () => {
     const [spec, twine, charge] = flattenBatches(batches);
     expect(spec).toMatchObject({ totalPrice: 24750, weightKg: 4950, unitPrice: 2475, unit: "PCS" });
-    expect(twine).toMatchObject({ totalPrice: 250, weightKg: 100, qtyPcs: 100, unit: "KGS" });
+    expect(twine).toMatchObject({ totalPrice: 250, weightKg: 100, qtyPcs: 100, unit: "KG" });
     expect(charge).toMatchObject({ totalPrice: 50, weightKg: 0, qtyPcs: 1 });
   });
 

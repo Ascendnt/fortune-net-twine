@@ -144,7 +144,7 @@ export function SpecificationPricingModal({
       {stage === 1 ? (
         <>
           <div className="mb-3 flex items-center justify-between rounded-lg bg-paper-50 px-3 py-2">
-            <span className="text-xs text-paper-500">Given price / kg</span>
+            <span className="text-xs text-paper-500">USD/WT</span>
             <span className="font-mono text-sm font-semibold text-paper-800">{line.givenPriceKg.toFixed(4)}</span>
           </div>
 
@@ -212,7 +212,7 @@ export function SpecificationPricingModal({
 
           <div className="mt-3 flex items-center justify-between rounded-lg border border-pine-200 bg-pine-50 px-3 py-2.5">
             <div>
-              <p className="text-[11px] text-paper-500">New price / kg = Given price plus the sum of the additional values</p>
+              <p className="text-[11px] text-paper-500">New price / kg = USD/WT plus the sum of the additional values</p>
               <p className="text-[11px] text-paper-400">
                 Additional: <span className="font-mono">{additional >= 0 ? "+" : ""}{additional.toFixed(4)}</span> ·{" "}
                 {draft.appliedRuleIds.length} of {enabledRules.length} applied
