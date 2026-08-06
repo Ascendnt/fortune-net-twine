@@ -115,11 +115,7 @@ export function QuotationDetail() {
     setPdfLoading(true);
     try {
       await downloadElementAsPdf("pi-document-root", `${q!.id}.pdf`);
-      pushToast({
-        tone: "info",
-        title: "Save as PDF",
-        description: `Choose "Save as PDF" as the destination. The file is named ${q!.id}.`,
-      });
+      pushToast({ tone: "success", title: "PDF downloaded", description: `${q!.id}.pdf saved to your downloads.` });
     } catch (err) {
       pushToast({
         tone: "danger",

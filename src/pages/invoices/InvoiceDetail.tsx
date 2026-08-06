@@ -53,11 +53,7 @@ export function InvoiceDetail() {
     setPdfLoading(true);
     try {
       await downloadElementAsPdf("ci-document-root", `${inv!.id}.pdf`);
-      pushToast({
-        tone: "info",
-        title: "Save as PDF",
-        description: `Choose "Save as PDF" as the destination. The file is named ${inv!.id}.`,
-      });
+      pushToast({ tone: "success", title: "PDF downloaded", description: `${inv!.id}.pdf saved to your downloads.` });
     } catch (err) {
       pushToast({
         tone: "danger",

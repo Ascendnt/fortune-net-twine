@@ -215,6 +215,9 @@ body {
   .no-print {
     display: none !important;
   }
+  /* Page geometry. Ctrl+P and the Download PDF button must produce the same document, so these
+     two values are mirrored by PAGE_SIZE and PAGE_MARGIN_MM in src/lib/pdf.ts. Change one and
+     you must change the other: CSS and the export script cannot share a constant. */
   @page {
     size: A4;
     margin: 14mm;
