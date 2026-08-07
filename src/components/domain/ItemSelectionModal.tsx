@@ -16,6 +16,7 @@ import {
   SPEC_SELVAGES,
   SPEC_STRETCHING,
   SPEC_WEIGHT_UNITS,
+  SPEC_NONE,
   buildSpecString,
 } from "@/lib/specOptions";
 import type { SpecSelection } from "@/lib/specOptions";
@@ -27,16 +28,19 @@ import type { SpecSelection } from "@/lib/specOptions";
 // Every list is a type-to-filter combobox: Others has ~66 entries and Color ~67, which a plain
 // <select> handles badly.
 
-const FIELDS: { key: keyof SpecSelection; label: string; options: readonly string[] }[] = [
-  { key: "category", label: "Category", options: SPEC_CATEGORIES },
+// `optional` fields carry an explicit "-" choice. Material and Net Type are required (they drive
+// which item codes exist), and the two UOMs must resolve to a real unit or the document prints a
+// blank column, so none of those four offer it.
+const FIELDS: { key: keyof SpecSelection; label: string; options: readonly string[]; optional?: boolean }[] = [
+  { key: "category", label: "Category", options: SPEC_CATEGORIES, optional: true },
   { key: "material", label: "Material", options: SPEC_MATERIALS },
   { key: "netType", label: "Net Type", options: SPEC_NET_TYPES },
-  { key: "knots", label: "Knots Type", options: SPEC_KNOTS },
-  { key: "selvages", label: "Selvages", options: SPEC_SELVAGES },
-  { key: "stretching", label: "Stretching", options: SPEC_STRETCHING },
-  { key: "reinforcement", label: "Reinforcement", options: SPEC_REINFORCEMENT },
-  { key: "others", label: "Others", options: SPEC_OTHERS },
-  { key: "color", label: "Color", options: SPEC_COLORS },
+  { key: "knots", label: "Knots Type", options: SPEC_KNOTS, optional: true },
+  { key: "selvages", label: "Selvages", options: SPEC_SELVAGES, optional: true },
+  { key: "stretching", label: "Stretching", options: SPEC_STRETCHING, optional: true },
+  { key: "reinforcement", label: "Reinforcement", options: SPEC_REINFORCEMENT, optional: true },
+  { key: "others", label: "Others", options: SPEC_OTHERS, optional: true },
+  { key: "color", label: "Color", options: SPEC_COLORS, optional: true },
   { key: "weightUnit", label: "Weight UOM", options: SPEC_WEIGHT_UNITS },
   { key: "qtyUnit", label: "Quantity QUOM", options: SPEC_QTY_UNITS },
 ];
@@ -117,9 +121,13 @@ export function ItemSelectionModal({
             </label>
             <SearchableSelect
               value={sel[f.key]}
+              clearable={f.optional}
               onChange={(value) => setSel((prev) => ({ ...prev, [f.key]: value }) as SpecSelection)}
               placeholder={`Select ${f.label.toLowerCase()}…`}
-              options={(f.key === "netType" ? netTypeOptions : f.options).map((o) => ({ value: o, label: o }))}
+              options={[
+                ...(f.optional ? [{ value: SPEC_NONE, label: SPEC_NONE }] : []),
+                ...(f.key === "netType" ? netTypeOptions : f.options).map((o) => ({ value: o, label: o })),
+              ]}
             />
           </div>
         ))}

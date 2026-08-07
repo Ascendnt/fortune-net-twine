@@ -9,6 +9,16 @@
 // Each category is an independent, deduplicated pick-list (not a nested per-material tree) — the
 // source sheet's "Nth selection" header names a sequence of choices, not a hierarchy.
 
+/**
+ * Explicit "nothing here" choice, offered on every optional specification field.
+ *
+ * Leaving a field untouched and choosing "-" mean the same thing to the composed string, but they
+ * do not mean the same thing to the person filling the form: a blank reads as unfinished, while a
+ * dash reads as decided. It is stored rather than collapsed to "" so the distinction survives, and
+ * buildSpecString drops it.
+ */
+export const SPEC_NONE = "-";
+
 // First selection in the Item Selection flow (doc §3.3) — narrows what the rest of the sheet is
 // describing before any material is chosen.
 export const SPEC_CATEGORIES = ["NET", "SPORTS NET", "TWINE"];
@@ -291,7 +301,8 @@ export function buildSpecString(sel: SpecSelection): string {
     sel.others,
     sel.color,
   ]
-    .filter(Boolean)
+    // SPEC_NONE is a deliberate "none", so it contributes nothing to the sentence.
+    .filter((part) => Boolean(part) && part !== SPEC_NONE)
     .join(" ")
     .toUpperCase();
 }

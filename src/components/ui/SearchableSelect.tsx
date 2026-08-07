@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import clsx from "clsx";
 
 export interface SearchableSelectOption {
@@ -18,12 +18,15 @@ export function SearchableSelect({
   onChange,
   placeholder = "Search…",
   className,
+  clearable = false,
 }: {
   value: string;
   options: SearchableSelectOption[];
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /** Shows an inline clear control once a value is picked, resetting the field to empty. */
+  clearable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -66,7 +69,33 @@ export function SearchableSelect({
         className="flex w-full items-center justify-between gap-2 rounded-lg border border-paper-200 bg-white px-3 py-2 text-left text-sm hover:border-paper-300 focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
       >
         <span className={clsx("truncate", !selected && "text-paper-400")}>{selected ? selected.label : placeholder}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-paper-400" />
+        <span className="flex shrink-0 items-center gap-1">
+          {clearable && value && (
+            // A span rather than a nested button: buttons cannot legally nest, and this sits
+            // inside the trigger.
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label="Clear selection"
+              title="Clear"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onChange("");
+                }
+              }}
+              className="rounded p-0.5 text-paper-400 hover:bg-paper-100 hover:text-alert-600"
+            >
+              <X className="h-3 w-3" />
+            </span>
+          )}
+          <ChevronDown className="h-3.5 w-3.5 text-paper-400" />
+        </span>
       </button>
 
       {open && (

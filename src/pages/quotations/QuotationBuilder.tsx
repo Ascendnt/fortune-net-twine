@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, FolderPlus } from "lucide-react";
+import { ChevronLeft, Eraser, FolderPlus } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -117,6 +117,22 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
 
   /** Validity cannot precede the Date. ISO strings compare correctly, so no parsing is needed. */
   const notBeforeDate = (value: string) => (value && leadTimeDate && value < leadTimeDate ? leadTimeDate : value);
+
+  /**
+   * Empties the terms on this step. The customer is kept, because clearing it would also wipe the
+   * snapshot panel and the Attn list, and picking the customer again re-fills these fields anyway,
+   * which is the opposite of what someone reaching for "Clear all" wants.
+   */
+  function clearStepOne() {
+    setConsignee("");
+    setAttentionContact("");
+    setPaymentTerms("");
+    setShipmentTerms("");
+    setIncoterms("");
+    setDepositPercent(0);
+    handleDateChange(TODAY);
+    setRemarks("");
+  }
   // Cover-letter fields the reference quotation header carries (doc §3.1). Shipment is a phrase,
   // not a date; the client master's standard wordings back the dropdown.
   const [shipmentTerms, setShipmentTerms] = useState(existing?.shipmentTerms ?? "");
@@ -473,12 +489,21 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_320px]">
         <div className="space-y-4">
           <Card>
-            <CardHeader title="Customer & Terms" eyebrow="Step 1" />
+            <CardHeader
+              title="Customer & Terms"
+              eyebrow="Step 1"
+              action={
+                <Button variant="ghost" size="sm" icon={<Eraser className="h-3.5 w-3.5" />} onClick={clearStepOne}>
+                  Clear all
+                </Button>
+              }
+            />
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <Field label="Customer">
                   <SearchableSelect
                     value={customerId}
+                    clearable
                     onChange={handleCustomerChange}
                     placeholder="Select a customer…"
                     options={customers.map((c) => ({ value: c.id, label: c.name, sublabel: c.country }))}
@@ -525,6 +550,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
               <Field label="Shipment">
                 <SearchableSelect
                   value={shipmentTerms}
+                  clearable
                   onChange={setShipmentTerms}
                   placeholder="Select shipment terms…"
                   options={shipmentOptions.map((o) => ({ value: o, label: o }))}
@@ -533,6 +559,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
               <Field label="Incoterms">
                 <SearchableSelect
                   value={incoterms}
+                  clearable
                   onChange={setIncoterms}
                   placeholder="Select incoterms…"
                   options={INCOTERMS.map((o) => ({ value: o, label: o }))}
