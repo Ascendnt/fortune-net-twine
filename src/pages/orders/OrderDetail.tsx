@@ -20,7 +20,6 @@ import { Modal } from "@/components/ui/Modal";
 import { LifecycleStepper } from "@/components/domain/LifecycleStepper";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
-import { DOCUMENTS } from "@/lib/mockData";
 import { formatMoney, formatDate, formatDateTime } from "@/lib/format";
 import { ORDER_STAGES } from "@/lib/types";
 
@@ -28,7 +27,6 @@ const TABS = [
   { id: "overview", label: "Overview" },
   { id: "items", label: "Items" },
   { id: "payments", label: "Payments" },
-  { id: "documents", label: "Documents" },
   { id: "activity", label: "Activity History" },
 ];
 
@@ -46,7 +44,6 @@ export function OrderDetail() {
   const customer = order ? customers.find((c) => c.id === order.customerId) : undefined;
   const orderPayments = payments.filter((p) => p.salesOrderId === id);
   const orderActivity = activity.filter((a) => a.recordId === id);
-  const orderDocs = DOCUMENTS.filter((d) => d.relatedOrderId === id);
   const invoice = order?.invoiceId ? invoices.find((i) => i.id === order.invoiceId) : undefined;
 
   if (!order) {
@@ -103,7 +100,17 @@ export function OrderDetail() {
         description: isPartial ? `${invId}: partial shipment recalculated on actual qty.` : invId,
       });
       navigate(`/invoices/${invId}`);
+      return;
     }
+    // The only way generateInvoice returns nothing is a missing quotation, which happens on orders
+    // raised straight from a customer PO. Say so rather than letting the button do nothing.
+    pushToast({
+      tone: "warning",
+      title: "No line items to invoice",
+      description: order!.quotationId
+        ? "The linked quotation could not be found."
+        : `${order!.id} was raised on customer PO ${order!.customerPoNo ?? "—"} with no quotation behind it, so there are no lines to invoice yet.`,
+    });
   }
 
   return (
@@ -112,7 +119,13 @@ export function OrderDetail() {
         breadcrumb={["Fortune Net & Twine ERP", "Sales Orders", order.id]}
         eyebrow={`Owned by ${currentStageMeta.role}`}
         title={order.id}
-        description={`${customer?.name} · ${order.country} · from ${order.quotationId}`}
+        description={`${customer?.name} · ${order.country} · ${
+          order.quotationId
+            ? `from ${order.quotationId}`
+            : order.customerPoNo
+              ? `on customer PO ${order.customerPoNo}`
+              : "direct order"
+        }`}
         actions={
           <div className="flex items-center gap-2">
             <Badge status={order.priority} />
@@ -131,6 +144,14 @@ export function OrderDetail() {
           <div className="flex-1">
             <p className="text-sm font-semibold text-alert-800">Order blocked at {currentStageMeta.label}</p>
             <p className="text-sm text-alert-700">{blockedStage.blocker}</p>
+            {/* A block that does not say who can clear it is a dead end. Verification is a Finance
+                authority and stays that way, so the banner names the role rather than handing the
+                power to whoever happens to be looking. */}
+            <p className="mt-1 text-xs text-alert-700/80">
+              {role === "finance" || role === "admin"
+                ? "You can clear this: open Payments below and verify the remittance."
+                : "Finance clears this. Switch to the Finance role from the account menu, or ask them to verify the remittance."}
+            </p>
           </div>
           <Button variant="secondary" size="sm" onClick={() => setTab("payments")}>
             Review Payments
@@ -355,43 +376,6 @@ export function OrderDetail() {
               View all payments across orders →
             </Link>
           </div>
-        )}
-
-        {tab === "documents" && (
-          <Table>
-            <THead>
-              <TH>Document</TH>
-              <TH>Type</TH>
-              <TH>Version</TH>
-              <TH>Uploaded By</TH>
-              <TH>Date</TH>
-              <TH>Status</TH>
-            </THead>
-            <tbody>
-              {orderDocs.length === 0 ? (
-                <TR>
-                  <TD className="text-paper-400" colSpan={6}>
-                    <span className="flex items-center gap-2 py-2">
-                      <FileText className="h-4 w-4" /> No documents recorded yet for this order.
-                    </span>
-                  </TD>
-                </TR>
-              ) : (
-                orderDocs.map((d) => (
-                  <TR key={d.id}>
-                    <TD className="font-medium">{d.name}</TD>
-                    <TD className="text-xs">{d.type}</TD>
-                    <TD className="font-mono text-xs">v{d.version}{d.isCurrent ? "" : " (superseded)"}</TD>
-                    <TD className="text-xs">{d.uploadedBy}</TD>
-                    <TD className="font-mono text-xs">{formatDate(d.uploadDate)}</TD>
-                    <TD>
-                      <Badge status={d.approvalStatus === "approved" ? "approved" : d.approvalStatus === "pending" ? "pending" : "n/a"} />
-                    </TD>
-                  </TR>
-                ))
-              )}
-            </tbody>
-          </Table>
         )}
 
         {tab === "activity" && (

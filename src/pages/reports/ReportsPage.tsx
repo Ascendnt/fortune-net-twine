@@ -6,6 +6,7 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useStore } from "@/lib/store";
+import { exportCsv } from "@/lib/csv";
 import { formatMoney, daysBetween } from "@/lib/format";
 
 export function ReportsPage() {
@@ -32,6 +33,9 @@ export function ReportsPage() {
       return { customer: c, buckets, total };
     }).filter((r) => r.total > 0);
   }, [payments, salesOrders]);
+
+  /** The aging row behind the open Statement of Account dialog, if any. */
+  const soaRow = aging.find((x) => x.customer.id === soaCustomer);
 
   const collection = useMemo(() => {
     const verified = payments.filter((p) => p.status === "verified");
@@ -70,7 +74,22 @@ export function ReportsPage() {
               variant="secondary"
               size="sm"
               icon={<Download className="h-3.5 w-3.5" />}
-              onClick={() => pushToast({ tone: "info", title: "Export simulated", description: "CSV export is a Phase 1 integration." })}
+              onClick={() => {
+                exportCsv(`aging-of-accounts-${new Date().toISOString().slice(0, 10)}`, aging, [
+                  { header: "Customer", value: (a) => a.customer.name },
+                  { header: "Country", value: (a) => a.customer.country },
+                  { header: "0-30 Days", value: (a) => a.buckets.d0_30.toFixed(2) },
+                  { header: "31-60 Days", value: (a) => a.buckets.d31_60.toFixed(2) },
+                  { header: "61-90 Days", value: (a) => a.buckets.d61_90.toFixed(2) },
+                  { header: "90+ Days", value: (a) => a.buckets.d90_plus.toFixed(2) },
+                  { header: "Total", value: (a) => a.total.toFixed(2) },
+                ]);
+                pushToast({
+                  tone: "success",
+                  title: "Export downloaded",
+                  description: `${aging.length} customers saved to your downloads.`,
+                });
+              }}
             >
               Export
             </Button>
@@ -127,12 +146,27 @@ export function ReportsPage() {
           <Button
             variant="primary"
             size="sm"
+            disabled={!soaRow}
             onClick={() => {
-              pushToast({ tone: "info", title: "SOA export simulated" });
+              if (!soaRow) return;
+              exportCsv(
+                `statement-${soaRow.customer.name.replace(/\W+/g, "-").toLowerCase()}`,
+                [soaRow],
+                [
+                  { header: "Customer", value: (x) => x.customer.name },
+                  { header: "Country", value: (x) => x.customer.country },
+                  { header: "0-30 Days", value: (x) => x.buckets.d0_30.toFixed(2) },
+                  { header: "31-60 Days", value: (x) => x.buckets.d31_60.toFixed(2) },
+                  { header: "61-90 Days", value: (x) => x.buckets.d61_90.toFixed(2) },
+                  { header: "90+ Days", value: (x) => x.buckets.d90_plus.toFixed(2) },
+                  { header: "Total Outstanding", value: (x) => x.total.toFixed(2) },
+                ]
+              );
+              pushToast({ tone: "success", title: "Statement downloaded", description: soaRow.customer.name });
               setSoaCustomer(null);
             }}
           >
-            Export PDF
+            Export CSV
           </Button>
         }
       >

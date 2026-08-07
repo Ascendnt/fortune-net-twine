@@ -22,12 +22,19 @@ export function LifecycleStepper({ stages }: { stages: StageRecord[] }) {
               ? "bg-alert-600 border-alert-600 text-white"
               : "bg-white border-paper-300 text-paper-400";
 
-          const lineClass = status === "completed" ? "bg-pine-500" : "bg-paper-200";
+          // A connector on BOTH sides of every circle, rather than one trailing each. The circle
+          // used to be centred with mx-auto while the line took the leftover space to its right,
+          // so the auto margin on the next circle left an uncovered gap and the track appeared to
+          // stop short of the final stage. Half-segments always meet.
+          const prevStatus = idx === 0 ? undefined : stages.find((s) => s.stage === ORDER_STAGES[idx - 1].id)?.status;
+          const leftLine = idx === 0 ? "bg-transparent" : prevStatus === "completed" ? "bg-pine-500" : "bg-paper-200";
+          const rightLine = isLast ? "bg-transparent" : status === "completed" ? "bg-pine-500" : "bg-paper-200";
 
           return (
             <div key={meta.id} className="flex flex-col items-center" style={{ width: 108 }}>
               <div className="flex w-full items-center">
-                <div className={clsx("mx-auto flex h-7 w-7 items-center justify-center rounded-full border-2 shrink-0", circleClass)}>
+                <div className={clsx("h-0.5 flex-1", leftLine)} />
+                <div className={clsx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2", circleClass)}>
                   {status === "completed" ? (
                     <Check className="h-3.5 w-3.5" />
                   ) : status === "blocked" ? (
@@ -38,7 +45,7 @@ export function LifecycleStepper({ stages }: { stages: StageRecord[] }) {
                     <span className="text-[11px] font-semibold">{idx + 1}</span>
                   )}
                 </div>
-                {!isLast && <div className={clsx("h-0.5 flex-1", lineClass)} style={{ marginLeft: -2, marginRight: -2 }} />}
+                <div className={clsx("h-0.5 flex-1", rightLine)} />
               </div>
               <div className="mt-2 text-center">
                 <p

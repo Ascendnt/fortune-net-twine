@@ -69,6 +69,10 @@ export function recomputeSpecLine(line: SpecLine, rules: PricingRule[], lookupTa
     lookupTables
   );
 
+  // A hand-entered unit price wins. Pricing is manual: the engine is a helper, so once someone has
+  // typed a U/P, editing quantity or any other field must not quietly overwrite their figure.
+  const unitPrice = line.manualUnitPrice ? line.unitPrice : result.unitPrice;
+
   return {
     ...line,
     pricing: {
@@ -81,8 +85,8 @@ export function recomputeSpecLine(line: SpecLine, rules: PricingRule[], lookupTa
       wastageCost: result.wastageCost,
       twineCost: result.twineCost,
     },
-    unitPrice: result.unitPrice,
-    amount: result.totalPrice,
+    unitPrice,
+    amount: unitPrice * line.qtyPcs,
     weightKg: result.weightKg,
   };
 }

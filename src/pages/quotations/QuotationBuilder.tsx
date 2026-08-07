@@ -791,7 +791,9 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
         line={pricingTarget}
         onApply={(pricing) => {
           if (modal.kind !== "pricing") return;
-          patchSpec(modal.batchId, modal.itemId, modal.specId, { pricing });
+          // Applying the helper hands control back to the calculation, so a previously typed U/P
+          // stops overriding it.
+          patchSpec(modal.batchId, modal.itemId, modal.specId, { pricing, manualUnitPrice: false });
           setModal({ kind: "none" });
         }}
       />

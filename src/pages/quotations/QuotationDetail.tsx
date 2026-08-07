@@ -44,6 +44,8 @@ export function QuotationDetail() {
     updateRevisionNote,
     pushToast,
     customers,
+    inquiries,
+    assessments,
   } = useStore();
   const [modal, setModal] = useState<ModalKind>(null);
   const [restoreTarget, setRestoreTarget] = useState<number | null>(null);
@@ -61,6 +63,10 @@ export function QuotationDetail() {
   // Single shared roll-up. Prefers the authored batch tree, falls back to the flat line list for
   // quotations that predate it.
   const total = useMemo(() => (q ? totalsForQuotation(q).grandTotal : 0), [q]);
+
+  // Traceability back up the chain: which inquiry this came from, and whether the plant costed it.
+  const sourceInquiry = inquiries.find((i) => i.quotationId === q?.id);
+  const sourceAssessment = assessments.find((a) => a.quotationId === q?.id);
 
   const previewRevision = q?.revisions.find((r) => r.revisionNo === previewNo);
   // Viewing the CURRENT revision shows the live record, not its snapshot. A snapshot is captured
@@ -254,6 +260,26 @@ export function QuotationDetail() {
             <KeyValue label="Est. shipment" value={formatDate(q.estimatedShipmentDate)} />
             <KeyValue label="Validity" value={q.validityDate ? formatDate(q.validityDate) : `${q.validityDays} days`} />
             <div className="my-2 border-t border-paper-100" />
+            {sourceInquiry && (
+              <KeyValue
+                label="From inquiry"
+                value={
+                  <Link to="/inquiries" className="font-mono text-manifest-600 hover:underline">
+                    {sourceInquiry.id}
+                  </Link>
+                }
+              />
+            )}
+            {sourceAssessment && (
+              <KeyValue
+                label="Plant assessment"
+                value={
+                  <Link to="/technical" className="font-mono text-manifest-600 hover:underline">
+                    {sourceAssessment.id}
+                  </Link>
+                }
+              />
+            )}
             <KeyValue label="Total value" value={formatMoney(total, q.currency)} mono />
             <KeyValue label="Assigned to" value={q.assignedSalesperson} />
           </Card>

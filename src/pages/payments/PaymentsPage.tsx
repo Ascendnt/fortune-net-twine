@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, Search, Plus, Pencil, Trash2 } from "lucide-react";
+import { Wallet, Search, Plus, Pencil, Trash2, Download } from "lucide-react";
+import { exportCsv } from "@/lib/csv";
 import { Modal } from "@/components/ui/Modal";
 import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
@@ -8,6 +9,7 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
+import { HowToUse } from "@/components/ui/HowToUse";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/format";
 import type { PaymentRecord, PaymentStatus, PaymentType } from "@/lib/types";
@@ -118,15 +120,63 @@ export function PaymentsPage() {
         title="Payments"
         description="Deposit and balance milestones across every sales order, with finance verification."
         actions={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<Plus className="h-3.5 w-3.5" />}
-            onClick={() => setForm({ draft: emptyDraft(), id: null })}
-          >
-            Record Payment
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Download className="h-3.5 w-3.5" />}
+              onClick={() => {
+                exportCsv(
+                  `payments-${new Date().toISOString().slice(0, 10)}`,
+                  rows,
+                  [
+                    { header: "Reference", value: ({ p }) => p.id },
+                    { header: "Sales Order", value: ({ p }) => p.salesOrderId },
+                    { header: "Customer", value: ({ customer }) => customer?.name },
+                    { header: "Type", value: ({ p }) => p.type },
+                    { header: "Expected", value: ({ p }) => p.expectedAmount.toFixed(2) },
+                    { header: "Received", value: ({ p }) => p.amountReceived.toFixed(2) },
+                    { header: "Currency", value: ({ order }) => order?.currency },
+                    { header: "Method", value: ({ p }) => p.method },
+                    { header: "Bank Ref", value: ({ p }) => p.bankRef },
+                    { header: "Status", value: ({ p }) => p.status.replace(/_/g, " ") },
+                    { header: "Due Date", value: ({ p }) => p.dueDate },
+                    { header: "Date Received", value: ({ p }) => p.dateReceived },
+                    { header: "Verified By", value: ({ p }) => p.verifiedBy },
+                    { header: "Remarks", value: ({ p }) => p.remarks },
+                  ]
+                );
+                pushToast({
+                  tone: "success",
+                  title: "Export downloaded",
+                  description: `${rows.length} payments saved to your downloads.`,
+                });
+              }}
+            >
+              Export CSV
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus className="h-3.5 w-3.5" />}
+              onClick={() => setForm({ draft: emptyDraft(), id: null })}
+            >
+              Record Payment
+            </Button>
+          </div>
         }
+      />
+
+      <HowToUse
+        id="payments"
+        steps={[
+          "Find the payment using the search box or the status buttons.",
+          "When money arrives, press Verify. The order it belongs to is then allowed to move forward.",
+          "Wrong status? Use the dropdown beside Verify to set the correct one. Anything can be corrected, including undoing a verification.",
+          "Use the pencil to change amounts, dates, bank reference or remarks. Use the bin to remove a payment recorded in error.",
+          "Export CSV downloads whatever is currently on screen, including your filters, for Excel.",
+        ]}
+        note="Only Finance and the System Administrator can verify or change a status. Everyone else can see payments but not alter them."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -195,25 +245,53 @@ export function PaymentsPage() {
                   <Badge status={p.status} />
                 </TD>
                 <TD>
-                  {p.status === "submitted_for_verification" && canVerify ? (
-                    <div className="flex gap-1.5">
-                      <Button
-                        variant="success"
-                        size="sm"
-                        onClick={() => {
-                          verifyPayment(p.id);
-                          pushToast({ tone: "success", title: "Payment verified", description: p.id });
+                  {/* Every status is changeable, not just the one waiting to be verified. A payment
+                      recorded against the wrong order, marked overdue in error, or verified by
+                      mistake all have to be correctable by Finance without a developer. The change
+                      is restricted by role, not by which state the row happens to be in. */}
+                  {canVerify ? (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {p.status !== "verified" && (
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => {
+                            verifyPayment(p.id);
+                            pushToast({ tone: "success", title: "Payment verified", description: p.id });
+                          }}
+                        >
+                          Verify
+                        </Button>
+                      )}
+                      <select
+                        value={p.status}
+                        onChange={(e) => {
+                          const status = e.target.value as PaymentStatus;
+                          updatePayment(p.id, {
+                            status,
+                            // Undoing a verification must also clear who verified it, otherwise the
+                            // row keeps a signature for a decision that no longer stands.
+                            ...(status !== "verified" ? { verifiedBy: undefined, verificationDate: undefined } : {}),
+                          });
+                          pushToast({
+                            tone: "info",
+                            title: "Status changed",
+                            description: `${p.id} is now ${status.replace(/_/g, " ")}.`,
+                          });
                         }}
+                        className="rounded-md border border-paper-200 bg-white px-2 py-1 text-[11px] text-paper-700"
+                        title="Change this payment's status"
                       >
-                        Verify
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={() => rejectPayment(p.id)}>
-                        Reject
-                      </Button>
+                        {PAYMENT_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {s.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   ) : (
-                    <span className="text-xs text-paper-300">
-                      {p.verifiedBy ? `Verified by ${p.verifiedBy}` : "—"}
+                    <span className="text-xs text-paper-400">
+                      {p.verifiedBy ? `Verified by ${p.verifiedBy}` : "Finance only"}
                     </span>
                   )}
                 </TD>
@@ -226,6 +304,7 @@ export function PaymentsPage() {
                         setForm({ draft, id: p.id });
                       }}
                       className="rounded p-1 text-paper-400 hover:bg-paper-100 hover:text-manifest-700"
+                      title="Edit every field on this payment"
                       aria-label={`Edit ${p.id}`}
                     >
                       <Pencil className="h-3.5 w-3.5" />

@@ -9,8 +9,8 @@ import {
   Factory,
   PackageCheck,
   Ship,
+  ClipboardCheck,
   Wallet,
-  FolderOpen,
   Users,
   BarChart3,
   ShieldCheck,
@@ -44,8 +44,8 @@ const groups: NavGroup[] = [
   {
     label: "Sales",
     items: [
-      { to: "/inquiries", label: "Customer Inquiries", icon: MessageSquareText, locked: true },
-      { to: "/technical", label: "Technical Assessments", icon: FlaskConical, locked: true },
+      { to: "/inquiries", label: "Customer Inquiries", icon: MessageSquareText },
+      { to: "/technical", label: "Technical Assessments", icon: FlaskConical },
       { to: "/quotations", label: "Quotations / PI", icon: FileSpreadsheet },
       { to: "/orders", label: "Sales Orders", icon: ClipboardList },
     ],
@@ -53,9 +53,10 @@ const groups: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { to: "/production", label: "Production", icon: Factory, locked: true },
-      { to: "/packing", label: "Packing & Inspection", icon: PackageCheck, locked: true },
-      { to: "/shipments", label: "Shipments", icon: Ship, locked: true },
+      { to: "/production", label: "Production", icon: Factory },
+      { to: "/packing", label: "Packing", icon: PackageCheck },
+      { to: "/inspection", label: "Product Inspection", icon: ClipboardCheck },
+      { to: "/shipments", label: "Shipments", icon: Ship },
     ],
   },
   {
@@ -68,7 +69,6 @@ const groups: NavGroup[] = [
   {
     label: "Records",
     items: [
-      { to: "/documents", label: "Documents", icon: FolderOpen },
       { to: "/customers", label: "Customers", icon: Users },
       { to: "/approvals", label: "Approvals", icon: ShieldCheck },
       { to: "/activity", label: "Activity Logs", icon: History },

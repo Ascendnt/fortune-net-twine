@@ -173,7 +173,7 @@ function ItemBlock({
                 <th className="w-24 px-2 py-1.5 text-right">USD/WT</th>
                 <th className="w-20 px-2 py-1.5 text-right">Qty</th>
                 <th className="w-52 px-2 py-1.5">Pricing</th>
-                <th className="w-24 px-2 py-1.5 text-right">U/P</th>
+                <th className="w-28 px-2 py-1.5 text-right">U/P</th>
                 <th className="w-28 px-2 py-1.5 text-right">Amount</th>
                 <th className="w-8" />
               </tr>
@@ -291,7 +291,21 @@ function SpecRow({
           </button>
         )}
       </td>
-      <td className="px-2 py-1.5 text-right font-mono text-[11px] text-paper-700">{spec.unitPrice.toFixed(2)}</td>
+      <td className="px-2 py-1.5">
+        {/* Typed directly. Pricing is manual; the Add Pricing helper can fill this in, but the
+            number here is always the one that counts. */}
+        <input
+          {...NON_NEGATIVE}
+          value={spec.unitPrice}
+          onChange={(e) =>
+            handlers.onPatchSpec(itemId, spec.id, {
+              unitPrice: toNonNegative(e.target.value),
+              manualUnitPrice: true,
+            })
+          }
+          className={clsx(miniInput, "text-right")}
+        />
+      </td>
       <td className="px-2 py-1.5 text-right font-mono text-[11px] font-semibold text-pine-800">
         {formatMoney(spec.amount, currency)}
       </td>

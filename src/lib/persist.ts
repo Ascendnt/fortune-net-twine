@@ -17,6 +17,13 @@ export const PERSIST_KEYS = {
   specMaster: "specMaster",
   lacingCatalog: "lacingCatalog",
   customers: "customers",
+  inquiries: "inquiries",
+  assessments: "assessments",
+  mail: "mail",
+  production: "production",
+  packing: "packing",
+  inspections: "inspections",
+  shipments: "shipments",
 } as const;
 
 export type PersistKey = (typeof PERSIST_KEYS)[keyof typeof PERSIST_KEYS];

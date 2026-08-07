@@ -77,7 +77,7 @@ export function SettingsPage() {
   function handleReset() {
     resetDemoData();
     setConfirmReset(false);
-    pushToast({ tone: "info", title: "Demo data reset", description: "Saved changes cleared and seeds restored." });
+    pushToast({ tone: "info", title: "Data reset", description: "Saved changes cleared and starting values restored." });
   }
 
   return (
@@ -86,7 +86,7 @@ export function SettingsPage() {
         breadcrumb={["Fortune Net & Twine ERP", "System"]}
         eyebrow="Configuration"
         title="Settings"
-        description="Prototype-level configuration only. Full role permissions and business rules ship with Phase 1."
+        description="Company profile, roles, and the pricing rules and rate tables behind quotations."
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -105,7 +105,7 @@ export function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Roles in this Prototype" eyebrow="Demonstration only" />
+          <CardHeader title="Roles" eyebrow="Access" />
           <div className="space-y-2">
             {ROLES.map((r) => (
               <div key={r.id} className="flex items-start justify-between gap-3 rounded-lg bg-paper-50 px-3 py-2">
@@ -423,9 +423,9 @@ export function SettingsPage() {
       <div className="mt-5">
         <Card>
           <CardHeader
-            title="Demo Data"
-            eyebrow="Prototype"
-            subtitle="Quotations, pricing rules, lookup tables, the specification master and the lacing catalog are saved in this browser so a refresh doesn't lose work mid-walkthrough."
+            title="Reset Data"
+            eyebrow="Maintenance"
+            subtitle="Restores quotations, pricing rules, rate tables, the specification master and the lacing catalog to their starting values."
             action={
               <Button
                 variant="secondary"
@@ -433,13 +433,12 @@ export function SettingsPage() {
                 icon={<RotateCcw className="h-3.5 w-3.5" />}
                 onClick={() => setConfirmReset(true)}
               >
-                Reset Demo Data
+                Reset Data
               </Button>
             }
           />
           <p className="text-xs text-paper-500">
-            Resetting clears everything saved in this browser and restores the seeded fixtures. It does not affect any
-            other machine.
+            Resetting discards changes made on this machine and restores the starting values.
           </p>
         </Card>
       </div>
@@ -447,8 +446,8 @@ export function SettingsPage() {
       <Modal
         open={confirmReset}
         onClose={() => setConfirmReset(false)}
-        title="Reset demo data?"
-        subtitle="Every quotation drafted in this browser will be discarded."
+        title="Reset data?"
+        subtitle="Every quotation drafted on this machine will be discarded."
         footer={
           <>
             <Button variant="secondary" size="sm" onClick={() => setConfirmReset(false)}>
@@ -469,7 +468,7 @@ export function SettingsPage() {
       <div className="mt-5">
         <ProcessDiscoveryNote
           items={[
-            "Real authentication, SSO, and per-role permission enforcement are not part of this prototype. The role switcher only changes what's visible for demonstration.",
+            "Single sign-on and per-role permission enforcement are pending IT sign-off. The role switcher currently changes what is visible, not what is permitted.",
             "Pricing rules and lookup tables are fully editable here, including adding and retiring whole rules and lookup rows, pending the factory confirming which adjustment types are actually in play.",
             "MD and DW lookup values are interpolated from the two figures the simulation observed live (122MD -> 0.1750, 50FL -> 0.5000); the factory's real rate card should replace them.",
             "Deposit %, approval thresholds, and discount limits are still per-quotation fields; centralizing their defaults here is pending discovery.",

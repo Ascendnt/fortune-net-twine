@@ -40,7 +40,6 @@ const monthlyValue = [
 const stageColors: Record<string, string> = {
   quotation: "#9ba39a",
   customer_confirmation: "#2c72c2",
-  internal_verification: "#2c72c2",
   deposit: "#d38f1a",
   production: "#226b44",
   packing: "#226b44",

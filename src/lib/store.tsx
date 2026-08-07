@@ -15,8 +15,24 @@ import type {
   Contact,
   QuotationSnapshot,
   QuotationRevision,
+  CustomerInquiry,
+  InquiryStatus,
+  TechnicalAssessment,
+  MailMessage,
+  OrderStage,
+  StageRecord,
+  ProductionRun,
+  PackingList,
+  PackingCarton,
+  InspectionRecord,
+  Shipment,
 } from "./types";
 import { ORDER_STAGES } from "./types";
+import { INQUIRIES, TECHNICAL_ASSESSMENTS, MAIL_MESSAGES } from "./inquiryData";
+import { PRODUCTION_RUNS, PACKING_LISTS, INSPECTIONS, SHIPMENTS } from "./operationsData";
+import { emptyPricing, flattenBatches, newBatch, newBatchItem } from "./batches";
+import { recomputeSpecLine } from "./totals";
+import type { BatchItem, QuotationBatch } from "./types";
 import {
   QUOTATIONS,
   SALES_ORDERS,
@@ -37,6 +53,49 @@ interface StoreState {
   role: Role;
   setRole: (r: Role) => void;
   currentUser: string;
+
+  // ---- Front of the pipeline ----
+  inquiries: CustomerInquiry[];
+  assessments: TechnicalAssessment[];
+  mail: MailMessage[];
+  addInquiry: (inquiry: Omit<CustomerInquiry, "id">) => string;
+  updateInquiry: (id: string, patch: Partial<CustomerInquiry>) => void;
+  removeInquiry: (id: string) => void;
+  /** Sends the inquiry to the plant and opens a pending assessment against it. */
+  forwardInquiryToPlant: (id: string, note: string) => string;
+  updateAssessment: (id: string, patch: Partial<TechnicalAssessment>) => void;
+  /** Turns the plant's costing into a draft quotation and links all three records together. */
+  createQuotationFromAssessment: (assessmentId: string) => string;
+  /** Closes an inquiry without quoting it. */
+  closeInquiry: (id: string, status: Extract<InquiryStatus, "no_quote" | "lost">, reason: string) => void;
+  /** Customer's own PO becomes a sales order with no proforma behind it. */
+  createDirectSalesOrder: (inquiryId: string, args: { poNo: string; value: number; deliveryDate: string }) => string;
+  markMailRead: (id: string) => void;
+  createInquiryFromMail: (mailId: string) => string;
+
+  // ---- Operations ----
+  productionRuns: ProductionRun[];
+  packingLists: PackingList[];
+  inspections: InspectionRecord[];
+  shipments: Shipment[];
+  updateProductionRun: (id: string, patch: Partial<ProductionRun>) => void;
+  addProductionRun: (run: Omit<ProductionRun, "id">) => string;
+  removeProductionRun: (id: string) => void;
+  /** Marks every run on an order finished and moves the order to Packing. */
+  completeProduction: (salesOrderId: string) => void;
+  createPackingList: (salesOrderId: string) => string;
+  updatePackingList: (id: string, patch: Partial<PackingList>) => void;
+  addCarton: (packingListId: string, carton: Omit<PackingCarton, "id">) => void;
+  removeCarton: (packingListId: string, cartonId: string) => void;
+  /** Closes the list, opens an inspection against it, and moves the order on. */
+  finalizePackingList: (id: string) => void;
+  updateInspection: (id: string, patch: Partial<InspectionRecord>) => void;
+  /** Records the verdict. A pass releases the order to Shipment; a fail blocks it. */
+  recordInspection: (id: string, result: "pass" | "fail", args: { cartonsChecked: number; defectsFound: number; remarks: string }) => void;
+  createShipment: (salesOrderId: string) => string;
+  updateShipment: (id: string, patch: Partial<Shipment>) => void;
+  /** Departure stamps the B/L and container onto the commercial invoice. */
+  departShipment: (id: string) => void;
 
   quotations: Quotation[];
   salesOrders: SalesOrder[];
@@ -150,6 +209,23 @@ function normalizeCustomers(customers: Customer[]): Customer[] {
  * unlabelled empty band. They contributed to neither the grand total nor the total weight, so
  * removing them cannot change a figure.
  */
+/**
+ * A fresh stage list for a new sales order: everything before `current` completed, `current` in
+ * progress, the rest pending. Built from ORDER_STAGES so the lifecycle is defined in exactly one
+ * place.
+ */
+function freshStages(current: OrderStage, pendingAction?: string): StageRecord[] {
+  const today = new Date().toISOString().slice(0, 10);
+  const currentIdx = ORDER_STAGES.findIndex((s) => s.id === current);
+  return ORDER_STAGES.map((s, idx) => ({
+    stage: s.id,
+    status: idx < currentIdx ? "completed" : idx === currentIdx ? "in_progress" : "pending",
+    completedDate: idx < currentIdx ? today : undefined,
+    responsibleRole: s.role,
+    pendingAction: idx === currentIdx ? pendingAction : undefined,
+  }));
+}
+
 /** Captures the content a revision needs in order to be restored later. */
 function snapshotOf(q: Quotation): QuotationSnapshot {
   return {
@@ -223,7 +299,9 @@ function nextId(prefix: string) {
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<Role>("sales_manager");
+  // System Administrator by default: it is the only role with sight of every module and permission
+  // to act at every stage, so nothing in the process is hidden behind a role switch.
+  const [role, setRole] = useState<Role>("admin");
   // Slices that a user can meaningfully change are restored from localStorage; the rest stay as
   // seeded demo fixtures. See lib/persist.ts for the degradation rules.
   const [quotations, setQuotations] = useState<Quotation[]>(() =>
@@ -249,6 +327,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [customers, setCustomers] = useState<Customer[]>(() =>
     normalizeCustomers(loadPersisted(PERSIST_KEYS.customers, CUSTOMERS))
   );
+  const [inquiries, setInquiries] = useState<CustomerInquiry[]>(() =>
+    loadPersisted(PERSIST_KEYS.inquiries, INQUIRIES)
+  );
+  const [assessments, setAssessments] = useState<TechnicalAssessment[]>(() =>
+    loadPersisted(PERSIST_KEYS.assessments, TECHNICAL_ASSESSMENTS)
+  );
+  const [mail, setMail] = useState<MailMessage[]>(() => loadPersisted(PERSIST_KEYS.mail, MAIL_MESSAGES));
+  const [productionRuns, setProductionRuns] = useState<ProductionRun[]>(() =>
+    loadPersisted(PERSIST_KEYS.production, PRODUCTION_RUNS)
+  );
+  const [packingLists, setPackingLists] = useState<PackingList[]>(() =>
+    loadPersisted(PERSIST_KEYS.packing, PACKING_LISTS)
+  );
+  const [inspections, setInspections] = useState<InspectionRecord[]>(() =>
+    loadPersisted(PERSIST_KEYS.inspections, INSPECTIONS)
+  );
+  const [shipments, setShipments] = useState<Shipment[]>(() => loadPersisted(PERSIST_KEYS.shipments, SHIPMENTS));
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   useEffect(() => persist(PERSIST_KEYS.quotations, quotations), [quotations]);
@@ -257,6 +352,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => persist(PERSIST_KEYS.specMaster, specMaster), [specMaster]);
   useEffect(() => persist(PERSIST_KEYS.lacingCatalog, lacingCatalog), [lacingCatalog]);
   useEffect(() => persist(PERSIST_KEYS.customers, customers), [customers]);
+  useEffect(() => persist(PERSIST_KEYS.inquiries, inquiries), [inquiries]);
+  useEffect(() => persist(PERSIST_KEYS.assessments, assessments), [assessments]);
+  useEffect(() => persist(PERSIST_KEYS.mail, mail), [mail]);
+  useEffect(() => persist(PERSIST_KEYS.production, productionRuns), [productionRuns]);
+  useEffect(() => persist(PERSIST_KEYS.packing, packingLists), [packingLists]);
+  useEffect(() => persist(PERSIST_KEYS.inspections, inspections), [inspections]);
+  useEffect(() => persist(PERSIST_KEYS.shipments, shipments), [shipments]);
 
   const addSpecMasterRow = useCallback((row: SpecMasterRow) => {
     setSpecMaster((prev) => (prev.some((r) => r.code === row.code) ? prev : [row, ...prev]));
@@ -385,6 +487,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setSpecMaster(SPEC_MASTER);
     setLacingCatalog(LACING_CATALOG);
     setCustomers(CUSTOMERS);
+    setInquiries(INQUIRIES);
+    setAssessments(TECHNICAL_ASSESSMENTS);
+    setMail(MAIL_MESSAGES);
+    setProductionRuns(PRODUCTION_RUNS);
+    setPackingLists(PACKING_LISTS);
+    setInspections(INSPECTIONS);
+    setShipments(SHIPMENTS);
   }, []);
 
   const addContact = useCallback((customerId: string, contact: Omit<Contact, "id">) => {
@@ -467,6 +576,112 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [currentUser, role]
   );
 
+  // ---- Front of the pipeline: inquiry -> assessment -> quotation, or straight to an order ----
+
+  const addInquiry = useCallback(
+    (inquiry: Omit<CustomerInquiry, "id">): string => {
+      const id = nextId("INQ");
+      setInquiries((prev) => [{ ...inquiry, id }, ...prev]);
+      logActivity({ action: "Customer inquiry logged", recordType: "Inquiry", recordId: id });
+      return id;
+    },
+    [logActivity]
+  );
+
+  const updateInquiry = useCallback((id: string, patch: Partial<CustomerInquiry>) => {
+    setInquiries((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  }, []);
+
+  const removeInquiry = useCallback((id: string) => {
+    setInquiries((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const forwardInquiryToPlant = useCallback(
+    (id: string, note: string): string => {
+      const inquiry = inquiries.find((i) => i.id === id);
+      if (!inquiry) return "";
+      const today = new Date().toISOString().slice(0, 10);
+      const assessmentId = nextId("TA");
+
+      // Forwarding opens a pending assessment immediately, so the wait on the plant is visible as
+      // a record rather than living in someone's sent folder.
+      setAssessments((prev) => [
+        {
+          id: assessmentId,
+          inquiryId: id,
+          customerId: inquiry.customerId,
+          requestedDate: today,
+          verdict: "pending",
+          assessedBy: "—",
+          plantRemarks: "",
+          lines: [],
+        },
+        ...prev,
+      ]);
+      setInquiries((prev) =>
+        prev.map((i) =>
+          i.id === id ? { ...i, status: "forwarded_to_plant", forwardedDate: today, assessmentId } : i
+        )
+      );
+      // The mock mailbox gets the outgoing message so the flow reads end to end.
+      setMail((prev) => [
+        {
+          id: nextId("M"),
+          folder: "sent",
+          from: "sales@fortunenet.com.ph",
+          to: "planta@fortunenet.com.ph",
+          subject: `FWD: ${inquiry.subject} — ${id}`,
+          body: note || "Forwarding for feasibility and costing.",
+          date: new Date().toISOString(),
+          read: true,
+          linkedInquiryId: id,
+          attachmentNames: inquiry.attachments.map((a) => a.name),
+        },
+        ...prev,
+      ]);
+      logActivity({ action: "Inquiry forwarded to plant", recordType: "Inquiry", recordId: id, comment: note });
+      return assessmentId;
+    },
+    [inquiries, logActivity]
+  );
+
+  const updateAssessment = useCallback((id: string, patch: Partial<TechnicalAssessment>) => {
+    setAssessments((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+    // A plant reply moves its inquiry forward without anyone having to remember to do it.
+    if (patch.verdict && patch.verdict !== "pending") {
+      setAssessments((prevA) => {
+        const target = prevA.find((a) => a.id === id);
+        if (target) {
+          setInquiries((prevI) =>
+            prevI.map((i) =>
+              i.id === target.inquiryId && i.status === "forwarded_to_plant"
+                ? { ...i, status: "assessment_received" }
+                : i
+            )
+          );
+        }
+        return prevA;
+      });
+    }
+  }, []);
+
+  const closeInquiry = useCallback(
+    (id: string, status: Extract<InquiryStatus, "no_quote" | "lost">, reason: string) => {
+      setInquiries((prev) => prev.map((i) => (i.id === id ? { ...i, status, closeReason: reason } : i)));
+      logActivity({
+        action: status === "lost" ? "Inquiry marked lost" : "Inquiry closed without quotation",
+        recordType: "Inquiry",
+        recordId: id,
+        comment: reason,
+      });
+    },
+    [logActivity]
+  );
+
+  const markMailRead = useCallback((id: string) => {
+    setMail((prev) => prev.map((m) => (m.id === id ? { ...m, read: true } : m)));
+  }, []);
+
   const createQuotation = useCallback(
     (q: Omit<Quotation, "id" | "revisionNo" | "revisions" | "status">): string => {
       // Computed synchronously, not inside the setState updater: React may defer that updater
@@ -498,6 +713,89 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return id;
     },
     [quotations, currentUser, logActivity]
+  );
+
+  const createQuotationFromAssessment = useCallback(
+    (assessmentId: string): string => {
+      const assessment = assessments.find((a) => a.id === assessmentId);
+      if (!assessment || assessment.lines.length === 0) return "";
+      const customer = customers.find((c) => c.id === assessment.customerId);
+      const today = new Date().toISOString().slice(0, 10);
+
+      // The plant's costing IS the pre-quotation. Lines sharing a specification sentence become one
+      // item, exactly as they would if someone had built them by hand, and the plant's cost per kg
+      // lands in USD/WT. No pricing rules are applied: margin is the salesperson's decision, so the
+      // quotation opens at cost with every adjustment switched off.
+      const items: BatchItem[] = [];
+      for (const line of assessment.lines) {
+        let item = items.find((i) => i.specification === line.specification);
+        if (!item) {
+          item = newBatchItem({
+            specification: line.specification,
+            material: line.material,
+            netType: line.netType,
+            weightUom: "KG",
+            qtyUom: "PCS",
+          });
+          items.push(item);
+        }
+        item.specs.push(
+          recomputeSpecLine(
+            {
+              id: `${assessmentId}-${line.id}`,
+              specCode: line.specCode ?? "—",
+              description: line.description,
+              meshDepth: "",
+              length: "",
+              weightPerPc: line.weightPerPc,
+              givenPriceKg: line.costPerKg,
+              qtyPcs: line.qtyPcs,
+              pricing: emptyPricing(line.costPerKg),
+              unitPrice: 0,
+              amount: 0,
+              weightKg: 0,
+            },
+            pricingRules,
+            lookupTables
+          )
+        );
+      }
+
+      const batches: QuotationBatch[] = [{ ...newBatch("normal"), items }];
+      const quotationId = createQuotation({
+        customerId: assessment.customerId,
+        consignee: customer?.consignee ?? customer?.name ?? "",
+        attentionContact: customer?.contactPerson,
+        currency: customer?.defaultCurrency ?? "USD",
+        paymentTerms: customer?.defaultPaymentTerms ?? "",
+        issueDate: today,
+        leadTimeDate: today,
+        validityDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+        validityDays: 7,
+        leadTimeWeeks: 0,
+        estimatedShipmentDate: today,
+        batches,
+        items: flattenBatches(batches),
+        freight: 0,
+        discount: 0,
+        tax: 0,
+        depositPercent: 30,
+        assignedSalesperson: currentUser,
+        remarks: assessment.leadTimeNote ?? "",
+      });
+
+      setAssessments((prev) => prev.map((a) => (a.id === assessmentId ? { ...a, quotationId } : a)));
+      setInquiries((prev) =>
+        prev.map((i) => (i.id === assessment.inquiryId ? { ...i, status: "quoted", quotationId } : i))
+      );
+      logActivity({
+        action: `Quotation pre-filled from assessment ${assessmentId}`,
+        recordType: "Quotation",
+        recordId: quotationId,
+      });
+      return quotationId;
+    },
+    [assessments, customers, pricingRules, lookupTables, createQuotation, currentUser, logActivity]
   );
 
   const updateQuotationStatus = useCallback(
@@ -663,19 +961,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         productionQtyOrdered: q.items.reduce((s, li) => s + li.qtyPcs, 0),
         productionQtyCompleted: 0,
         productionQtyRejected: 0,
-        stages: [
-          { stage: "quotation", status: "completed", completedDate: new Date().toISOString().slice(0, 10), responsibleRole: "Sales" },
-          { stage: "customer_confirmation", status: "in_progress", responsibleRole: "Sales", pendingAction: "Awaiting signed PO from customer" },
-          { stage: "internal_verification", status: "pending", responsibleRole: "Factory Technical" },
-          { stage: "deposit", status: "pending", responsibleRole: "Finance" },
-          { stage: "production", status: "pending", responsibleRole: "Production" },
-          { stage: "packing", status: "pending", responsibleRole: "Logistics" },
-          { stage: "inspection", status: "pending", responsibleRole: "QC" },
-          { stage: "shipment", status: "pending", responsibleRole: "Logistics" },
-          { stage: "final_payment", status: "pending", responsibleRole: "Finance" },
-          { stage: "documents", status: "pending", responsibleRole: "Sales" },
-          { stage: "completed", status: "pending", responsibleRole: "—" },
-        ],
+        // Derived from ORDER_STAGES rather than written out, so reordering the lifecycle in one
+        // place cannot leave newly created orders running the old sequence.
+        stages: freshStages("customer_confirmation", "Awaiting signed PO from customer"),
       };
 
       setSalesOrders((prev) => [newOrder, ...prev]);
@@ -717,6 +1005,381 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return soId;
     },
     [quotations, logActivity]
+  );
+
+  const createDirectSalesOrder = useCallback(
+    (inquiryId: string, args: { poNo: string; value: number; deliveryDate: string }): string => {
+      const inquiry = inquiries.find((i) => i.id === inquiryId);
+      if (!inquiry) return "";
+      const customer = customers.find((c) => c.id === inquiry.customerId);
+      const today = new Date().toISOString().slice(0, 10);
+      // Numbered off the inquiry, since there is no PI to take a number from.
+      const soId = inquiryId.replace(/^INQ-/, "SO-");
+
+      // No quotation behind this order: the customer's PO is the agreement. It therefore starts at
+      // Deposit rather than Customer Confirmation, because the customer has already confirmed, in
+      // writing, by raising the PO.
+      const newOrder: SalesOrder = {
+        id: soId,
+        inquiryId,
+        customerPoNo: args.poNo,
+        customerId: inquiry.customerId,
+        consignee: customer?.consignee ?? customer?.name ?? "",
+        country: customer?.country ?? "—",
+        currency: customer?.defaultCurrency ?? "USD",
+        orderValue: args.value,
+        orderDate: today,
+        requestedDeliveryDate: args.deliveryDate,
+        currentStage: "deposit",
+        priority: "standard",
+        assignedSalesperson: currentUser,
+        productionStatus: "not_started",
+        productionQtyOrdered: 0,
+        productionQtyCompleted: 0,
+        productionQtyRejected: 0,
+        stages: freshStages("deposit", `Awaiting deposit against ${args.poNo}`),
+      };
+
+      setSalesOrders((prev) => [newOrder, ...prev]);
+      setInquiries((prev) =>
+        prev.map((i) =>
+          i.id === inquiryId
+            ? {
+                ...i,
+                status: "direct_order",
+                salesOrderId: soId,
+                closeReason: `Customer issued PO ${args.poNo}; no proforma required.`,
+              }
+            : i
+        )
+      );
+
+      const depositPercent = 30;
+      const depositAmt = args.value * (depositPercent / 100);
+      setPayments((prev) => [
+        ...prev,
+        {
+          id: nextId("PMT"),
+          salesOrderId: soId,
+          type: "deposit",
+          expectedAmount: depositAmt,
+          amountReceived: 0,
+          status: "expected",
+          dueDate: today,
+          remarks: `Against customer PO ${args.poNo}`,
+        },
+        {
+          id: nextId("PMT"),
+          salesOrderId: soId,
+          type: "balance",
+          expectedAmount: args.value - depositAmt,
+          amountReceived: 0,
+          status: "expected",
+          dueDate: args.deliveryDate,
+        },
+      ]);
+
+      logActivity({
+        action: `Sales order raised directly from ${inquiryId} on customer PO ${args.poNo}`,
+        recordType: "Sales Order",
+        recordId: soId,
+      });
+      return soId;
+    },
+    [inquiries, customers, currentUser, logActivity]
+  );
+
+  const createInquiryFromMail = useCallback(
+    (mailId: string): string => {
+      const message = mail.find((m) => m.id === mailId);
+      if (!message) return "";
+      const id = nextId("INQ");
+      setInquiries((prev) => [
+        {
+          id,
+          customerId: message.suggestedCustomerId ?? customers[0]?.id ?? "",
+          receivedDate: message.date.slice(0, 10),
+          source: "email",
+          subject: message.subject,
+          requirement: message.body,
+          status: "new",
+          assignedTo: currentUser,
+          attachments: message.attachmentNames.map((name, i) => ({
+            id: `att-${i}`,
+            name,
+            origin: "Customer email",
+            uploadedBy: currentUser,
+            date: message.date.slice(0, 10),
+          })),
+        },
+        ...prev,
+      ]);
+      setMail((prev) => prev.map((m) => (m.id === mailId ? { ...m, read: true, linkedInquiryId: id } : m)));
+      logActivity({ action: "Inquiry raised from email", recordType: "Inquiry", recordId: id });
+      return id;
+    },
+    [mail, customers, currentUser, logActivity]
+  );
+
+  // ---- Operations -------------------------------------------------------------------------
+  //
+  // Each stage completing pushes its sales order forward. That single helper is what makes the
+  // four operations screens feel like one process rather than four disconnected lists.
+
+  const advanceOrderTo = useCallback(
+    (salesOrderId: string, stage: OrderStage, pendingAction?: string) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const targetIdx = ORDER_STAGES.findIndex((s) => s.id === stage);
+      setSalesOrders((prev) =>
+        prev.map((so) =>
+          so.id !== salesOrderId
+            ? so
+            : {
+                ...so,
+                currentStage: stage,
+                stages: so.stages.map((rec) => {
+                  const idx = ORDER_STAGES.findIndex((s) => s.id === rec.stage);
+                  if (idx < targetIdx) {
+                    return rec.status === "completed" ? rec : { ...rec, status: "completed", completedDate: today };
+                  }
+                  if (idx === targetIdx) return { ...rec, status: "in_progress", pendingAction };
+                  return { ...rec, status: "pending", pendingAction: undefined };
+                }),
+              }
+        )
+      );
+    },
+    []
+  );
+
+  const addProductionRun = useCallback((run: Omit<ProductionRun, "id">): string => {
+    const id = nextId("PR");
+    setProductionRuns((prev) => [{ ...run, id }, ...prev]);
+    return id;
+  }, []);
+
+  const updateProductionRun = useCallback((id: string, patch: Partial<ProductionRun>) => {
+    setProductionRuns((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }, []);
+
+  const removeProductionRun = useCallback((id: string) => {
+    setProductionRuns((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const completeProduction = useCallback(
+    (salesOrderId: string) => {
+      const today = new Date().toISOString().slice(0, 10);
+      setProductionRuns((prev) =>
+        prev.map((r) => (r.salesOrderId === salesOrderId && !r.completedDate ? { ...r, completedDate: today } : r))
+      );
+      // The order's headline production figures are the sum of its runs, so the sales order and
+      // the factory floor can never disagree.
+      setSalesOrders((prev) =>
+        prev.map((so) => {
+          if (so.id !== salesOrderId) return so;
+          const runs = productionRuns.filter((r) => r.salesOrderId === salesOrderId);
+          return {
+            ...so,
+            productionStatus: "completed",
+            actualCompletionDate: today,
+            productionQtyOrdered: runs.reduce((s, r) => s + r.qtyOrdered, 0),
+            productionQtyCompleted: runs.reduce((s, r) => s + r.qtyCompleted, 0),
+            productionQtyRejected: runs.reduce((s, r) => s + r.qtyRejected, 0),
+          };
+        })
+      );
+      advanceOrderTo(salesOrderId, "packing", "Pack completed goods and raise the packing list");
+      logActivity({ action: "Production completed", recordType: "Sales Order", recordId: salesOrderId });
+    },
+    [productionRuns, advanceOrderTo, logActivity]
+  );
+
+  const createPackingList = useCallback(
+    (salesOrderId: string): string => {
+      const id = salesOrderId.replace(/^SO-/, "PL-");
+      setPackingLists((prev) =>
+        prev.some((p) => p.id === id)
+          ? prev
+          : [
+              {
+                id,
+                salesOrderId,
+                createdDate: new Date().toISOString().slice(0, 10),
+                packedBy: currentUser,
+                cartons: [],
+              },
+              ...prev,
+            ]
+      );
+      return id;
+    },
+    [currentUser]
+  );
+
+  const updatePackingList = useCallback((id: string, patch: Partial<PackingList>) => {
+    setPackingLists((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }, []);
+
+  const addCarton = useCallback((packingListId: string, carton: Omit<PackingCarton, "id">) => {
+    setPackingLists((prev) =>
+      prev.map((p) =>
+        p.id === packingListId ? { ...p, cartons: [...p.cartons, { ...carton, id: nextId("CTN") }] } : p
+      )
+    );
+  }, []);
+
+  const removeCarton = useCallback((packingListId: string, cartonId: string) => {
+    setPackingLists((prev) =>
+      prev.map((p) => (p.id === packingListId ? { ...p, cartons: p.cartons.filter((c) => c.id !== cartonId) } : p))
+    );
+  }, []);
+
+  const finalizePackingList = useCallback(
+    (id: string) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const list = packingLists.find((p) => p.id === id);
+      if (!list) return;
+      setPackingLists((prev) => prev.map((p) => (p.id === id ? { ...p, finalizedDate: today } : p)));
+
+      // Closing the list opens the inspection it will be checked against, so nothing has to be
+      // created by hand between the two stages.
+      const inspectionId = list.salesOrderId.replace(/^SO-/, "QC-");
+      setInspections((prev) =>
+        prev.some((i) => i.id === inspectionId)
+          ? prev
+          : [
+              {
+                id: inspectionId,
+                salesOrderId: list.salesOrderId,
+                packingListId: id,
+                inspector: "",
+                result: "pending",
+                cartonsChecked: 0,
+                defectsFound: 0,
+                remarks: "",
+              },
+              ...prev,
+            ]
+      );
+      advanceOrderTo(list.salesOrderId, "final_payment", "Collect balance before inspection release");
+      logActivity({ action: `Packing list ${id} finalized`, recordType: "Sales Order", recordId: list.salesOrderId });
+    },
+    [packingLists, advanceOrderTo, logActivity]
+  );
+
+  const updateInspection = useCallback((id: string, patch: Partial<InspectionRecord>) => {
+    setInspections((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  }, []);
+
+  const recordInspection = useCallback(
+    (id: string, result: "pass" | "fail", args: { cartonsChecked: number; defectsFound: number; remarks: string }) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const record = inspections.find((i) => i.id === id);
+      if (!record) return;
+      setInspections((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, ...args, result, inspectedDate: today, inspector: i.inspector || currentUser } : i))
+      );
+
+      if (result === "pass") {
+        advanceOrderTo(record.salesOrderId, "shipment", "Book the container and raise the bill of lading");
+      } else {
+        // A failure holds the cartons and blocks the order rather than silently moving on.
+        setPackingLists((prev) =>
+          prev.map((p) =>
+            p.id === record.packingListId
+              ? { ...p, cartons: p.cartons.map((c) => (c.status === "packed" ? { ...c, status: "held" } : c)) }
+              : p
+          )
+        );
+        setSalesOrders((prev) =>
+          prev.map((so) =>
+            so.id !== record.salesOrderId
+              ? so
+              : {
+                  ...so,
+                  stages: so.stages.map((rec) =>
+                    rec.stage === "inspection"
+                      ? { ...rec, status: "blocked", blocker: args.remarks || "Failed inspection" }
+                      : rec
+                  ),
+                }
+          )
+        );
+      }
+      logActivity({
+        action: `Inspection ${result === "pass" ? "passed" : "failed"}`,
+        recordType: "Sales Order",
+        recordId: record.salesOrderId,
+        comment: args.remarks,
+      });
+    },
+    [inspections, currentUser, advanceOrderTo, logActivity]
+  );
+
+  const createShipment = useCallback(
+    (salesOrderId: string): string => {
+      const id = salesOrderId.replace(/^SO-/, "SH-");
+      const list = packingLists.find((p) => p.salesOrderId === salesOrderId);
+      setShipments((prev) =>
+        prev.some((s) => s.id === id)
+          ? prev
+          : [
+              {
+                id,
+                salesOrderId,
+                status: "booked",
+                vessel: "",
+                containerNo: "",
+                billOfLadingNo: "",
+                portOfLoading: "Manila, Philippines",
+                portOfDischarge: "",
+                bookedDate: new Date().toISOString().slice(0, 10),
+                // Gross weight comes from what was actually packed, not what was quoted.
+                grossWeightKg: list?.cartons.reduce((s, c) => s + c.grossWeightKg, 0) ?? 0,
+              },
+              ...prev,
+            ]
+      );
+      return id;
+    },
+    [packingLists]
+  );
+
+  const updateShipment = useCallback((id: string, patch: Partial<Shipment>) => {
+    setShipments((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }, []);
+
+  const departShipment = useCallback(
+    (id: string) => {
+      const shipment = shipments.find((s) => s.id === id);
+      if (!shipment) return;
+      const today = new Date().toISOString().slice(0, 10);
+      setShipments((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, status: "departed", etd: s.etd ?? today } : s))
+      );
+      setPackingLists((prev) =>
+        prev.map((p) =>
+          p.salesOrderId === shipment.salesOrderId
+            ? { ...p, cartons: p.cartons.map((c) => ({ ...c, status: "shipped" as const })) }
+            : p
+        )
+      );
+      // The B/L and container belong on the commercial invoice; this is the moment they are known.
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.salesOrderId === shipment.salesOrderId
+            ? { ...inv, billOfLadingNo: shipment.billOfLadingNo, containerNo: shipment.containerNo }
+            : inv
+        )
+      );
+      advanceOrderTo(shipment.salesOrderId, "documents", "Release shipping documents to the customer and bank");
+      logActivity({
+        action: `Shipment departed on ${shipment.vessel || "vessel TBA"}`,
+        recordType: "Sales Order",
+        recordId: shipment.salesOrderId,
+      });
+    },
+    [shipments, advanceOrderTo, logActivity]
   );
 
   const verifyPayment = useCallback(
@@ -898,6 +1561,37 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       role,
       setRole,
       currentUser,
+      inquiries,
+      assessments,
+      mail,
+      addInquiry,
+      updateInquiry,
+      removeInquiry,
+      forwardInquiryToPlant,
+      updateAssessment,
+      createQuotationFromAssessment,
+      closeInquiry,
+      createDirectSalesOrder,
+      markMailRead,
+      createInquiryFromMail,
+      productionRuns,
+      packingLists,
+      inspections,
+      shipments,
+      addProductionRun,
+      updateProductionRun,
+      removeProductionRun,
+      completeProduction,
+      createPackingList,
+      updatePackingList,
+      addCarton,
+      removeCarton,
+      finalizePackingList,
+      updateInspection,
+      recordInspection,
+      createShipment,
+      updateShipment,
+      departShipment,
       quotations,
       salesOrders,
       payments,
@@ -957,6 +1651,37 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [
       role,
       currentUser,
+      inquiries,
+      assessments,
+      mail,
+      addInquiry,
+      updateInquiry,
+      removeInquiry,
+      forwardInquiryToPlant,
+      updateAssessment,
+      createQuotationFromAssessment,
+      closeInquiry,
+      createDirectSalesOrder,
+      markMailRead,
+      createInquiryFromMail,
+      productionRuns,
+      packingLists,
+      inspections,
+      shipments,
+      addProductionRun,
+      updateProductionRun,
+      removeProductionRun,
+      completeProduction,
+      createPackingList,
+      updatePackingList,
+      addCarton,
+      removeCarton,
+      finalizePackingList,
+      updateInspection,
+      recordInspection,
+      createShipment,
+      updateShipment,
+      departShipment,
       quotations,
       salesOrders,
       payments,

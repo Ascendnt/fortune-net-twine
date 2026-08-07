@@ -562,6 +562,31 @@ export const QUOTATIONS: Quotation[] = [
 // Sales Orders — covering the required demo scenarios
 // -------------------------------------------------------------------------
 export const SALES_ORDERS: SalesOrder[] = [
+  // Raised straight from INQ-2044 on the customer's own PO. No quotation exists behind it, which
+  // is the case the Customer Inquiries module was built to show: the PO is the agreement, so the
+  // order skips Customer Confirmation and starts at Internal Verification.
+  {
+    id: "SO-2044",
+    inquiryId: "INQ-2044",
+    customerPoNo: "PO-88214",
+    customerId: "CUST-002",
+    consignee: "KTI Company Limited",
+    country: "South Korea",
+    currency: "USD",
+    orderValue: 18400,
+    orderDate: "2026-08-05",
+    requestedDeliveryDate: "2026-10-15",
+    currentStage: "deposit",
+    priority: "standard",
+    assignedSalesperson: "Grace Tan",
+    productionStatus: "not_started",
+    productionQtyOrdered: 0,
+    productionQtyCompleted: 0,
+    productionQtyRejected: 0,
+    stages: buildStages("deposit", {
+      deposit: { pendingAction: "Awaiting 30% deposit against PO-88214" },
+    }),
+  },
   {
     id: "SO-1041",
     quotationId: "PI-33002",
@@ -585,7 +610,6 @@ export const SALES_ORDERS: SalesOrder[] = [
     stages: buildStages("completed", {
       quotation: { status: "completed", completedDate: "2026-05-03" },
       customer_confirmation: { status: "completed", completedDate: "2026-05-04" },
-      internal_verification: { status: "completed", completedDate: "2026-05-05" },
       deposit: { status: "completed", completedDate: "2026-05-08" },
       production: { status: "completed", completedDate: "2026-06-18" },
       packing: { status: "completed", completedDate: "2026-06-25" },
@@ -618,7 +642,6 @@ export const SALES_ORDERS: SalesOrder[] = [
     stages: buildStages("shipment", {
       quotation: { status: "completed", completedDate: "2026-05-25" },
       customer_confirmation: { status: "completed", completedDate: "2026-05-26" },
-      internal_verification: { status: "completed", completedDate: "2026-05-27" },
       deposit: { status: "completed", completedDate: "2026-05-30" },
       production: { status: "completed", completedDate: "2026-07-09" },
       packing: { status: "completed", completedDate: "2026-07-16" },
@@ -654,7 +677,6 @@ export const SALES_ORDERS: SalesOrder[] = [
     stages: buildStages("completed", {
       quotation: { status: "completed", completedDate: "2026-04-16" },
       customer_confirmation: { status: "completed", completedDate: "2026-04-17" },
-      internal_verification: { status: "completed", completedDate: "2026-04-18" },
       deposit: { status: "completed", completedDate: "2026-04-21" },
       production: { status: "completed", completedDate: "2026-05-19" },
       packing: { status: "completed", completedDate: "2026-05-24" },
@@ -685,7 +707,6 @@ export const SALES_ORDERS: SalesOrder[] = [
     stages: buildStages("deposit", {
       quotation: { status: "completed", completedDate: "2026-07-08" },
       customer_confirmation: { status: "completed", completedDate: "2026-07-10" },
-      internal_verification: { status: "completed", completedDate: "2026-07-11" },
       deposit: {
         status: "in_progress",
         responsibleRole: "Finance",
@@ -714,7 +735,6 @@ export const SALES_ORDERS: SalesOrder[] = [
     stages: buildStages("production", {
       quotation: { status: "completed", completedDate: "2026-06-28" },
       customer_confirmation: { status: "completed", completedDate: "2026-07-01" },
-      internal_verification: { status: "completed", completedDate: "2026-07-02" },
       deposit: { status: "completed", completedDate: "2026-07-05" },
       production: {
         status: "in_progress",
@@ -745,7 +765,6 @@ export const SALES_ORDERS: SalesOrder[] = [
     stages: buildStages("production", {
       quotation: { status: "completed", completedDate: "2026-07-12" },
       customer_confirmation: { status: "completed", completedDate: "2026-07-14" },
-      internal_verification: { status: "completed", completedDate: "2026-07-15" },
       deposit: { status: "completed", completedDate: "2026-07-17" },
       production: {
         status: "blocked",
@@ -776,7 +795,6 @@ export const SALES_ORDERS: SalesOrder[] = [
     stages: buildStages("packing", {
       quotation: { status: "completed", completedDate: "2026-07-18" },
       customer_confirmation: { status: "completed", completedDate: "2026-07-20" },
-      internal_verification: { status: "completed", completedDate: "2026-07-21" },
       deposit: { status: "completed", completedDate: "2026-07-23" },
       production: { status: "completed", completedDate: "2026-07-28" },
       packing: {

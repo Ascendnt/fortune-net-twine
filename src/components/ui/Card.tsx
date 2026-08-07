@@ -29,7 +29,12 @@ export function CardHeader({
   action,
   eyebrow,
 }: {
-  title: string;
+  /**
+   * ReactNode rather than string: several headers need the title to carry a link or a badge
+   * alongside the text (a sales order number that navigates, for instance). The component only
+   * renders it, so widening costs nothing and plain strings still work everywhere.
+   */
+  title: React.ReactNode;
   subtitle?: string;
   action?: React.ReactNode;
   eyebrow?: string;

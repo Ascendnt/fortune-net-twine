@@ -1,0 +1,280 @@
+// Seed data for the front of the pipeline: inquiries, the plant's technical assessments, and the
+// mock mailbox that stands in for the proposed Gmail connector.
+//
+// The set is deliberately shaped to show that an inquiry is not a promise of a quotation. Of the
+// eight seeded here: three became quotations, one went straight to a sales order on the customer's
+// own PO, one was declined, one was lost to a competitor, one is still sitting with the plant, and
+// one has only just arrived. That spread is the point of the module.
+
+import type { CustomerInquiry, MailMessage, TechnicalAssessment } from "./types";
+
+export const INQUIRIES: CustomerInquiry[] = [
+  {
+    id: "INQ-2041",
+    customerId: "CUST-001",
+    receivedDate: "2026-07-28",
+    source: "email",
+    subject: "Request for quotation — purse seine netting, 3 sizes",
+    requirement:
+      "Nylon braided net, No.120 210/22x16, 3-1/2\" stretched mesh. Need 122MD in 50FL, 60FL and 70FL. Black tarred. Approx 4 pcs each. Please advise price and lead time.",
+    status: "quoted",
+    assignedTo: "Grace Tan",
+    forwardedDate: "2026-07-28",
+    attachments: [
+      { id: "a1", name: "RFQ-WestCoast-Jul2026.pdf", origin: "Customer email", uploadedBy: "Grace Tan", date: "2026-07-28" },
+      { id: "a2", name: "Plant-costing-INQ-2041.xlsx", origin: "Plant reply", uploadedBy: "Ramon Dela Cruz", date: "2026-07-30" },
+    ],
+    assessmentId: "TA-3041",
+    quotationId: "PI-33001",
+  },
+  {
+    id: "INQ-2042",
+    customerId: "CUST-004",
+    receivedDate: "2026-07-30",
+    source: "email",
+    subject: "Cage netting enquiry for Q4 delivery",
+    requirement:
+      "Hi-Ex braided net, 8\" mesh, 50MD x 120FL. Quantity around 6 pcs. Customer asks whether a lighter twine is possible to reduce cost.",
+    status: "assessment_received",
+    assignedTo: "Grace Tan",
+    forwardedDate: "2026-07-30",
+    attachments: [
+      { id: "a1", name: "Cage-spec-sketch.pdf", origin: "Customer email", uploadedBy: "Grace Tan", date: "2026-07-30" },
+    ],
+    assessmentId: "TA-3042",
+  },
+  {
+    id: "INQ-2043",
+    customerId: "CUST-007",
+    receivedDate: "2026-08-03",
+    source: "email",
+    subject: "Trawl net replacement panels",
+    requirement:
+      "Replacement panels for existing trawl. Customer has not supplied mesh depth. Awaiting plant view on whether the old drawing is still on file.",
+    status: "forwarded_to_plant",
+    assignedTo: "Miguel Santos",
+    forwardedDate: "2026-08-04",
+    attachments: [],
+  },
+  {
+    id: "INQ-2044",
+    customerId: "CUST-002",
+    receivedDate: "2026-08-05",
+    source: "email",
+    subject: "PO attached — repeat order, agreed pricing",
+    requirement:
+      "Repeat of last season's order. Customer has issued their own PO with their part numbers and previously agreed prices. No quotation required, they only need order confirmation and shipping dates.",
+    status: "direct_order",
+    assignedTo: "Grace Tan",
+    closeReason: "Customer issued their own PO with agreed pricing; no proforma required.",
+    attachments: [
+      { id: "a1", name: "PO-88214-KTI.pdf", origin: "Customer email", uploadedBy: "Grace Tan", date: "2026-08-05" },
+    ],
+    salesOrderId: "SO-2044",
+  },
+  {
+    id: "INQ-2045",
+    customerId: "CUST-011",
+    receivedDate: "2026-07-22",
+    source: "agent",
+    subject: "Sports netting — golf barrier",
+    requirement: "Golf barrier netting, knotless, 50m x 12m panels. Customer wanted delivery within 3 weeks.",
+    status: "lost",
+    assignedTo: "Miguel Santos",
+    closeReason: "Quoted, but customer awarded to a local supplier on lead time. Our 8 weeks against their 3.",
+    attachments: [],
+    quotationId: "PI-33005",
+  },
+  {
+    id: "INQ-2046",
+    customerId: "CUST-016",
+    receivedDate: "2026-07-18",
+    source: "email",
+    subject: "Enquiry: monofilament gill netting",
+    requirement: "Monofilament gill net, 200 pcs. Very small diameter mono, well below our usual range.",
+    status: "no_quote",
+    assignedTo: "Grace Tan",
+    closeReason: "Outside our production range. Referred the customer to a mono specialist rather than quoting.",
+    attachments: [],
+  },
+  {
+    id: "INQ-2047",
+    customerId: "CUST-005",
+    receivedDate: "2026-08-06",
+    source: "email",
+    subject: "New enquiry — aquaculture pen nets",
+    requirement:
+      "Predator net and pen net for a new site. No specifications supplied yet, customer asked what information we need from them.",
+    status: "new",
+    assignedTo: "Grace Tan",
+    attachments: [],
+  },
+  {
+    id: "INQ-2048",
+    customerId: "CUST-009",
+    receivedDate: "2026-08-01",
+    source: "phone",
+    subject: "Lacing twine top-up",
+    requirement: "Nylon tarred lacing twine, 300 kg. Straightforward repeat item, priced from the standard rate card.",
+    status: "quoted",
+    assignedTo: "Miguel Santos",
+    attachments: [],
+    quotationId: "PI-33004",
+  },
+];
+
+export const TECHNICAL_ASSESSMENTS: TechnicalAssessment[] = [
+  {
+    id: "TA-3041",
+    inquiryId: "INQ-2041",
+    customerId: "CUST-001",
+    requestedDate: "2026-07-28",
+    respondedDate: "2026-07-30",
+    verdict: "feasible",
+    assessedBy: "Ramon Dela Cruz",
+    plantRemarks:
+      "All three depths are standard for us and the tooling is already set. No substitutions needed. Costing below is at current nylon pricing; if the order slips past September the twine cost should be re-checked.",
+    leadTimeNote: "6 weeks from receipt of deposit for all three sizes together.",
+    lines: [
+      {
+        id: "l1",
+        specCode: "N-1596",
+        description: 'NO.120(210/22x16) 3-1/2"STR 122MD x 50FL',
+        specification: "NYLON BRAIDED NET SK DSTB DWS PREDYED BLACK AND TARRED",
+        material: "Nylon",
+        netType: "Braided Net",
+        weightPerPc: 495,
+        qtyPcs: 4,
+        costPerKg: 11.6,
+      },
+      {
+        id: "l2",
+        specCode: "N-1597",
+        description: 'NO.120(210/22x16) 3-1/2"STR 122MD x 60FL',
+        specification: "NYLON BRAIDED NET SK DSTB DWS PREDYED BLACK AND TARRED",
+        material: "Nylon",
+        netType: "Braided Net",
+        weightPerPc: 590,
+        qtyPcs: 4,
+        costPerKg: 11.6,
+      },
+      {
+        id: "l3",
+        specCode: "N-1598",
+        description: 'NO.120(210/22x16) 3-1/2"STR 122MD x 70FL',
+        specification: "NYLON BRAIDED NET SK DSTB DWS PREDYED BLACK AND TARRED",
+        material: "Nylon",
+        netType: "Braided Net",
+        weightPerPc: 689,
+        qtyPcs: 4,
+        costPerKg: 11.6,
+      },
+    ],
+    quotationId: "PI-33001",
+  },
+  {
+    id: "TA-3042",
+    inquiryId: "INQ-2042",
+    customerId: "CUST-004",
+    requestedDate: "2026-07-30",
+    respondedDate: "2026-08-04",
+    verdict: "feasible_with_changes",
+    assessedBy: "Ramon Dela Cruz",
+    plantRemarks:
+      "The lighter twine the customer asked about would not hold at 8\" mesh under cage load. Recommend staying at 250/08x16. Costed below on that basis. If they insist on lighter, we would not warrant it.",
+    leadTimeNote: "8 weeks. Hi-Ex stock is committed until early September.",
+    lines: [
+      {
+        id: "l1",
+        specCode: "H-1642",
+        description: 'NO.42(250/08x16) 8"STR 50MD x 120FL',
+        specification: "HI-EX BRAIDED NET SK DSTB DWS PREDYED BLACK AND TARRED",
+        material: "Hi-Ex",
+        netType: "Braided Net",
+        weightPerPc: 33.9,
+        qtyPcs: 6,
+        costPerKg: 14.5,
+        note: "Substituted back to 250/08x16 from the customer's lighter request.",
+      },
+    ],
+  },
+  {
+    id: "TA-3043",
+    inquiryId: "INQ-2043",
+    customerId: "CUST-007",
+    requestedDate: "2026-08-04",
+    verdict: "pending",
+    assessedBy: "—",
+    plantRemarks: "",
+    lines: [],
+  },
+];
+
+// -------------------------------------------------------------------------
+// Mock mailbox. See the MailMessage type note: none of this touches a real
+// mailbox, it exists so the proposed flow can be demonstrated.
+// -------------------------------------------------------------------------
+
+export const MAIL_MESSAGES: MailMessage[] = [
+  {
+    id: "M-001",
+    folder: "inbox",
+    from: "purchasing@westcoastmarine.com",
+    to: "sales@fortunenet.com.ph",
+    subject: "Enquiry — seine netting, three depths",
+    body: "Good day,\n\nWe are looking at replacement netting for two vessels. Nylon braided, No.120 210/22x16, 3-1/2\" stretched. We need 122MD in 50FL, 60FL and 70FL, around 4 pieces of each, black tarred.\n\nCould you advise pricing and the earliest shipment date?\n\nRegards,\nDaniel Cruz\nWest Coast Marine Supply Inc.",
+    date: "2026-08-06T09:12:00",
+    read: false,
+    suggestedCustomerId: "CUST-001",
+    attachmentNames: ["RFQ-WestCoast-Aug2026.pdf"],
+  },
+  {
+    id: "M-002",
+    folder: "inbox",
+    from: "kevin.park@kticompany.co.kr",
+    to: "sales@fortunenet.com.ph",
+    subject: "PO 88231 — repeat order",
+    body: "Hello Grace,\n\nPlease find our PO attached for the repeat order, same specification and pricing as our last shipment. No quotation needed on our side, we just need your order confirmation and the shipping date.\n\nBest regards,\nKevin Park",
+    date: "2026-08-06T07:45:00",
+    read: false,
+    suggestedCustomerId: "CUST-002",
+    attachmentNames: ["PO-88231.pdf"],
+  },
+  {
+    id: "M-003",
+    folder: "inbox",
+    from: "info@nordfisk.no",
+    to: "sales@fortunenet.com.ph",
+    subject: "Question on mesh depth tolerance",
+    body: "Hi,\n\nBefore we place the order, what tolerance do you hold on mesh depth after depth-way stretching? Our inspector flagged this on the last delivery.\n\nThanks,\nNordfisk Trading AS",
+    date: "2026-08-05T16:30:00",
+    read: true,
+    suggestedCustomerId: "CUST-016",
+    attachmentNames: [],
+  },
+  {
+    id: "M-101",
+    folder: "sent",
+    from: "sales@fortunenet.com.ph",
+    to: "planta@fortunenet.com.ph",
+    subject: "FWD: Trawl net replacement panels — INQ-2043",
+    body: "Forwarding for feasibility and costing. Customer has not given mesh depth. Do we still have the 2024 drawing for this vessel on file?",
+    date: "2026-08-04T11:20:00",
+    read: true,
+    linkedInquiryId: "INQ-2043",
+    attachmentNames: [],
+  },
+  {
+    id: "M-201",
+    folder: "plant_reply",
+    from: "planta@fortunenet.com.ph",
+    to: "sales@fortunenet.com.ph",
+    subject: "RE: Cage netting enquiry — INQ-2042",
+    body: "Grace,\n\nThe lighter twine will not hold at 8\" mesh under cage load. Recommend staying with 250/08x16. Costing attached on that basis, 14.50 per kg, 33.9 kg per piece.\n\nLead time 8 weeks, Hi-Ex stock is committed until early September.\n\nRamon",
+    date: "2026-08-04T14:05:00",
+    read: true,
+    linkedInquiryId: "INQ-2042",
+    linkedAssessmentId: "TA-3042",
+    attachmentNames: ["Plant-costing-INQ-2042.xlsx"],
+  },
+];

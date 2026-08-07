@@ -159,8 +159,14 @@ export interface SpecLine {
   weightPerPc: number; // readonly, from the master row
   givenPriceKg: number;
   qtyPcs: number;
-  pricing: LinePricing; // always populated — see spec §6.2.1
-  unitPrice: number; // U/P, always derived
+  pricing: LinePricing;
+  /**
+   * Unit price. Entered by hand: the rule engine is available as a helper but is not applied
+   * unless someone asks for it, so this is the authoritative figure either way.
+   */
+  unitPrice: number;
+  /** True once U/P has been typed directly, which stops a recompute overwriting it. */
+  manualUnitPrice?: boolean;
   amount: number; // U/P x qty
   weightKg: number; // weightPerPc x qty
 }
@@ -312,12 +318,125 @@ export interface Quotation {
   customerResponseNote?: string;
 }
 
+// ---------- Customer Inquiry ----------
+// The front of the pipeline. An inquiry is a request that has arrived, usually by email; it is NOT
+// a commitment that a quotation will follow. Some are declined, some are lost, and some arrive with
+// the customer's own parts, prices and PO already settled, in which case they go straight to a
+// sales order without a proforma ever being issued.
+
+export type InquirySource = "email" | "phone" | "walk_in" | "agent";
+
+export type InquiryStatus =
+  | "new" // received, nothing done yet
+  | "forwarded_to_plant" // sent to the factory for feasibility and costing
+  | "assessment_received" // the plant has replied; a technical assessment exists
+  | "quoted" // a quotation was raised from it
+  | "direct_order" // no quotation needed; customer's own PO became a sales order
+  | "no_quote" // deliberately not quoted (out of scope, capacity, etc.)
+  | "lost"; // quoted or considered, but the customer went elsewhere
+
+export interface InquiryAttachment {
+  id: string;
+  name: string;
+  /** Where it came from, e.g. "Customer email" or "Plant reply". */
+  origin: string;
+  uploadedBy: string;
+  date: string;
+}
+
+export interface CustomerInquiry {
+  id: string;
+  customerId: string;
+  receivedDate: string;
+  source: InquirySource;
+  /** Subject line if it arrived by email, otherwise a short title. */
+  subject: string;
+  /** What the customer actually asked for, in their words. */
+  requirement: string;
+  status: InquiryStatus;
+  assignedTo: string;
+  /** Set when forwarded to the plant, so the wait can be measured. */
+  forwardedDate?: string;
+  /** Why an inquiry was closed without a quotation. Required for no_quote and lost. */
+  closeReason?: string;
+  attachments: InquiryAttachment[];
+  /** Downstream links. All optional: an inquiry may end at any point. */
+  assessmentId?: string;
+  quotationId?: string;
+  salesOrderId?: string;
+}
+
+// ---------- Mail (mock) ----------
+// A stand-in for the proposed Gmail connector. Nothing here touches a real mailbox: these are
+// local fixtures that let the intended flow be demonstrated end to end, namely customer inquiry
+// arrives -> forwarded to the plant -> plant replies -> reply becomes a technical assessment.
+// Swapping this for a real inbox is a matter of replacing the seed and the send action.
+
+export type MailFolder = "inbox" | "sent" | "plant_reply";
+
+export interface MailMessage {
+  id: string;
+  folder: MailFolder;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  date: string;
+  read: boolean;
+  /** Set once this message has been turned into an inquiry or an assessment. */
+  linkedInquiryId?: string;
+  linkedAssessmentId?: string;
+  /** Guessed from the sender's address, so an inquiry can be raised with one click. */
+  suggestedCustomerId?: string;
+  attachmentNames: string[];
+}
+
+// ---------- Technical Assessment ----------
+// The plant's reply to an inquiry. Its whole purpose is to answer "can we make this, and what does
+// it cost", and the answer arrives as draft lines with factory costs. Those lines pre-fill the
+// quotation, so the quote starts from the plant's real figures rather than a blank form.
+
+export type AssessmentVerdict = "feasible" | "feasible_with_changes" | "not_feasible" | "pending";
+
+/** One line of the plant's costing, ready to become a quotation line. */
+export interface AssessmentLine {
+  id: string;
+  /** Matches a SPEC_MASTER code when the plant recognised the spec; free text otherwise. */
+  specCode?: string;
+  description: string;
+  /** Composed specification sentence, as the quotation would carry it. */
+  specification: string;
+  material: string;
+  netType: string;
+  weightPerPc: number;
+  qtyPcs: number;
+  /** The plant's cost per kg. This becomes the quotation's USD/WT starting figure. */
+  costPerKg: number;
+  /** Plant's note on this line, e.g. a substitution or a caveat. */
+  note?: string;
+}
+
+export interface TechnicalAssessment {
+  id: string;
+  inquiryId: string;
+  customerId: string;
+  requestedDate: string;
+  respondedDate?: string;
+  verdict: AssessmentVerdict;
+  assessedBy: string;
+  /** The plant's overall reply, in their words. */
+  plantRemarks: string;
+  leadTimeNote?: string;
+  lines: AssessmentLine[];
+  /** Set once a quotation has been generated from this assessment. */
+  quotationId?: string;
+}
+
 // ---------- Sales Order lifecycle ----------
 
 export type OrderStage =
   | "quotation"
   | "customer_confirmation"
-  | "internal_verification"
   | "deposit"
   | "production"
   | "packing"
@@ -327,16 +446,17 @@ export type OrderStage =
   | "documents"
   | "completed";
 
+// Final payment sits BEFORE inspection: the balance is collected once packing is done, and
+// inspection then releases the goods. Nothing ships until it is both paid for and inspected.
 export const ORDER_STAGES: { id: OrderStage; label: string; role: string }[] = [
   { id: "quotation", label: "Quotation", role: "Sales" },
   { id: "customer_confirmation", label: "Customer Confirmation", role: "Sales" },
-  { id: "internal_verification", label: "Internal Verification", role: "Factory Technical" },
   { id: "deposit", label: "Deposit", role: "Finance" },
   { id: "production", label: "Production", role: "Production" },
   { id: "packing", label: "Packing", role: "Logistics" },
+  { id: "final_payment", label: "Final Payment", role: "Finance" },
   { id: "inspection", label: "Inspection", role: "QC" },
   { id: "shipment", label: "Shipment", role: "Logistics" },
-  { id: "final_payment", label: "Final Payment", role: "Finance" },
   { id: "documents", label: "Documents", role: "Sales" },
   { id: "completed", label: "Completed", role: "—" },
 ];
@@ -356,7 +476,15 @@ export type OrderPriority = "standard" | "high" | "urgent";
 
 export interface SalesOrder {
   id: string; // SO number
-  quotationId: string;
+  /**
+   * Optional. Most orders come from a quotation, but a customer who sends their own PO with parts
+   * and prices already agreed produces an order with no proforma behind it.
+   */
+  quotationId?: string;
+  /** Set when the order came straight from an inquiry rather than through a quotation. */
+  inquiryId?: string;
+  /** The customer's own PO reference, when they raised one. */
+  customerPoNo?: string;
   customerId: string;
   consignee: string;
   country: string;
@@ -384,6 +512,86 @@ export interface SalesOrder {
   actualCompletionDate?: string;
   delayReason?: string;
   invoiceId?: string;
+}
+
+// ---------- Operations: production -> packing -> inspection -> shipment ----------
+//
+// Each of these hangs off a sales order and each one advances that order's stage when it completes.
+// They also feed each other: production's completed quantity is what packing may pack, packing's
+// actual weights are what the commercial invoice and bill of lading carry, inspection decides
+// whether packed cartons may ship, and the shipment stamps its B/L and container onto the invoice.
+
+export interface ProductionRun {
+  id: string;
+  salesOrderId: string;
+  /** Mirrors the order's line so shortfalls are attributable, not just a single order-level number. */
+  itemCode: string;
+  description: string;
+  qtyOrdered: number;
+  qtyCompleted: number;
+  qtyRejected: number;
+  startedDate?: string;
+  completedDate?: string;
+  /** Free text: machine, shift, operator, whatever the floor records. */
+  note?: string;
+}
+
+export type CartonStatus = "packed" | "held" | "shipped";
+
+export interface PackingCarton {
+  id: string;
+  /** Carton or bale number as marked on the goods. */
+  markNo: string;
+  itemCode: string;
+  qtyPcs: number;
+  netWeightKg: number;
+  grossWeightKg: number;
+  status: CartonStatus;
+}
+
+export interface PackingList {
+  id: string;
+  salesOrderId: string;
+  createdDate: string;
+  packedBy: string;
+  cartons: PackingCarton[];
+  /** Set once the list is closed; no further cartons may be added. */
+  finalizedDate?: string;
+  remarks?: string;
+}
+
+export type InspectionResult = "pass" | "fail" | "pending";
+
+export interface InspectionRecord {
+  id: string;
+  salesOrderId: string;
+  packingListId?: string;
+  inspectedDate?: string;
+  inspector: string;
+  result: InspectionResult;
+  /** Cartons checked against cartons packed. */
+  cartonsChecked: number;
+  defectsFound: number;
+  remarks: string;
+}
+
+export type ShipmentStatus = "booked" | "loaded" | "departed" | "arrived";
+
+export interface Shipment {
+  id: string;
+  salesOrderId: string;
+  status: ShipmentStatus;
+  vessel: string;
+  containerNo: string;
+  billOfLadingNo: string;
+  portOfLoading: string;
+  portOfDischarge: string;
+  etd?: string;
+  eta?: string;
+  bookedDate: string;
+  /** Total gross weight actually loaded, taken from the packing list. */
+  grossWeightKg: number;
+  remarks?: string;
 }
 
 // ---------- Payments ----------
