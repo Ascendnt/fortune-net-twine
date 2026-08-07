@@ -75,16 +75,9 @@ export function BatchEditor({
 
         {(batch.type === "normal" || batch.type === "assembled") && (
           <div className="space-y-3">
-            {batch.type === "assembled" && (
-              <textarea
-                value={batch.title ?? ""}
-                onChange={(e) => handlers.onPatchBatch({ title: e.target.value })}
-                rows={2}
-                placeholder="Type your assembled item description here…"
-                className="w-full rounded-lg border border-paper-200 px-3 py-2 text-sm font-semibold uppercase text-pine-800 focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
-              />
-            )}
-
+            {/* No free-text title on an ASSEMBLED group. The specification sentence on each item
+                already names the product, so a second description field was one more thing to
+                fill in that said nothing the document did not already carry. */}
             {(batch.items ?? []).map((item) => (
               <ItemBlock
                 key={item.id}
