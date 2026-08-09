@@ -192,13 +192,17 @@ export function SpecificationPickerModal({
         { key: "length", label: "lengths", value: (r) => r.length },
       ]}
       columns={[
+        // Neither Code nor Description is shown. Description was the same sentence on every row,
+        // since the list is already filtered to one material and net type. Code is an internal
+        // number: people pick a net by its measurements, and the code appears on the quotation the
+        // moment the row lands there. Both stay searchable, so typing "N-1598" still finds its row.
         {
-          key: "code",
-          header: "Code",
-          width: "w-28",
+          key: "twine",
+          header: "Twine",
           render: (r) => {
-            // The pick number, shown as you go. Without it the order is invisible until the rows
-            // land on the quotation, which is too late to notice you ticked two the wrong way round.
+            // The pick number moves here now there is no code cell to hold it. Without it the
+            // order is invisible until the rows reach the quotation, which is too late to notice
+            // two were ticked the wrong way round.
             const pickedAt = selected.indexOf(r.code);
             return (
               <span className="flex items-center gap-1.5">
@@ -207,14 +211,11 @@ export function SpecificationPickerModal({
                     {pickedAt + 1}
                   </span>
                 )}
-                <span className="font-mono text-pine-800">{r.code}</span>
+                <span className="font-mono">{r.twine}</span>
               </span>
             );
           },
         },
-        // Description was dropped. The list is already filtered to one material and net type, so
-        // every row carried the same sentence and the column bought nothing but width.
-        { key: "twine", header: "Twine", render: (r) => <span className="font-mono">{r.twine}</span> },
         { key: "meshSize", header: "Mesh Size", render: (r) => r.meshSize, width: "w-24" },
         { key: "meshDepth", header: "Mesh Depth", render: (r) => r.meshDepth, width: "w-24" },
         { key: "length", header: "Length", render: (r) => r.length, width: "w-32" },
