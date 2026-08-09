@@ -1,4 +1,5 @@
 import type { PaymentApproval, PaymentRecord, Role } from "./types";
+import { can } from "./permissions";
 
 /**
  * The rules governing who may sign off a payment, and when.
@@ -10,16 +11,25 @@ import type { PaymentApproval, PaymentRecord, Role } from "./types";
  */
 
 /**
- * Roles that may approve a payment.
+ * Whether a role may approve a payment at all.
  *
- * Management and Finance both qualify, deliberately: routing every line through one named manager
- * is what produces the situation where a container sits at the port because one person is on a
- * plane. Admin is included because the system administrator has to be able to unstick anything.
+ * Delegated to the permission matrix rather than a list kept here, so there is one place that
+ * answers "what may this role do" and the roles screen and the buttons cannot drift apart.
  */
-const APPROVER_ROLES: Role[] = ["management", "finance", "admin"];
-
 export function canApprovePayments(role: Role): boolean {
-  return APPROVER_ROLES.includes(role);
+  return can(role, "payment.approve");
+}
+
+/**
+ * Whether a role may sign in place of the person a payment was routed to.
+ *
+ * Management only. Approving a payment is a job several people share; standing in for a named
+ * colleague is a claim of authority over their decision, and that does not spread just because
+ * somebody is at their desk and the approver is not. Finance can still approve anything routed to
+ * nobody in particular, so the ordinary case is unaffected.
+ */
+export function canOverrideApproval(role: Role): boolean {
+  return can(role, "payment.override");
 }
 
 /**
@@ -66,12 +76,21 @@ export function validateApproval(args: {
   approval: PaymentApproval | undefined;
   actualApprover: string;
   overrideReason: string;
+  /** The role of the person signing. Omitted only by callers that have already checked. */
+  role?: Role;
 }): string | null {
   if (!args.actualApprover.trim()) {
     return "Enter who is approving this payment.";
   }
-  if (isOverride(args.approval, args.actualApprover) && !args.overrideReason.trim()) {
-    return `This payment was routed to ${args.approval?.intendedApprover}. Give a reason for approving it in their place.`;
+  if (isOverride(args.approval, args.actualApprover)) {
+    // Checked before the reason, because being told to justify something you were never allowed
+    // to do is a worse experience than being told plainly that it is not yours to do.
+    if (args.role && !canOverrideApproval(args.role)) {
+      return `This payment was routed to ${args.approval?.intendedApprover}. Only Management can approve in someone else's place — ask them, or have it re-routed.`;
+    }
+    if (!args.overrideReason.trim()) {
+      return `This payment was routed to ${args.approval?.intendedApprover}. Give a reason for approving it in their place.`;
+    }
   }
   return null;
 }

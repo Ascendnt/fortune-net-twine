@@ -811,6 +811,36 @@ export interface CommercialInvoice {
   containerNo?: string;
 }
 
+// ---------- Uploaded documents ----------
+
+/**
+ * Where an uploaded file belongs. Internal is the default because that is the gap this fills:
+ * the generated paper trail already covers the PI, the invoice and the B/L, but the factory
+ * report, the customer's signed PO scan and the bank advice had nowhere to live.
+ */
+export type OrderDocumentCategory = "internal" | "customer" | "shipping" | "finance" | "other";
+
+export interface OrderDocument {
+  id: string;
+  salesOrderId: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  category: OrderDocumentCategory;
+  uploadedBy: string;
+  uploadedDate: string;
+  notes?: string;
+  /**
+   * The file itself, as a data URL.
+   *
+   * There is no file server behind this build, so the bytes ride along in browser storage. That
+   * caps what can realistically be kept — see MAX_UPLOAD_BYTES in lib/documents.ts — and a file
+   * too large to store is refused with an explanation rather than silently recorded as an entry
+   * that opens nothing.
+   */
+  dataUrl?: string;
+}
+
 // ---------- Documents ----------
 
 export type DocumentType =

@@ -148,9 +148,6 @@ export function PIDocumentPreview({
   const attn = q.attentionContact || customer?.contactPerson;
   const { totalWeightKg, grandTotal } = totalsForQuotation(q);
   const rows = buildRows(q);
-  // Newest first, and only actual revisions. Revision 0 is the initial issue, which needs no
-  // explanation on a document that already carries its own number and date.
-  const revisionsToPrint = [...(q.revisions ?? [])].filter((r) => r.revisionNo > 0).reverse();
 
   return (
     <div className="overflow-x-auto">
@@ -309,26 +306,9 @@ export function PIDocumentPreview({
             </div>
           )}
 
-          {/* The revision history is printed on the document, not kept to the screen. A customer
-              holding R3 needs to see what changed between R1 and R3 without asking, and so does
-              anyone matching this against a bank instruction months later. The initial issue is
-              left out: a single "Initial issue" line under a bare PI number says nothing. */}
-          {revisionsToPrint.length > 0 && (
-            <div className="mt-4 break-inside-avoid">
-              <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-paper-400">Revision history</p>
-              <table className="w-full border-collapse text-[10.5px]">
-                <tbody>
-                  {revisionsToPrint.map((r) => (
-                    <tr key={r.revisionNo} className="border-b border-paper-100 last:border-0 align-top">
-                      <td className="w-12 py-1 pr-2 font-mono font-semibold text-pine-800">R{r.revisionNo}</td>
-                      <td className="w-20 py-1 pr-2 font-mono text-paper-400">{formatDate(r.date)}</td>
-                      <td className="py-1 text-paper-600">{r.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* No revision history on the document. The Revision History panel beside it already
+              carries the same list, and repeating it here only lengthened the printed page. The
+              revision itself still travels with the customer on the PI number above. */}
 
           <div className="mt-8 flex justify-between break-inside-avoid text-[11px] text-paper-400">
             <div>

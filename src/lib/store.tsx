@@ -39,11 +39,12 @@ import {
   INVOICES,
   APPROVALS,
   ACTIVITY,
-  CURRENT_USER_BY_ROLE,
   PRICING_RULES,
   LOOKUP_TABLES,
   CUSTOMERS,
 } from "./mockData";
+import { USERS, findUser } from "./users";
+import type { User } from "./users";
 import { LACING_CATALOG, SPEC_MASTER } from "./specMaster";
 import type { LacingCatalogRow, SpecMasterRow } from "./specMaster";
 import { PERSIST_KEYS, clearPersisted, loadPersisted, persist } from "./persist";
@@ -51,11 +52,16 @@ import { revisionLabel } from "./format";
 import { applyApproval, applyDecline, canVerifyPayment } from "./paymentApproval";
 import { migratePackingList, sectionTotals } from "./packing";
 import { buildInspectionLines, settleInspection } from "./inspectionPricing";
-import type { PaymentApproval, PackingLine, ShipmentScope } from "./types";
+import type { PaymentApproval, PackingLine, ShipmentScope, OrderDocument } from "./types";
 
 interface StoreState {
+  /** Derived from the signed-in user. Falls back to the least privileged role when signed out. */
   role: Role;
-  setRole: (r: Role) => void;
+  users: User[];
+  signedInUser: User | undefined;
+  signIn: (userId: string) => void;
+  signOut: () => void;
+  updateUser: (id: string, patch: Partial<User>) => void;
   currentUser: string;
 
   // ---- Front of the pipeline ----
@@ -90,6 +96,10 @@ interface StoreState {
   createPackingList: (salesOrderId: string, scope?: ShipmentScope) => string;
   updatePackingList: (id: string, patch: Partial<PackingList>) => void;
   removePackingList: (id: string) => void;
+  /** Files attached to sales orders. */
+  orderDocuments: OrderDocument[];
+  addOrderDocument: (doc: Omit<OrderDocument, "id" | "uploadedBy" | "uploadedDate">) => void;
+  removeOrderDocument: (id: string) => void;
   addPackingSection: (listId: string, title: string) => void;
   updatePackingSection: (listId: string, sectionId: string, title: string) => void;
   removePackingSection: (listId: string, sectionId: string) => void;
@@ -372,9 +382,19 @@ function nextId(prefix: string) {
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  // System Administrator by default: it is the only role with sight of every module and permission
-  // to act at every stage, so nothing in the process is hidden behind a role switch.
-  const [role, setRole] = useState<Role>("admin");
+  /**
+   * Who is signed in.
+   *
+   * Identity, not authentication: there is no server to prove anyone is who they say. What it does
+   * buy is that approvals, overrides and the activity log name a real person rather than a role
+   * label, which is the difference between an audit trail and a list of job titles.
+   *
+   * The choice persists, so a refresh does not dump someone back at the sign-in screen mid-task.
+   */
+  const [users, setUsers] = useState<User[]>(() => loadPersisted(PERSIST_KEYS.users, USERS));
+  const [signedInUserId, setSignedInUserId] = useState<string | null>(() =>
+    loadPersisted(PERSIST_KEYS.session, null as string | null)
+  );
   // Slices that a user can meaningfully change are restored from localStorage; the rest stay as
   // seeded demo fixtures. See lib/persist.ts for the degradation rules.
   const [quotations, setQuotations] = useState<Quotation[]>(() =>
@@ -383,6 +403,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>(() => migrateSalesOrders(SALES_ORDERS));
   const [specUsage, setSpecUsage] = useState<Record<string, number>>(() =>
     loadPersisted(PERSIST_KEYS.specUsage, {} as Record<string, number>)
+  );
+  const [orderDocuments, setOrderDocuments] = useState<OrderDocument[]>(() =>
+    loadPersisted(PERSIST_KEYS.orderDocuments, [] as OrderDocument[])
   );
   const [payments, setPayments] = useState<PaymentRecord[]>(PAYMENTS);
   const [invoices, setInvoices] = useState<CommercialInvoice[]>(INVOICES);
@@ -436,6 +459,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => persist(PERSIST_KEYS.inspections, inspections), [inspections]);
   useEffect(() => persist(PERSIST_KEYS.shipments, shipments), [shipments]);
   useEffect(() => persist(PERSIST_KEYS.specUsage, specUsage), [specUsage]);
+  useEffect(() => persist(PERSIST_KEYS.orderDocuments, orderDocuments), [orderDocuments]);
+  useEffect(() => persist(PERSIST_KEYS.users, users), [users]);
+  useEffect(() => persist(PERSIST_KEYS.session, signedInUserId), [signedInUserId]);
 
   const addSpecMasterRow = useCallback((row: SpecMasterRow) => {
     setSpecMaster((prev) => (prev.some((r) => r.code === row.code) ? prev : [row, ...prev]));
@@ -628,7 +654,24 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const currentUser = CURRENT_USER_BY_ROLE[role] ?? "Guest User";
+  // Both derived from the signed-in user, so there is one source of truth for who is acting.
+  // Signed out, the role falls back to sales_rep — the least privileged — rather than admin, so a
+  // broken session can never hand someone more authority than they had.
+  const signedInUser = findUser(users, signedInUserId);
+  const role: Role = signedInUser?.role ?? "sales_rep";
+  const currentUser = signedInUser?.name ?? "Guest User";
+
+  const signIn = useCallback((userId: string) => {
+    setSignedInUserId(userId);
+  }, []);
+
+  const signOut = useCallback(() => {
+    setSignedInUserId(null);
+  }, []);
+
+  const updateUser = useCallback((id: string, patch: Partial<User>) => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+  }, []);
 
   const pushToast = useCallback((t: Omit<ToastMessage, "id">) => {
     const id = nextId("TOAST");
@@ -1448,6 +1491,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setPackingLists((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
+  /** Attaches a file to a sales order. The caller has already read and validated it. */
+  const addOrderDocument = useCallback(
+    (doc: Omit<OrderDocument, "id" | "uploadedBy" | "uploadedDate">) => {
+      const id = nextId("DOC");
+      setOrderDocuments((prev) => [
+        { ...doc, id, uploadedBy: currentUser, uploadedDate: new Date().toISOString().slice(0, 10) },
+        ...prev,
+      ]);
+      logActivity({
+        action: `Uploaded ${doc.category} document "${doc.name}"`,
+        recordType: "Sales Order",
+        recordId: doc.salesOrderId,
+      });
+    },
+    [currentUser, logActivity]
+  );
+
+  const removeOrderDocument = useCallback(
+    (id: string) => {
+      const doc = orderDocuments.find((d) => d.id === id);
+      setOrderDocuments((prev) => prev.filter((d) => d.id !== id));
+      if (doc) {
+        logActivity({
+          action: `Removed document "${doc.name}"`,
+          recordType: "Sales Order",
+          recordId: doc.salesOrderId,
+        });
+      }
+    },
+    [orderDocuments, logActivity]
+  );
+
   const addPackingSection = useCallback((listId: string, title: string) => {
     setPackingLists((prev) =>
       prev.map((p) =>
@@ -1910,7 +1985,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       role,
-      setRole,
+      users,
+      signedInUser,
+      signIn,
+      signOut,
+      updateUser,
       currentUser,
       inquiries,
       assessments,
@@ -1936,6 +2015,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createPackingList,
       updatePackingList,
       removePackingList,
+      orderDocuments,
+      addOrderDocument,
+      removeOrderDocument,
       addPackingSection,
       updatePackingSection,
       removePackingSection,
@@ -2038,6 +2120,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createPackingList,
       updatePackingList,
       removePackingList,
+      orderDocuments,
+      addOrderDocument,
+      removeOrderDocument,
       addPackingSection,
       updatePackingSection,
       removePackingSection,

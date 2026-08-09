@@ -5,6 +5,7 @@ import {
   approvalStateOf,
   approvalSummary,
   canApprovePayments,
+  canOverrideApproval,
   canVerifyPayment,
   isOverride,
   isPendingApproval,
@@ -119,6 +120,67 @@ describe("validateApproval", () => {
     expect(
       validateApproval({ approval: pending, actualApprover: "Elaine Sy", overrideReason: "Marcus on leave" })
     ).toBeNull();
+  });
+
+  it("refuses an override from a role that does not hold it, before asking for a reason", () => {
+    // Being asked to justify something you were never allowed to do is worse than being told
+    // plainly that it is not yours to do.
+    const msg = validateApproval({
+      approval: pending,
+      actualApprover: "Rosa Lim",
+      overrideReason: "Marcus on leave",
+      role: "finance",
+    });
+    expect(msg).toContain("Only Management");
+  });
+
+  it("allows Management to override with a reason", () => {
+    expect(
+      validateApproval({
+        approval: pending,
+        actualApprover: "Teresa Uy",
+        overrideReason: "Marcus on leave",
+        role: "management",
+      })
+    ).toBeNull();
+  });
+
+  it("still requires Management to give a reason", () => {
+    expect(
+      validateApproval({ approval: pending, actualApprover: "Teresa Uy", overrideReason: "", role: "management" })
+    ).toContain("reason");
+  });
+
+  it("does not block Finance approving a line routed to nobody in particular", () => {
+    // The ordinary case has to stay ordinary, or the rule just teaches people to route nothing.
+    expect(
+      validateApproval({
+        approval: { ...pending, intendedApprover: undefined },
+        actualApprover: "Rosa Lim",
+        overrideReason: "",
+        role: "finance",
+      })
+    ).toBeNull();
+  });
+
+  it("does not block Finance approving a line routed to themselves", () => {
+    expect(
+      validateApproval({
+        approval: { ...pending, intendedApprover: "Rosa Lim" },
+        actualApprover: "Rosa Lim",
+        overrideReason: "",
+        role: "finance",
+      })
+    ).toBeNull();
+  });
+});
+
+describe("canOverrideApproval", () => {
+  it("is Management and Admin only", () => {
+    expect(canOverrideApproval("management")).toBe(true);
+    expect(canOverrideApproval("admin")).toBe(true);
+    expect(canOverrideApproval("finance")).toBe(false);
+    expect(canOverrideApproval("sales_manager")).toBe(false);
   });
 });
 

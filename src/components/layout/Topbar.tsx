@@ -1,20 +1,21 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Bell, Plus, ChevronDown, Check, Menu } from "lucide-react";
+import { Search, Bell, Plus, ChevronDown, Check, Menu, LogOut } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { ROLES } from "@/lib/mockData";
 import { initials } from "@/lib/format";
 import { buildNotifications } from "@/lib/notifications";
-import type { Role } from "@/lib/types";
+import { PERMISSION_LABELS, permissionsFor } from "@/lib/permissions";
 import clsx from "clsx";
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
-  const { role, setRole, currentUser, pushToast, quotations, salesOrders, payments, inspections } = useStore();
+  const { role, signedInUser, signOut, currentUser, pushToast, quotations, salesOrders, payments, inspections } =
+    useStore();
   const [roleOpen, setRoleOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const navigate = useNavigate();
 
-  const activeRole = ROLES.find((r) => r.id === role)!;
+  const activeRole = ROLES.find((r) => r.id === role) ?? { label: "—", description: "" };
 
   // Derived from live state, not a fixed list. An item disappears the moment the thing it is
   // chasing is dealt with, which is the only way a feed like this stays worth reading.
@@ -133,35 +134,36 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setRoleOpen(false)} />
               <div className="absolute right-0 z-50 mt-2 w-[calc(100vw-1.5rem)] max-w-72 rounded-xl border border-paper-200 bg-white p-2 shadow-[var(--shadow-pop)]">
-                <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-paper-400">
-                  Preview interface as…
+                <div className="border-b border-paper-100 px-2 pb-2">
+                  <p className="text-[13px] font-semibold text-paper-800">{currentUser}</p>
+                  <p className="text-[11.5px] text-paper-400">
+                    {activeRole.label} · {signedInUser?.email}
+                  </p>
+                </div>
+
+                <p className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-paper-400">
+                  What this role can do
                 </p>
-                {ROLES.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => {
-                      setRole(r.id as Role);
-                      setRoleOpen(false);
-                      pushToast({
-                        tone: "info",
-                        title: `Viewing as ${r.label}`,
-                        description: "Dashboard and work queue updated for this role.",
-                      });
-                    }}
-                    className={clsx(
-                      "flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left hover:bg-paper-50",
-                      r.id === role && "bg-pine-50"
-                    )}
-                  >
-                    <div className="mt-0.5 w-4 shrink-0">
-                      {r.id === role && <Check className="h-3.5 w-3.5 text-pine-600" />}
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-medium text-paper-800">{r.label}</p>
-                      <p className="text-[11.5px] text-paper-400">{r.description}</p>
-                    </div>
-                  </button>
-                ))}
+                <ul className="mb-1 space-y-0.5 px-2">
+                  {permissionsFor(role).map((p) => (
+                    <li key={p} className="flex gap-1.5 text-[11.5px] leading-snug text-paper-600">
+                      <Check className="mt-0.5 h-3 w-3 shrink-0 text-pine-600" />
+                      {PERMISSION_LABELS[p]}
+                    </li>
+                  ))}
+                </ul>
+
+                <button
+                  onClick={() => {
+                    setRoleOpen(false);
+                    signOut();
+                    pushToast({ tone: "info", title: "Signed out" });
+                  }}
+                  className="mt-1 flex w-full items-center gap-2 rounded-lg border-t border-paper-100 px-2 py-2 text-left text-[13px] font-medium text-paper-700 hover:bg-paper-50"
+                >
+                  <LogOut className="h-3.5 w-3.5 text-paper-400" />
+                  Sign out
+                </button>
               </div>
             </>
           )}

@@ -16,11 +16,14 @@ import {
   approvalStateOf,
   approvalSummary,
   canApprovePayments,
+  canOverrideApproval,
   canVerifyPayment,
   isOverride,
   isPendingApproval,
   validateApproval,
 } from "@/lib/paymentApproval";
+import { selectableUsers } from "@/lib/users";
+import { ROLES } from "@/lib/mockData";
 import type { PaymentRecord, PaymentStatus, PaymentType } from "@/lib/types";
 
 const formClass =
@@ -60,6 +63,7 @@ export function PaymentsPage() {
     declinePayment,
     reopenPaymentApproval,
     role,
+    users,
     currentUser,
     pushToast,
     customers: CUSTOMERS,
@@ -76,6 +80,9 @@ export function PaymentsPage() {
   const [approvalReason, setApprovalReason] = useState("");
 
   const canApprove = canApprovePayments(role);
+  const canOverride = canOverrideApproval(role);
+  /** Only people who actually hold the approval permission can be routed to. */
+  const approvers = selectableUsers(users).filter((u) => canApprovePayments(u.role));
 
   function openApproval(payment: PaymentRecord, mode: "approve" | "decline") {
     setApproving({ payment, mode });
@@ -102,6 +109,7 @@ export function PaymentsPage() {
       approval: payment.approval,
       actualApprover: approverName,
       overrideReason: approvalReason,
+      role,
     });
     if (problem) {
       pushToast({ tone: "warning", title: "Approval not recorded", description: problem });
@@ -235,13 +243,13 @@ export function PaymentsPage() {
         steps={[
           "Find the payment using the search box or the status buttons.",
           "Record Payment raises a new line. Whoever raises it is recorded, and it waits for approval before anything else can happen to it.",
-          "In the Approval column, press Approve. If the payment was routed to a colleague who is away, you can still approve it, and the system asks you why so both names are kept.",
+          "In the Approval column, press Approve. If the payment was routed to a colleague who is away, only Management can sign in their place, and the system asks why so both names are kept.",
           "Once approved and the money has arrived, press Verify. The order it belongs to is then allowed to move forward.",
           "Wrong status? Use the dropdown beside Verify to set the correct one. Anything can be corrected, including undoing a verification.",
           "Use the pencil to change amounts, dates, bank reference or remarks. Use the bin to remove a payment recorded in error.",
           "Export CSV downloads whatever is currently on screen, including your filters, for Excel.",
         ]}
-        note="Anyone can raise a payment. Only Management, Finance and the System Administrator can approve one, and a payment must be approved before it can be verified."
+        note="Anyone can raise a payment. Management, Finance and the System Administrator can approve one, and a payment must be approved before it can be verified. Approving in place of a named colleague is Management only."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -471,10 +479,10 @@ export function PaymentsPage() {
             </div>
             <div className="sm:col-span-2">
               <label className={formLabel}>Route approval to</label>
-              {/* Optional on purpose. Naming someone routes it and makes an override visible when
-                  a different person signs. Leaving it blank means anyone in Management or Finance
-                  can pick it up, which is what a small team usually wants. */}
-              <input
+              {/* Chosen from the people who actually hold the permission, so a payment cannot be
+                  routed to somebody who could never sign it. Leaving it unrouted is the normal
+                  case: anyone in Management or Finance can then pick it up. */}
+              <select
                 value={form.draft.approval?.intendedApprover ?? ""}
                 onChange={(e) =>
                   setForm({
@@ -486,17 +494,23 @@ export function PaymentsPage() {
                         author: form.draft.approval?.author ?? currentUser,
                         authoredDate: form.draft.approval?.authoredDate ?? new Date().toISOString().slice(0, 10),
                         ...form.draft.approval,
-                        intendedApprover: e.target.value,
+                        intendedApprover: e.target.value || undefined,
                       },
                     },
                   })
                 }
-                placeholder="Leave blank for anyone in Management or Finance"
                 className={formClass}
-              />
+              >
+                <option value="">Anyone in Management or Finance</option>
+                {approvers.map((u) => (
+                  <option key={u.id} value={u.name}>
+                    {u.name} · {ROLES.find((r) => r.id === u.role)?.label ?? u.role}
+                  </option>
+                ))}
+              </select>
               <p className="mt-1 text-[11px] leading-snug text-paper-400">
-                Name a person and the payment waits for them. If they are away, someone else can still approve it by
-                giving a reason, and both names are kept on the record.
+                Naming someone makes the payment theirs to sign. If they are away, only Management can approve in their
+                place, and the reason goes on the record.
               </p>
             </div>
             <div>
@@ -676,20 +690,29 @@ export function PaymentsPage() {
             {/* The override. It appears only when the person signing is not the one the line was
                 routed to, so the normal case stays a two-click job and the exception is the thing
                 that asks a question. */}
-            {approving.mode === "approve" && isOverride(approving.payment.approval, approverName) && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="mb-2 text-xs font-medium text-amber-800">
-                  This payment was routed to {approving.payment.approval?.intendedApprover}. You are approving in their
-                  place, so the reason goes on the record.
-                </p>
-                <input
-                  value={approvalReason}
-                  onChange={(e) => setApprovalReason(e.target.value)}
-                  className={formClass}
-                  placeholder="e.g. On leave until 14 Aug, shipment cannot wait"
-                />
-              </div>
-            )}
+            {approving.mode === "approve" &&
+              isOverride(approving.payment.approval, approverName) &&
+              (canOverride ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="mb-2 text-xs font-medium text-amber-800">
+                    This payment was routed to {approving.payment.approval?.intendedApprover}. You are approving in
+                    their place, so the reason goes on the record.
+                  </p>
+                  <input
+                    value={approvalReason}
+                    onChange={(e) => setApprovalReason(e.target.value)}
+                    className={formClass}
+                    placeholder="e.g. On leave until 14 Aug, shipment cannot wait"
+                  />
+                </div>
+              ) : (
+                // Said plainly rather than shown as a disabled box. Being asked to justify
+                // something you were never allowed to do is worse than being told it is not yours.
+                <div className="rounded-lg border border-alert-200 bg-alert-50 p-3 text-xs text-alert-700">
+                  This payment is routed to {approving.payment.approval?.intendedApprover}. Only Management can approve
+                  in someone else's place — ask them to sign it, or have it re-routed to you.
+                </div>
+              ))}
 
             {approving.mode === "decline" && (
               <div>

@@ -26,6 +26,11 @@ export const PERSIST_KEYS = {
   shipments: "shipments",
   /** How often each specification code has been picked, so the picker can lead with the usual ones. */
   specUsage: "specUsage",
+  /** Files attached to sales orders. */
+  orderDocuments: "orderDocuments",
+  users: "users",
+  /** The signed-in user's id. Identity only — there is no credential behind it. */
+  session: "session",
 } as const;
 
 export type PersistKey = (typeof PERSIST_KEYS)[keyof typeof PERSIST_KEYS];

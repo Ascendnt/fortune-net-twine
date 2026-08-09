@@ -24,6 +24,37 @@ export interface SpecMasterRow {
   weightPerPc: number;
 }
 
+/** The fields that make one specification the same net as another. The code is deliberately not one. */
+type SpecShape = Pick<SpecMasterRow, "material" | "netType" | "twine" | "meshSize" | "meshDepth" | "length"> & {
+  weightPerPc: number;
+};
+
+const norm = (v: string) => v.trim().toUpperCase().replace(/\s+/g, " ");
+
+/**
+ * Finds an existing specification identical to the one being described.
+ *
+ * A specification IS its measurements. Someone copying an existing item to change the length has
+ * made a new net and needs a new code; someone who opens the copy form, changes nothing and saves
+ * has simply re-described a net already on file. Creating a second code for it means two codes for
+ * one product, and two sets of quotations that no longer reconcile against each other.
+ *
+ * Weight is compared to two decimals, matching how it is entered and displayed. Everything else is
+ * compared with case and spacing normalised, since `50FL` and `50fl ` are the same length.
+ */
+export function findEquivalentSpec(rows: SpecMasterRow[], candidate: SpecShape): SpecMasterRow | undefined {
+  return rows.find(
+    (r) =>
+      norm(r.material) === norm(candidate.material) &&
+      norm(r.netType) === norm(candidate.netType) &&
+      norm(r.twine) === norm(candidate.twine) &&
+      norm(r.meshSize) === norm(candidate.meshSize) &&
+      norm(r.meshDepth) === norm(candidate.meshDepth) &&
+      norm(r.length) === norm(candidate.length) &&
+      Math.round(r.weightPerPc * 100) === Math.round(candidate.weightPerPc * 100)
+  );
+}
+
 /** The line label shown under a specification row, e.g. `NO.120(210/22x16) 3-1/2"STR 122MD x 50FL`. */
 export function specRowLabel(row: SpecMasterRow): string {
   const dims = [row.meshSize, row.meshDepth].filter((v) => v && v !== "—").join(" ");

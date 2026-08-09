@@ -3,6 +3,7 @@ import { Plus, Pencil } from "lucide-react";
 import { DataTableModal } from "@/components/ui/DataTableModal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
+import { findEquivalentSpec } from "@/lib/specMaster";
 import type { SpecMasterRow } from "@/lib/specMaster";
 
 // Item Specification picker (doc §3.4). Multi-select, searchable, paginated, and pre-filtered to
@@ -28,7 +29,7 @@ export function SpecificationPickerModal({
   singleSelect?: boolean;
   onConfirm: (rows: SpecMasterRow[]) => void;
 }) {
-  const { specMaster, addSpecMasterRow, recordSpecUsage, specUsage, pushToast } = useStore();
+  const { specMaster, addSpecMasterRow, recordSpecUsage, pushToast } = useStore();
   const [selected, setSelected] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState({ code: "", twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
@@ -45,19 +46,18 @@ export function SpecificationPickerModal({
   }, [open]);
 
   /**
-   * Filtered to the parent item, then ordered by how often each code has actually been picked.
+   * Filtered to the parent item, listed by code.
    *
-   * Sorting by code put whatever happens to start with a low number at the top, which is unrelated
-   * to what this office quotes. A handful of specifications make up most of the work; those should
-   * be the ones on the first page. Codes never used yet fall back to alphabetical, so the list is
-   * still predictable rather than arbitrary.
+   * Deliberately a stable, predictable order. The list is something you scan and search; the order
+   * things end up on the quotation is decided by the order you tick them, which is handled in
+   * `confirm` below.
    */
   const rows = useMemo(
     () =>
       specMaster
         .filter((r) => r.material === material && r.netType === netType)
-        .sort((a, b) => (specUsage[b.code] ?? 0) - (specUsage[a.code] ?? 0) || a.code.localeCompare(b.code)),
-    [specMaster, material, netType, specUsage]
+        .sort((a, b) => a.code.localeCompare(b.code)),
+    [specMaster, material, netType]
   );
 
   function toggle(code: string) {
@@ -69,11 +69,18 @@ export function SpecificationPickerModal({
   }
 
   function confirm() {
-    const picked = rows.filter((r) => selected.includes(r.code));
-    // Counted before emitting, so the next quotation opens with these nearer the top.
+    /**
+     * Emitted in the order they were ticked, not the order the table happens to list them.
+     *
+     * `selected` is appended to on each click, so it already holds the click sequence. Tick 1599,
+     * then 1501, then 1535 and they land on the quotation in exactly that order. The person picking
+     * is building the document as they go, and having the rows re-sorted underneath them means
+     * dragging them back into place afterwards.
+     */
+    const picked = selected
+      .map((code) => rows.find((r) => r.code === code))
+      .filter((r): r is SpecMasterRow => Boolean(r));
     recordSpecUsage(picked.map((r) => r.code));
-    // Emitted in the order the list shows them, so the rows land predictably rather than in
-    // whatever order they happened to be clicked.
     onConfirm(picked);
   }
 
@@ -100,8 +107,46 @@ export function SpecificationPickerModal({
 
   function saveNewSpec() {
     const weight = Number(draft.weightPerPc);
-    if (!draft.code.trim() || !draft.twine.trim() || !Number.isFinite(weight) || weight <= 0) {
-      pushToast({ tone: "warning", title: "Code, twine and a positive weight/pc are required" });
+    if (!draft.twine.trim() || !Number.isFinite(weight) || weight <= 0) {
+      pushToast({ tone: "warning", title: "Twine and a positive weight/pc are required" });
+      return;
+    }
+
+    /**
+     * Nothing changed, so nothing is created.
+     *
+     * Copying an item and saving it untouched means the net already exists on file. Minting a
+     * second code for it would leave two codes describing one product, and quotations that no
+     * longer reconcile against each other. The existing code is simply selected instead.
+     */
+    const twin = findEquivalentSpec(specMaster, {
+      material,
+      netType,
+      twine: draft.twine.trim(),
+      meshSize: draft.meshSize.trim() || "—",
+      meshDepth: draft.meshDepth.trim() || "—",
+      length: draft.length.trim() || "—",
+      weightPerPc: weight,
+    });
+    if (twin) {
+      setSelected((prev) => (prev.includes(twin.code) ? prev : [...prev, twin.code]));
+      setCreating(false);
+      setCopiedFrom(null);
+      setDraft({ code: "", twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
+      pushToast({
+        tone: "info",
+        title: `${twin.code} already covers this`,
+        description: "Nothing was changed, so the existing item has been ticked instead of a duplicate created.",
+      });
+      return;
+    }
+
+    if (!draft.code.trim()) {
+      pushToast({
+        tone: "warning",
+        title: "Give the new item a code",
+        description: "It differs from everything on file, so it needs a code of its own.",
+      });
       return;
     }
     if (specMaster.some((r) => r.code.toLowerCase() === draft.code.trim().toLowerCase())) {
@@ -147,7 +192,26 @@ export function SpecificationPickerModal({
         { key: "length", label: "lengths", value: (r) => r.length },
       ]}
       columns={[
-        { key: "code", header: "Code", render: (r) => <span className="font-mono text-pine-800">{r.code}</span>, width: "w-24" },
+        {
+          key: "code",
+          header: "Code",
+          width: "w-28",
+          render: (r) => {
+            // The pick number, shown as you go. Without it the order is invisible until the rows
+            // land on the quotation, which is too late to notice you ticked two the wrong way round.
+            const pickedAt = selected.indexOf(r.code);
+            return (
+              <span className="flex items-center gap-1.5">
+                {pickedAt >= 0 && !singleSelect && (
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-manifest-600 text-[9px] font-bold text-white">
+                    {pickedAt + 1}
+                  </span>
+                )}
+                <span className="font-mono text-pine-800">{r.code}</span>
+              </span>
+            );
+          },
+        },
         // Description was dropped. The list is already filtered to one material and net type, so
         // every row carried the same sentence and the column bought nothing but width.
         { key: "twine", header: "Twine", render: (r) => <span className="font-mono">{r.twine}</span> },
@@ -198,7 +262,8 @@ export function SpecificationPickerModal({
           {copiedFrom && (
             <p className="mb-2 text-[11px] leading-snug text-manifest-800">
               Copied from <span className="font-mono font-semibold">{copiedFrom}</span>. Change what differs and give it
-              a new code. {copiedFrom} itself is not altered.
+              a new code. {copiedFrom} itself is not altered, and if you change nothing it will simply be reused rather
+              than duplicated.
             </p>
           )}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">

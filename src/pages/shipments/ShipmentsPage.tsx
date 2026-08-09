@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Ship, Plus, Anchor } from "lucide-react";
+import { Ship, Plus, Anchor, Search } from "lucide-react";
+import { HowToUse } from "@/components/ui/HowToUse";
 import clsx from "clsx";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -18,6 +19,16 @@ const input =
   "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
 const label = "mb-1 block text-xs font-medium text-paper-600";
 
+type ShipmentFilter = "all" | "booked" | "departed" | "unpaid" | "paid";
+
+const FILTERS: { id: ShipmentFilter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "booked", label: "Booked" },
+  { id: "departed", label: "Sailed" },
+  { id: "unpaid", label: "Unpaid" },
+  { id: "paid", label: "Paid in full" },
+];
+
 const STATUS_TONE: Record<ShipmentStatus, string> = {
   booked: "bg-manifest-100 text-manifest-800",
   loaded: "bg-amber-100 text-amber-800",
@@ -26,6 +37,8 @@ const STATUS_TONE: Record<ShipmentStatus, string> = {
 };
 
 export function ShipmentsPage() {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<ShipmentFilter>("all");
   const {
     shipments,
     salesOrders,
@@ -85,13 +98,41 @@ export function ShipmentsPage() {
     .filter((s) => s.status !== "arrived")
     .reduce((sum, s) => sum + outstandingOn(s.salesOrderId), 0);
 
+  /** Containers already gone, or booked to go, with money still owed against them. */
+  const unpaidShipped = shipments.filter((s) => outstandingOn(s.salesOrderId) > 0);
+
+  const visible = shipments.filter((s) => {
+    if (filter === "unpaid" && outstandingOn(s.salesOrderId) <= 0) return false;
+    if (filter === "paid" && outstandingOn(s.salesOrderId) > 0) return false;
+    if (filter === "booked" && s.status !== "booked") return false;
+    if (filter === "departed" && s.status !== "departed" && s.status !== "arrived") return false;
+    if (query) {
+      const haystack =
+        `${s.id} ${s.salesOrderId} ${customerName(s.salesOrderId)} ${s.vessel} ${s.billOfLadingNo}`.toLowerCase();
+      if (!haystack.includes(query.toLowerCase())) return false;
+    }
+    return true;
+  });
+
   return (
     <div>
       <PageHeader
         breadcrumb={["Fortune Net & Twine ERP", "Operations"]}
         eyebrow="Export Logistics"
         title="Shipments"
-        description="Container booking, bill of lading and departure. Released orders only."
+        description="Container booking, bill of lading and departure, and what is still owed on goods already gone."
+      />
+
+      <HowToUse
+        id="shipments-v2"
+        steps={[
+          "An order appears under Released and awaiting booking once its inspection has passed. Press Book shipment.",
+          "Fill in the vessel, container, bill of lading and ports. ETD and ETA can be set now or once the line confirms them.",
+          "Press Mark departed when the container sails. That stamps the B/L and container onto the commercial invoice.",
+          "Watch the Outstanding column. Shipping is not blocked on payment, so a container can sail against a balance — but somebody has to be chasing it.",
+          "Use the Unpaid filter to see, in one place, every shipment that has left with money still owed.",
+        ]}
+        note="Gross weight comes from the closed packing lists on the order, so it is what was actually packed rather than what was quoted."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -99,10 +140,81 @@ export function ShipmentsPage() {
         <StatCard label="In transit" value={String(stats.inTransit)} tone="pine" />
         <StatCard label="Gross weight shipped" value={`${stats.gross.toFixed(2)} KG`} />
         <StatCard
-          label="Outstanding on shipments"
+          label="Shipped but unpaid"
           value={formatMoney(totalOutstanding)}
           tone={totalOutstanding > 0 ? "alert" : "pine"}
         />
+      </div>
+
+      {/* The monitoring half of this screen. Goods leave before the money always arrives, and the
+          sales team needs one place that says which containers are out with a balance against
+          them, rather than reconstructing it from statements weeks later. */}
+      {unpaidShipped.length > 0 && (
+        <Card className="mb-4 border-alert-200 bg-alert-50/40">
+          <CardHeader
+            title="Shipped with a balance outstanding"
+            eyebrow="For the sales team to chase"
+            subtitle="These containers have sailed. The amounts beside them are still owed."
+          />
+          <div className="space-y-2">
+            {unpaidShipped.map((s) => (
+              <div
+                key={s.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <Link
+                    to={`/orders/${s.salesOrderId}`}
+                    className="font-mono font-semibold text-manifest-600 hover:underline"
+                  >
+                    {s.salesOrderId}
+                  </Link>
+                  <span className="ml-2 text-paper-700">{customerName(s.salesOrderId)}</span>
+                  <p className="text-[11px] text-paper-400">
+                    {s.id} · {s.status} · {s.etd ? `sailed ${formatDate(s.etd)}` : "not yet sailed"} ·{" "}
+                    {s.grossWeightKg.toFixed(2)} KG
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono font-semibold text-alert-700">
+                    {formatMoney(outstandingOn(s.salesOrderId), currencyOf(s.salesOrderId))}
+                  </span>
+                  <Link to="/payments" className="font-medium text-manifest-600 hover:underline">
+                    Record payment
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-paper-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search shipment, order, customer, vessel or B/L…"
+            className="w-full rounded-lg border border-paper-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={clsx(
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                filter === f.id
+                  ? "border-pine-700 bg-pine-700 text-white"
+                  : "border-paper-200 bg-white text-paper-600 hover:bg-paper-50"
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {bookable.length > 0 && (
@@ -134,11 +246,19 @@ export function ShipmentsPage() {
         </Card>
       )}
 
-      {shipments.length === 0 ? (
-        <EmptyState icon={<Ship className="h-5 w-5" />} title="No shipments booked" />
+      {visible.length === 0 ? (
+        <EmptyState
+          icon={<Ship className="h-5 w-5" />}
+          title={shipments.length === 0 ? "No shipments booked" : "No shipments match your filters"}
+          description={
+            shipments.length === 0
+              ? "A shipment can be booked once an order has passed inspection."
+              : "Try a different search term or filter."
+          }
+        />
       ) : (
         <div className="space-y-4">
-          {shipments.map((s) => {
+          {visible.map((s) => {
             const list = packingLists.find((p) => p.salesOrderId === s.salesOrderId);
             const invoice = invoices.find((i) => i.salesOrderId === s.salesOrderId);
             const locked = s.status === "departed" || s.status === "arrived";

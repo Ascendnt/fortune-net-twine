@@ -3,10 +3,17 @@ import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { ToastStack } from "@/components/ui/Feedback";
+import { useStore } from "@/lib/store";
+import { SignIn } from "@/pages/SignIn";
 
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { signedInUser } = useStore();
+
+  // Nothing renders until somebody has said who they are. Every approval and activity entry names
+  // a person, so there is no sensible way to use the system anonymously.
+  if (!signedInUser) return <SignIn />;
 
   return (
     <div className="flex min-h-screen bg-paper-50">

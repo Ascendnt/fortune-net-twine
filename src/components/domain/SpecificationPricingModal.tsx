@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { Clock } from "lucide-react";
 import clsx from "clsx";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { computeLinePricing, formatRuleRate, lookupKeyForSpecRow } from "@/lib/pricing";
-import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
+import { NON_NEGATIVE } from "@/lib/num";
 import type { LinePricing, SpecLine } from "@/lib/types";
 
-// Specification Pricing (doc §3.5) and Price / Piece (§3.6), as two stages behind one modal.
+// Specification Pricing (doc §3.5).
+//
+// Price / Piece (§3.6) — the labour, wastage and sewing-twine side of the U/P — is parked. Those
+// costs genuinely belong in the price, but the rates and the way they combine are still being
+// settled with the factory, and a half-right cost is worse than none: it looks authoritative and
+// quietly moves every figure on the quotation. Until then the U/P is the new price per kilo times
+// the weight per piece, and anything needing more is typed in directly.
 //
 // Two deliberate departures from the build this replaces:
 //
@@ -37,7 +43,6 @@ export function SpecificationPricingModal({
   onApply: (pricing: LinePricing, manualUnitPrice?: number) => void;
 }) {
   const { pricingRules, lookupTables } = useStore();
-  const [stage, setStage] = useState<1 | 2>(1);
   const [draft, setDraft] = useState<LinePricing | null>(null);
   /**
    * The manual U/P override.
@@ -56,7 +61,6 @@ export function SpecificationPricingModal({
   useEffect(() => {
     if (open && line) {
       setDraft({ ...line.pricing, appliedRuleIds: [...line.pricing.appliedRuleIds] });
-      setStage(1);
       setManualMode(Boolean(line.manualUnitPrice));
       setManualPrice(line.manualUnitPrice ? String(line.unitPrice) : "");
       setManualKgMode(line.pricing.manualNewPriceKg !== undefined);
@@ -114,10 +118,6 @@ export function SpecificationPricingModal({
     );
   }
 
-  function patch(p: Partial<LinePricing>) {
-    setDraft((prev) => (prev ? { ...prev, ...p } : prev));
-  }
-
   function apply() {
     const typed = Number(manualPrice);
     // An empty or nonsensical box falls back to the calculation rather than writing a zero price
@@ -150,32 +150,21 @@ export function SpecificationPricingModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={stage === 1 ? "Specification Pricing" : "Price / Piece"}
+      title="Specification Pricing"
       subtitle={`${line.specCode} · ${line.description}`}
       width="max-w-3xl"
       footer={
         <>
-          {stage === 2 && (
-            <Button variant="ghost" size="sm" icon={<ArrowLeft className="h-3.5 w-3.5" />} onClick={() => setStage(1)}>
-              Back
-            </Button>
-          )}
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          {stage === 1 ? (
-            <Button variant="primary" size="sm" icon={<ArrowRight className="h-3.5 w-3.5" />} onClick={() => setStage(2)}>
-              Proceed to Price / Piece
-            </Button>
-          ) : (
-            <Button variant="primary" size="sm" onClick={apply}>
-              Apply Pricing
-            </Button>
-          )}
+          <Button variant="primary" size="sm" onClick={apply}>
+            Apply Pricing
+          </Button>
         </>
       }
     >
-      {stage === 1 ? (
+      {(
         <>
           <div className="mb-3 flex items-center justify-between rounded-lg bg-paper-50 px-3 py-2">
             <span className="text-xs text-paper-500">USD/WT</span>
@@ -305,32 +294,11 @@ export function SpecificationPricingModal({
               </div>
             )}
           </div>
-        </>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Field label="Labor hours">
-              <input {...NON_NEGATIVE} value={draft.laborHours} onChange={(e) => patch({ laborHours: toNonNegative(e.target.value) })} className={miniInput} />
-            </Field>
-            <Field label="Labor rate / hr">
-              <input {...NON_NEGATIVE} value={draft.laborRate} onChange={(e) => patch({ laborRate: toNonNegative(e.target.value) })} className={miniInput} />
-            </Field>
-            <Field label="Wastage (kg)">
-              <input {...NON_NEGATIVE} value={draft.wastageKg} onChange={(e) => patch({ wastageKg: toNonNegative(e.target.value) })} className={miniInput} />
-            </Field>
-            <Field label="Sewing twine (kg)">
-              <input {...NON_NEGATIVE} value={draft.twineKg} onChange={(e) => patch({ twineKg: toNonNegative(e.target.value) })} className={miniInput} />
-            </Field>
-            <Field label="Sewing rate / kg">
-              <input {...NON_NEGATIVE} value={draft.twineRate} onChange={(e) => patch({ twineRate: toNonNegative(e.target.value) })} className={miniInput} />
-            </Field>
-          </div>
-
-          <div className="mt-4 space-y-1.5 rounded-lg bg-paper-50 p-3 text-xs">
+          {/* What this line will actually carry. Previously this only appeared after clicking
+              through to a second step; with that step parked, the outcome belongs here where the
+              decision is made. */}
+          <div className="mt-3 space-y-1.5 rounded-lg bg-paper-50 p-3 text-xs">
             <Row label={`New price/kg × weight/pc (${line.weightPerPc.toFixed(2)})`} value={result.pricePerPiece} />
-            <Row label="Labor" value={result.laborCost} />
-            <Row label={`Wastage (${draft.wastageKg} kg × ${result.newPriceKg.toFixed(4)})`} value={result.wastageCost} />
-            <Row label="Sewing twine" value={result.twineCost} />
             <div className="flex items-center justify-between border-t border-paper-200 pt-1.5 text-sm font-semibold text-pine-800">
               <span>U/P (new price / piece)</span>
               <span className="font-mono">{result.unitPrice.toFixed(4)}</span>
@@ -394,6 +362,39 @@ export function SpecificationPricingModal({
                 </div>
               </div>
             )}
+          </div>
+
+          {/* The manufacturing side of the price is not switched off quietly. Labour, wastage and
+              sewing twine belong in the U/P, but the rates and the way they combine are still
+              being worked out with the factory, and a half-right cost would be worse than none:
+              it would look authoritative and quietly move every price on the quotation.
+              Shown, disabled, and labelled — so it reads as coming rather than missing. */}
+          <div className="mt-3 rounded-lg border border-dashed border-paper-300 bg-paper-50/60 p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5 text-paper-400" />
+              <span className="text-xs font-medium text-paper-600">Price / Piece — manufacturing costs</span>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                Coming soon
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 opacity-55 sm:grid-cols-5">
+              {[
+                { label: "Labor hours", value: draft.laborHours },
+                { label: "Labor rate / hr", value: draft.laborRate },
+                { label: "Wastage (kg)", value: draft.wastageKg },
+                { label: "Sewing twine (kg)", value: draft.twineKg },
+                { label: "Sewing rate / kg", value: draft.twineRate },
+              ].map((f) => (
+                <Field key={f.label} label={f.label}>
+                  <input value={f.value} readOnly tabIndex={-1} className={clsx(miniInput, "cursor-not-allowed")} />
+                </Field>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-paper-500">
+              Until the rates are agreed with the factory, the U/P is the new price per kilo times the weight per
+              piece. Use <span className="font-medium">Enter the U/P myself</span> above for anything that has to
+              include labour or wastage today.
+            </p>
           </div>
         </>
       )}
