@@ -3,7 +3,7 @@ import { Plus, Pencil } from "lucide-react";
 import { DataTableModal } from "@/components/ui/DataTableModal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
-import { findEquivalentSpec } from "@/lib/specMaster";
+import { findEquivalentSpec, nextSpecCode } from "@/lib/specMaster";
 import type { SpecMasterRow } from "@/lib/specMaster";
 
 // Item Specification picker (doc §3.4). Multi-select, searchable, paginated, and pre-filtered to
@@ -32,16 +32,18 @@ export function SpecificationPickerModal({
   const { specMaster, addSpecMasterRow, recordSpecUsage, pushToast } = useStore();
   const [selected, setSelected] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState({ code: "", twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
+  const [draft, setDraft] = useState({ twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
   /** Which existing item the draft was copied from, purely so the panel can say so. */
   const [copiedFrom, setCopiedFrom] = useState<string | null>(null);
+  /** The code this specification will be issued, shown before saving so it is never a surprise. */
+  const assignedCode = nextSpecCode(specMaster, material, netType);
 
   useEffect(() => {
     if (open) {
       setSelected([]);
       setCreating(false);
       setCopiedFrom(null);
-      setDraft({ code: "", twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
+      setDraft({ twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
     }
   }, [open]);
 
@@ -94,7 +96,6 @@ export function SpecificationPickerModal({
    */
   function startFrom(row: SpecMasterRow) {
     setDraft({
-      code: "",
       twine: row.twine,
       meshSize: row.meshSize === "—" ? "" : row.meshSize,
       meshDepth: row.meshDepth === "—" ? "" : row.meshDepth,
@@ -132,7 +133,7 @@ export function SpecificationPickerModal({
       setSelected((prev) => (prev.includes(twin.code) ? prev : [...prev, twin.code]));
       setCreating(false);
       setCopiedFrom(null);
-      setDraft({ code: "", twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
+      setDraft({ twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
       pushToast({
         tone: "info",
         title: `${twin.code} already covers this`,
@@ -141,20 +142,10 @@ export function SpecificationPickerModal({
       return;
     }
 
-    if (!draft.code.trim()) {
-      pushToast({
-        tone: "warning",
-        title: "Give the new item a code",
-        description: "It differs from everything on file, so it needs a code of its own.",
-      });
-      return;
-    }
-    if (specMaster.some((r) => r.code.toLowerCase() === draft.code.trim().toLowerCase())) {
-      pushToast({ tone: "warning", title: "That code already exists" });
-      return;
-    }
     const row: SpecMasterRow = {
-      code: draft.code.trim().toUpperCase(),
+      // Issued here, not taken from the form. Recomputed at save rather than reusing what was
+      // displayed, so two items created without closing the picker cannot land on one code.
+      code: nextSpecCode(specMaster, material, netType),
       description: `${material} ${netType}`.toUpperCase(),
       material,
       netType,
@@ -168,7 +159,7 @@ export function SpecificationPickerModal({
     setSelected((prev) => [...prev, row.code]);
     setCreating(false);
     setCopiedFrom(null);
-    setDraft({ code: "", twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
+    setDraft({ twine: "", meshSize: "", meshDepth: "", length: "", weightPerPc: "" });
     pushToast({ tone: "success", title: "Specification created", description: `${row.code} added to the master.` });
   }
 
@@ -192,17 +183,13 @@ export function SpecificationPickerModal({
         { key: "length", label: "lengths", value: (r) => r.length },
       ]}
       columns={[
-        // Neither Code nor Description is shown. Description was the same sentence on every row,
-        // since the list is already filtered to one material and net type. Code is an internal
-        // number: people pick a net by its measurements, and the code appears on the quotation the
-        // moment the row lands there. Both stay searchable, so typing "N-1598" still finds its row.
         {
-          key: "twine",
-          header: "Twine",
+          key: "code",
+          header: "Code",
+          width: "w-28",
           render: (r) => {
-            // The pick number moves here now there is no code cell to hold it. Without it the
-            // order is invisible until the rows reach the quotation, which is too late to notice
-            // two were ticked the wrong way round.
+            // The pick number, shown as you go. Without it the order is invisible until the rows
+            // land on the quotation, which is too late to notice two were ticked the wrong way round.
             const pickedAt = selected.indexOf(r.code);
             return (
               <span className="flex items-center gap-1.5">
@@ -211,11 +198,14 @@ export function SpecificationPickerModal({
                     {pickedAt + 1}
                   </span>
                 )}
-                <span className="font-mono">{r.twine}</span>
+                <span className="font-mono text-pine-800">{r.code}</span>
               </span>
             );
           },
         },
+        // Description was dropped. The list is already filtered to one material and net type, so
+        // every row carried the same sentence and the column bought nothing but width.
+        { key: "twine", header: "Twine", render: (r) => <span className="font-mono">{r.twine}</span> },
         { key: "meshSize", header: "Mesh Size", render: (r) => r.meshSize, width: "w-24" },
         { key: "meshDepth", header: "Mesh Depth", render: (r) => r.meshDepth, width: "w-24" },
         { key: "length", header: "Length", render: (r) => r.length, width: "w-32" },
@@ -262,20 +252,24 @@ export function SpecificationPickerModal({
           </p>
           {copiedFrom && (
             <p className="mb-2 text-[11px] leading-snug text-manifest-800">
-              Copied from <span className="font-mono font-semibold">{copiedFrom}</span>. Change what differs and give it
-              a new code. {copiedFrom} itself is not altered, and if you change nothing it will simply be reused rather
-              than duplicated.
+              Copied from <span className="font-mono font-semibold">{copiedFrom}</span>. Change whatever differs — the
+              code is issued for you. {copiedFrom} itself is not altered, and if you change nothing it will simply be
+              reused rather than duplicated.
             </p>
           )}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-            <input value={draft.code} onChange={(e) => setDraft({ ...draft, code: e.target.value })} placeholder="Code" className={miniInput} />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <input value={draft.twine} onChange={(e) => setDraft({ ...draft, twine: e.target.value })} placeholder="Twine" className={miniInput} />
             <input value={draft.meshSize} onChange={(e) => setDraft({ ...draft, meshSize: e.target.value })} placeholder="Mesh size" className={miniInput} />
             <input value={draft.meshDepth} onChange={(e) => setDraft({ ...draft, meshDepth: e.target.value })} placeholder="Mesh depth" className={miniInput} />
             <input value={draft.length} onChange={(e) => setDraft({ ...draft, length: e.target.value })} placeholder="Length" className={miniInput} />
             <input value={draft.weightPerPc} onChange={(e) => setDraft({ ...draft, weightPerPc: e.target.value })} placeholder="Weight/pc" type="number" min={0} step="0.01" className={miniInput} />
           </div>
-          <div className="mt-2 flex justify-end gap-2">
+          <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+            {/* The code is issued, not typed, so it is shown rather than asked for. Anyone about
+                to save can see what they are about to create. */}
+            <span className="mr-auto text-[11px] text-manifest-800">
+              Will be saved as <span className="font-mono font-semibold">{assignedCode}</span>
+            </span>
             <Button
               variant="ghost"
               size="sm"

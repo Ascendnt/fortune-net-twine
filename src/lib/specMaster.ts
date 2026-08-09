@@ -55,6 +55,38 @@ export function findEquivalentSpec(rows: SpecMasterRow[], candidate: SpecShape):
   );
 }
 
+/**
+ * The next code for a new specification.
+ *
+ * Codes are issued by the system, not typed. Letting people invent them produces duplicates, gaps
+ * and typos in the one field the whole quotation is keyed on, and a code is an identifier rather
+ * than a decision — there is nothing to think about, only something to get wrong.
+ *
+ * The series is inherited from the specifications already on file for the same material and net
+ * type, so a new nylon braided net joins the N-15xx run rather than starting a series of its own.
+ * With nothing to inherit from, the material's first letter seeds a fresh series.
+ */
+export function nextSpecCode(rows: SpecMasterRow[], material: string, netType: string): string {
+  const siblings = rows.filter(
+    (r) => norm(r.material) === norm(material) && norm(r.netType) === norm(netType)
+  );
+  const parsed = (siblings.length ? siblings : rows)
+    .map((r) => /^([A-Za-z]+)-(\d+)$/.exec(r.code))
+    .filter((m): m is RegExpExecArray => m !== null);
+
+  const prefix = parsed[0]?.[1]?.toUpperCase() ?? (material.trim()[0]?.toUpperCase() || "X");
+  // Only codes in this prefix's own series count, so an H-1642 sitting in the same list cannot
+  // push the nylon series into the 1700s.
+  const highest = parsed
+    .filter((m) => m[1].toUpperCase() === prefix)
+    .reduce((max, m) => Math.max(max, Number(m[2])), 0);
+
+  const next = highest + 1;
+  // Padded to the width already in use, so a series of four-digit codes stays four digits.
+  const width = String(highest).length >= 4 ? String(highest).length : 4;
+  return `${prefix}-${String(next).padStart(width, "0")}`;
+}
+
 /** The line label shown under a specification row, e.g. `NO.120(210/22x16) 3-1/2"STR 122MD x 50FL`. */
 export function specRowLabel(row: SpecMasterRow): string {
   const dims = [row.meshSize, row.meshDepth].filter((v) => v && v !== "—").join(" ");
