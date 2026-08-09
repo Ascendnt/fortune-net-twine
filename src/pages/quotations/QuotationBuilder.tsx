@@ -769,6 +769,10 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
         material={specTarget?.material ?? ""}
         netType={specTarget?.netType ?? ""}
         singleSelect={modal.kind === "spec" && Boolean(modal.replaceSpecId)}
+        // Codes already on this item are left out of the list. Offering something that is already
+        // on the quotation invites a duplicate row, and the row being replaced is no use as its
+        // own replacement either.
+        excludeCodes={specTarget?.specs.map((s) => s.specCode) ?? []}
         onConfirm={confirmSpecifications}
       />
 

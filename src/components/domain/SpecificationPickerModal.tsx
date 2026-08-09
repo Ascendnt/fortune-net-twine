@@ -19,6 +19,7 @@ export function SpecificationPickerModal({
   material,
   netType,
   singleSelect = false,
+  excludeCodes = [],
   onConfirm,
 }: {
   open: boolean;
@@ -27,6 +28,8 @@ export function SpecificationPickerModal({
   netType: string;
   /** Replace mode: picking a code swaps one existing row, so only one may be selected. */
   singleSelect?: boolean;
+  /** Codes already on the parent item, which are hidden rather than offered a second time. */
+  excludeCodes?: string[];
   onConfirm: (rows: SpecMasterRow[]) => void;
 }) {
   const { specMaster, addSpecMasterRow, recordSpecUsage, pushToast } = useStore();
@@ -54,13 +57,26 @@ export function SpecificationPickerModal({
    * things end up on the quotation is decided by the order you tick them, which is handled in
    * `confirm` below.
    */
-  const rows = useMemo(
+  const forThisItem = useMemo(
     () =>
       specMaster
         .filter((r) => r.material === material && r.netType === netType)
         .sort((a, b) => a.code.localeCompare(b.code)),
     [specMaster, material, netType]
   );
+
+  /**
+   * What is left to choose from.
+   *
+   * Codes already on the parent item are dropped: offering one again only invites a duplicate row
+   * on the quotation. How many were dropped is reported below the list, because a list that is
+   * quietly shorter than the catalog reads as missing data rather than as a filter doing its job.
+   */
+  const rows = useMemo(
+    () => forThisItem.filter((r) => !excludeCodes.includes(r.code)),
+    [forThisItem, excludeCodes]
+  );
+  const alreadyOnItem = forThisItem.length - rows.length;
 
   function toggle(code: string) {
     if (singleSelect) {
@@ -170,7 +186,10 @@ export function SpecificationPickerModal({
       title={singleSelect ? "Replace Item" : "Item Selection"}
       subtitle={
         material && netType
-          ? `${singleSelect ? "Pick the replacement. " : ""}Filtered to ${material} ${netType}`
+          ? `${singleSelect ? "Pick the replacement. " : ""}Filtered to ${material} ${netType}` +
+            (alreadyOnItem > 0
+              ? ` · ${alreadyOnItem} already on this quotation ${alreadyOnItem === 1 ? "is" : "are"} not shown`
+              : "")
           : undefined
       }
       rows={rows}
@@ -232,12 +251,19 @@ export function SpecificationPickerModal({
       ]}
       selectedKeys={selected}
       onToggle={toggle}
+      // While the create panel is open, clicking a row copies it into the form instead of ticking
+      // it. Building a new net almost always means "one of these, but longer", and retyping five
+      // fields to change one is both slow and where wrong numbers come from. The checkboxes still
+      // select, so nothing is taken away.
+      onRowClick={creating ? startFrom : undefined}
       onConfirm={confirm}
       confirmLabel={singleSelect ? "Replace Item" : "Add Item"}
       emptyMessage={
-        rows.length === 0
+        forThisItem.length === 0
           ? "No items on file for this material and net type. Create one below."
-          : "Nothing matches those filters."
+          : rows.length === 0
+            ? "Every item on file for this material and net type is already on this quotation. Create a new one to add something else."
+            : "Nothing matches those filters."
       }
       headerAction={
         <Button variant="secondary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setCreating((v) => !v)}>
@@ -247,9 +273,15 @@ export function SpecificationPickerModal({
     >
       {creating && (
         <div className="mb-3 rounded-lg border border-manifest-200 bg-manifest-50/50 p-3">
-          <p className="mb-2 text-[11px] font-semibold text-manifest-900">
+          <p className="mb-1 text-[11px] font-semibold text-manifest-900">
             New specification for {material} {netType}
           </p>
+          {!copiedFrom && (
+            <p className="mb-2 text-[11px] leading-snug text-manifest-800">
+              Click any item in the list below to copy its details up here, then change what differs. Use the
+              checkboxes if you meant to select one instead.
+            </p>
+          )}
           {copiedFrom && (
             <p className="mb-2 text-[11px] leading-snug text-manifest-800">
               Copied from <span className="font-mono font-semibold">{copiedFrom}</span>. Change whatever differs — the

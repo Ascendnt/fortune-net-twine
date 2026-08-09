@@ -5,7 +5,6 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { computeLinePricing, formatRuleRate, lookupKeyForSpecRow } from "@/lib/pricing";
-import { NON_NEGATIVE } from "@/lib/num";
 import type { LinePricing, SpecLine } from "@/lib/types";
 
 // Specification Pricing (doc §3.5).
@@ -51,6 +50,16 @@ export function SpecificationPricingModal({
    * work out what the number should be, not to dictate what was actually agreed. The override lets
    * the salesperson land on the figure the customer was quoted while keeping the workings visible
    * beside it, so the gap between the two is obvious rather than hidden.
+   */
+  /**
+   * Both manual price overrides are hidden from this screen for now.
+   *
+   * The state and the apply logic stay, deliberately. A line priced by hand before they were
+   * hidden still carries that price, and wiping it because the control that set it is no longer
+   * on screen would silently change money on a live quotation. They are read back in, carried
+   * through Apply untouched, and simply not offered again here.
+   *
+   * The typed U/P on the batch row is unaffected and remains the way to set a price directly.
    */
   const [manualMode, setManualMode] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
@@ -142,9 +151,6 @@ export function SpecificationPricingModal({
   }
 
   const additional = result.newPriceKg - line.givenPriceKg;
-  /** How far each typed price sits from what the calculation produced. */
-  const difference = (Number(manualPrice) || 0) - result.unitPrice;
-  const kgDifference = (Number(manualKgPrice) || 0) - result.calculatedNewPriceKg;
 
   return (
     <Modal
@@ -248,52 +254,6 @@ export function SpecificationPricingModal({
               rule about what it must be, so the new price / kg can simply be typed. The chain above
               stays on screen and is still recorded, which is what makes the gap between the agreed
               price and the calculated one visible instead of lost. */}
-          <div className="mt-3 rounded-lg border border-paper-200 p-3">
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                checked={manualKgMode}
-                onChange={(e) => {
-                  setManualKgMode(e.target.checked);
-                  if (e.target.checked && !manualKgPrice) setManualKgPrice(result.calculatedNewPriceKg.toFixed(4));
-                }}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-paper-300 text-manifest-600 focus:ring-manifest-400"
-              />
-              <span className="min-w-0">
-                <span className="block text-xs font-medium text-paper-700">Enter the new price / kg myself</span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-paper-400">
-                  For a price agreed with the customer rather than worked out from the adjustments above.
-                </span>
-              </span>
-            </label>
-
-            {manualKgMode && (
-              <div className="mt-2.5 flex flex-wrap items-end gap-4">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-paper-600">New price / kg</label>
-                  <input
-                    {...NON_NEGATIVE}
-                    step="0.0001"
-                    value={manualKgPrice}
-                    onChange={(e) => setManualKgPrice(e.target.value)}
-                    className={miniInput}
-                  />
-                </div>
-                <div className="text-[11px] leading-relaxed text-paper-500">
-                  <p>
-                    From the adjustments:{" "}
-                    <span className="font-mono">{result.calculatedNewPriceKg.toFixed(4)}</span>
-                  </p>
-                  {Number(manualKgPrice) > 0 && (
-                    <p className={kgDifference >= 0 ? "text-pine-700" : "text-alert-600"}>
-                      {kgDifference >= 0 ? "+" : ""}
-                      {kgDifference.toFixed(4)} against the calculation
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
           {/* What this line will actually carry. Previously this only appeared after clicking
               through to a second step; with that step parked, the outcome belongs here where the
               decision is made. */}
@@ -307,61 +267,6 @@ export function SpecificationPricingModal({
               <span>Amount at qty {line.qtyPcs}</span>
               <span className="font-mono">{result.totalPrice.toFixed(2)}</span>
             </div>
-          </div>
-
-          <div className="mt-3 rounded-lg border border-paper-200 p-3">
-            <label className="flex cursor-pointer items-start gap-2">
-              <input
-                type="checkbox"
-                checked={manualMode}
-                onChange={(e) => {
-                  setManualMode(e.target.checked);
-                  // Seeded from the calculation, so the common case is a small nudge rather than
-                  // typing a price from nothing.
-                  if (e.target.checked && !manualPrice) setManualPrice(result.unitPrice.toFixed(4));
-                }}
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-paper-300 text-manifest-600 focus:ring-manifest-400"
-              />
-              <span className="min-w-0">
-                <span className="block text-xs font-medium text-paper-700">Enter the U/P myself</span>
-                <span className="mt-0.5 block text-[11px] leading-snug text-paper-400">
-                  Use this when the price was agreed with the customer rather than calculated. The workings above stay
-                  on the record so the difference is visible.
-                </span>
-              </span>
-            </label>
-
-            {manualMode && (
-              <div className="mt-2.5 flex flex-wrap items-center gap-3">
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium text-paper-600">U/P to use</label>
-                  <input
-                    {...NON_NEGATIVE}
-                    step="0.0001"
-                    value={manualPrice}
-                    onChange={(e) => setManualPrice(e.target.value)}
-                    className={miniInput}
-                  />
-                </div>
-                <div className="text-[11px] text-paper-500">
-                  <p>
-                    Calculated: <span className="font-mono">{result.unitPrice.toFixed(4)}</span>
-                  </p>
-                  <p>
-                    Amount at qty {line.qtyPcs}:{" "}
-                    <span className="font-mono font-semibold text-pine-800">
-                      {((Number(manualPrice) || 0) * line.qtyPcs).toFixed(2)}
-                    </span>
-                  </p>
-                  {Number(manualPrice) > 0 && (
-                    <p className={difference >= 0 ? "text-pine-700" : "text-alert-600"}>
-                      {difference >= 0 ? "+" : ""}
-                      {difference.toFixed(4)} against the calculation
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* The manufacturing side of the price is not switched off quietly. Labour, wastage and

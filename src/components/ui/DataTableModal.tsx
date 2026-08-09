@@ -36,6 +36,7 @@ export function DataTableModal<T>({
   pageSize = 8,
   selectedKeys,
   onToggle,
+  onRowClick,
   onConfirm,
   confirmLabel = "Confirm",
   headerAction,
@@ -55,6 +56,13 @@ export function DataTableModal<T>({
   pageSize?: number;
   selectedKeys: string[];
   onToggle: (key: string) => void;
+  /**
+   * Takes over what clicking a row does, leaving the checkbox to carry on selecting.
+   *
+   * Used when the modal is in a mode where picking a row means something other than choosing it —
+   * copying it into a form, for instance.
+   */
+  onRowClick?: (row: T) => void;
   onConfirm: () => void;
   confirmLabel?: string;
   headerAction?: React.ReactNode;
@@ -191,10 +199,13 @@ export function DataTableModal<T>({
               return (
                 <tr
                   key={key}
-                  onClick={() => onToggle(key)}
+                  // When a row click has been given another job, the checkbox keeps doing the
+                  // selecting — otherwise there would be no way to select at all while that other
+                  // mode is on.
+                  onClick={() => (onRowClick ? onRowClick(row) : onToggle(key))}
                   className={clsx(
                     "cursor-pointer border-b border-paper-100 last:border-0",
-                    checked ? "bg-manifest-50" : "hover:bg-paper-50"
+                    checked ? "bg-manifest-50" : onRowClick ? "hover:bg-manifest-50/60" : "hover:bg-paper-50"
                   )}
                 >
                   <td className="py-1.5 pl-3">
