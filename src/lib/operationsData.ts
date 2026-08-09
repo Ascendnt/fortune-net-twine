@@ -57,26 +57,42 @@ export const PACKING_LISTS: PackingList[] = [
   {
     id: "PL-5050",
     salesOrderId: "SO-1050",
+    customerId: "CUST-006",
     createdDate: "2026-07-20",
     packedBy: "Ronaldo Cruz",
+    scope: "full",
     finalizedDate: "2026-07-21",
     remarks: "Marked for Long Beach. Four bales strapped in pairs.",
-    cartons: [
-      { id: "c1", markNo: "WCM/1", itemCode: "NET-96-210-20-350", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0, status: "packed" },
-      { id: "c2", markNo: "WCM/2", itemCode: "NET-96-210-20-350", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0, status: "packed" },
-      { id: "c3", markNo: "WCM/3", itemCode: "NET-96-210-20-350", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0, status: "packed" },
-      { id: "c4", markNo: "WCM/4", itemCode: "NET-96-210-20-350", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0, status: "packed" },
+    sections: [
+      {
+        id: "PL-5050-S1",
+        title: "Bales 1–4 · strapped in pairs",
+        lines: [
+          { id: "l1", itemCode: "NET-96-210-20-350", description: "WCM/1", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0 },
+          { id: "l2", itemCode: "NET-96-210-20-350", description: "WCM/2", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0 },
+          { id: "l3", itemCode: "NET-96-210-20-350", description: "WCM/3", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0 },
+          { id: "l4", itemCode: "NET-96-210-20-350", description: "WCM/4", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 468.0 },
+        ],
+      },
     ],
   },
   {
     id: "PL-5044",
     salesOrderId: "SO-1044",
+    customerId: "CUST-003",
     createdDate: "2026-07-15",
     packedBy: "Ronaldo Cruz",
+    scope: "full",
     finalizedDate: "2026-07-16",
-    cartons: [
-      { id: "c1", markNo: "PTS/1", itemCode: "NET-120-210-22-350", qtyPcs: 3, netWeightKg: 724.5, grossWeightKg: 741.0, status: "shipped" },
-      { id: "c2", markNo: "PTS/2", itemCode: "NET-120-210-22-350", qtyPcs: 3, netWeightKg: 724.5, grossWeightKg: 741.0, status: "shipped" },
+    sections: [
+      {
+        id: "PL-5044-S1",
+        title: "Bales 1–2",
+        lines: [
+          { id: "l1", itemCode: "NET-120-210-22-350", description: "PTS/1", qtyPcs: 3, netWeightKg: 724.5, grossWeightKg: 741.0 },
+          { id: "l2", itemCode: "NET-120-210-22-350", description: "PTS/2", qtyPcs: 3, netWeightKg: 724.5, grossWeightKg: 741.0 },
+        ],
+      },
     ],
   },
 ];

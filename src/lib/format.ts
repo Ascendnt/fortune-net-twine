@@ -37,6 +37,27 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * The proforma reference as it is shown on screen and printed on the document.
+ *
+ * The first issue of a quotation is not a revision of anything, so it prints bare. Once it has been
+ * revised the revision travels with the number, which is what the customer and the bank match on:
+ * PI-33007 first, then PI-33007-R1, PI-33007-R2 and so on.
+ */
+export function piRef(id: string, revisionNo: number): string {
+  return revisionNo > 0 ? `${id}-R${revisionNo}` : id;
+}
+
+/** How a revision reads in history and headers. Revision 0 is the first issue, not "Revision 0". */
+export function revisionLabel(revisionNo: number): string {
+  return revisionNo > 0 ? `Revision ${revisionNo}` : "Initial issue";
+}
+
+/** The short form used in badges and filter chips: "—" for the first issue, else "R2". */
+export function revisionTag(revisionNo: number): string {
+  return revisionNo > 0 ? `R${revisionNo}` : "—";
+}
+
 export function initials(name: string): string {
   return name
     .split(" ")

@@ -59,6 +59,7 @@ export function recomputeSpecLine(line: SpecLine, rules: PricingRule[], lookupTa
       wastageKg: p.wastageKg,
       twineKg: p.twineKg,
       twineRate: p.twineRate,
+      manualNewPriceKg: p.manualNewPriceKg,
       lookupKeyForRule: lookupKeyForSpecRow({
         code: line.specCode,
         meshDepth: line.meshDepth,

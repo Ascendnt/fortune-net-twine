@@ -32,6 +32,12 @@ import type { LacingCatalogRow, SpecMasterRow } from "@/lib/specMaster";
 const CURRENCIES: Currency[] = ["USD", "KRW", "EUR"];
 const INCOTERMS = ["FOB", "CIF"];
 
+/**
+ * The two companies that share the sales office. Which one issues a given PI is a commercial
+ * decision made per quotation, so it is picked on the form rather than fixed per customer.
+ */
+const ISSUING_ENTITIES = ["FORTUNE NET & TWINE MFG. CORP.", "NETTEX MFG. AND EXPORT CORP."];
+
 /** Today, from the machine's clock, as an ISO date. */
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -55,11 +61,12 @@ function daysBetweenIso(from: string | undefined, to: string): number {
 const inputClass =
   "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="mb-1.5 block text-xs font-medium text-paper-600">{label}</label>
       {children}
+      {hint && <p className="mt-1 text-[11px] leading-snug text-paper-400">{hint}</p>}
     </div>
   );
 }
@@ -132,12 +139,19 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
     setDepositPercent(0);
     handleDateChange(TODAY);
     setRemarks("");
+    setHeaderRemarks("");
   }
   // Cover-letter fields the reference quotation header carries (doc §3.1). Shipment is a phrase,
   // not a date; the client master's standard wordings back the dropdown.
   const [shipmentTerms, setShipmentTerms] = useState(existing?.shipmentTerms ?? "");
   const [incoterms, setIncoterms] = useState(existing?.incoterms ?? "");
   const [remarks, setRemarks] = useState(existing?.remarks ?? "");
+  // The one-line note that prints with the header, under "Attn:". Separate from `remarks`, which is
+  // the block of notes at the foot of the document.
+  const [headerRemarks, setHeaderRemarks] = useState(existing?.headerRemarks ?? "");
+  const [issuingEntity, setIssuingEntity] = useState(
+    existing?.issuingEntity ?? customer?.letterhead ?? ISSUING_ENTITIES[0]
+  );
 
   const [batches, setBatches] = useState<QuotationBatch[]>(existing?.batches ?? []);
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
@@ -438,6 +452,8 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
       tax: 0,
       depositPercent,
       remarks,
+      headerRemarks,
+      issuingEntity,
     };
 
     if (existing) {
@@ -523,6 +539,19 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                   ))}
                 </select>
               </Field>
+              {/* Sits with the customer, above the commercial terms, because it decides whose
+                  letterhead the document prints on. That is a decision about which company is
+                  selling, not a term of the sale, and it belongs at the top with the parties. */}
+              <div className="sm:col-span-2">
+                <Field label="Issuing entity">
+                  <SearchableSelect
+                    value={issuingEntity}
+                    onChange={setIssuingEntity}
+                    placeholder="Select issuing entity…"
+                    options={ISSUING_ENTITIES.map((o) => ({ value: o, label: o }))}
+                  />
+                </Field>
+              </div>
               <Field label="Currency">
                 <select value={currency} onChange={(e) => setCurrency(e.target.value as Currency)} className={inputClass}>
                   {CURRENCIES.map((cur) => (
@@ -591,6 +620,14 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                   className={inputClass}
                 />
               </Field>
+              <Field label="Remarks">
+                <input
+                  value={headerRemarks}
+                  onChange={(e) => setHeaderRemarks(e.target.value)}
+                  placeholder="e.g. Supersedes PI-33006"
+                  className={inputClass}
+                />
+              </Field>
             </div>
           </Card>
 
@@ -648,7 +685,11 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
           </Card>
 
           <Card>
-            <CardHeader title="Remarks" eyebrow="Step 3" />
+            <CardHeader
+              title="Notes"
+              eyebrow="Step 3"
+              subtitle="Printed at the foot of the document. For the one-line note that belongs with the header, use Remarks in Step 1."
+            />
             <textarea
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
@@ -789,11 +830,18 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
         open={modal.kind === "pricing"}
         onClose={() => setModal({ kind: "none" })}
         line={pricingTarget}
-        onApply={(pricing) => {
+        onApply={(pricing, manualUnitPrice) => {
           if (modal.kind !== "pricing") return;
-          // Applying the helper hands control back to the calculation, so a previously typed U/P
-          // stops overriding it.
-          patchSpec(modal.batchId, modal.itemId, modal.specId, { pricing, manualUnitPrice: false });
+          // A typed U/P wins and is marked manual so nothing recalculates over it. Without one,
+          // control goes back to the calculation and any earlier override is dropped.
+          patchSpec(
+            modal.batchId,
+            modal.itemId,
+            modal.specId,
+            manualUnitPrice !== undefined
+              ? { pricing, unitPrice: manualUnitPrice, manualUnitPrice: true }
+              : { pricing, manualUnitPrice: false }
+          );
           setModal({ kind: "none" });
         }}
       />

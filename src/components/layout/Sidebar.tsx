@@ -6,7 +6,6 @@ import {
   FlaskConical,
   FileSpreadsheet,
   ClipboardList,
-  Factory,
   PackageCheck,
   Ship,
   ClipboardCheck,
@@ -53,9 +52,8 @@ const groups: NavGroup[] = [
   {
     label: "Operations",
     items: [
-      { to: "/production", label: "Production", icon: Factory },
-      { to: "/packing", label: "Packing", icon: PackageCheck },
-      { to: "/inspection", label: "Product Inspection", icon: ClipboardCheck },
+      { to: "/packing", label: "Packing List", icon: PackageCheck },
+      { to: "/inspection", label: "Inspection", icon: ClipboardCheck },
       { to: "/shipments", label: "Shipments", icon: Ship },
     ],
   },

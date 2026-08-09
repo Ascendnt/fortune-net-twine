@@ -1,5 +1,5 @@
 import type { Quotation, Customer } from "@/lib/types";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, piRef } from "@/lib/format";
 import { BATCH_LABEL, lacingAmount, lacingWeight } from "@/lib/batches";
 import { totalsForQuotation } from "@/lib/totals";
 import fntLogo from "@/assets/fnt-logo.png";
@@ -142,10 +142,15 @@ export function PIDocumentPreview({
   // The export client master shows PIs actually go out under one of two legal entities depending
   // on the account, not a single fixed name — falls back to the historical default when a customer
   // record has no letterhead set (e.g. seed customers predating this field).
-  const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
+  // Set on the quotation when the sales team has chosen an entity for this document; otherwise it
+  // falls back to whichever entity the customer is normally billed from.
+  const issuingEntity = q.issuingEntity ?? customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
   const attn = q.attentionContact || customer?.contactPerson;
   const { totalWeightKg, grandTotal } = totalsForQuotation(q);
   const rows = buildRows(q);
+  // Newest first, and only actual revisions. Revision 0 is the initial issue, which needs no
+  // explanation on a document that already carries its own number and date.
+  const revisionsToPrint = [...(q.revisions ?? [])].filter((r) => r.revisionNo > 0).reverse();
 
   return (
     <div className="overflow-x-auto">
@@ -177,8 +182,9 @@ export function PIDocumentPreview({
             </div>
             <div className="text-right">
               <p className="font-mono text-[11px] text-paper-400">PROFORMA INVOICE</p>
-              <p className="font-mono text-lg font-bold text-pine-800">{q.id}</p>
-              {/* The revision number is internal tracking; it is not printed on the customer's copy. */}
+              {/* The revision travels with the number so the customer and their bank are looking
+                  at the same document we are: PI-33007 first, PI-33007-R1 once it is revised. */}
+              <p className="font-mono text-lg font-bold text-pine-800">{piRef(q.id, q.revisionNo)}</p>
               <p className="mt-1 text-[11px] text-paper-500">{formatDate(q.issueDate)}</p>
             </div>
           </div>
@@ -189,6 +195,9 @@ export function PIDocumentPreview({
               <p className="text-[13px] font-semibold">{customer?.name ?? q.consignee}</p>
               <p className="text-[12px] text-paper-500">{customer?.address}</p>
               {attn && <p className="mt-1 text-[12px] text-paper-500">Attn: {attn}</p>}
+              {q.headerRemarks?.trim() && (
+                <p className="mt-1 text-[12px] italic text-paper-500">{q.headerRemarks.trim()}</p>
+              )}
             </div>
             <div className="space-y-1 text-[12px]">
               <Row label="Shipment" value={q.shipmentTerms?.trim() || formatDate(q.estimatedShipmentDate)} />
@@ -207,7 +216,7 @@ export function PIDocumentPreview({
               <tr className="bg-pine-700 text-left font-mono text-[10px] font-semibold uppercase tracking-wide text-white">
                 <th className="w-10 py-1.5 pl-2 text-center">Item No.</th>
                 <th className="py-1.5 px-2">Description</th>
-                <th className="w-14 py-1.5 px-2 text-right">UOM</th>
+                <th className="w-14 py-1.5 px-2 text-right">Weight</th>
                 <th className="w-12 py-1.5 px-2 text-right">Qty</th>
                 <th className="w-20 py-1.5 px-2 text-right">U/P</th>
                 <th className="w-24 py-1.5 px-2 text-right">Amount</th>
@@ -294,9 +303,30 @@ export function PIDocumentPreview({
           </table>
 
           {q.remarks && (
-            <div className="mt-4 break-inside-avoid rounded-md bg-paper-50 px-3 py-2 text-[11.5px] text-paper-600">
-              <span className="font-semibold text-paper-700">Remarks: </span>
+            <div className="mt-4 whitespace-pre-line break-inside-avoid rounded-md bg-paper-50 px-3 py-2 text-[11.5px] text-paper-600">
+              <span className="font-semibold text-paper-700">Notes: </span>
               {q.remarks}
+            </div>
+          )}
+
+          {/* The revision history is printed on the document, not kept to the screen. A customer
+              holding R3 needs to see what changed between R1 and R3 without asking, and so does
+              anyone matching this against a bank instruction months later. The initial issue is
+              left out: a single "Initial issue" line under a bare PI number says nothing. */}
+          {revisionsToPrint.length > 0 && (
+            <div className="mt-4 break-inside-avoid">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-wide text-paper-400">Revision history</p>
+              <table className="w-full border-collapse text-[10.5px]">
+                <tbody>
+                  {revisionsToPrint.map((r) => (
+                    <tr key={r.revisionNo} className="border-b border-paper-100 last:border-0 align-top">
+                      <td className="w-12 py-1 pr-2 font-mono font-semibold text-pine-800">R{r.revisionNo}</td>
+                      <td className="w-20 py-1 pr-2 font-mono text-paper-400">{formatDate(r.date)}</td>
+                      <td className="py-1 text-paper-600">{r.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 

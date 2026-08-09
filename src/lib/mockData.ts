@@ -724,7 +724,7 @@ export const SALES_ORDERS: SalesOrder[] = [
     orderValue: 34120.5,
     orderDate: "2026-07-02",
     requestedDeliveryDate: "2026-09-01",
-    currentStage: "production",
+    currentStage: "packing",
     priority: "high",
     assignedSalesperson: "Marcus Reyes",
     productionStatus: "in_production",
@@ -732,14 +732,14 @@ export const SALES_ORDERS: SalesOrder[] = [
     productionQtyCompleted: 14,
     productionQtyRejected: 1,
     plannedCompletionDate: "2026-08-10",
-    stages: buildStages("production", {
+    stages: buildStages("packing", {
       quotation: { status: "completed", completedDate: "2026-06-28" },
       customer_confirmation: { status: "completed", completedDate: "2026-07-01" },
       deposit: { status: "completed", completedDate: "2026-07-05" },
-      production: {
+      packing: {
         status: "in_progress",
-        responsibleRole: "Production",
-        pendingAction: "Continue scheduled run — 14 of 24 pcs complete",
+        responsibleRole: "Logistics",
+        pendingAction: "Raise the packing list — 14 of 24 pcs off the line so far",
       },
     }),
   },
@@ -753,7 +753,7 @@ export const SALES_ORDERS: SalesOrder[] = [
     orderValue: 25400,
     orderDate: "2026-07-15",
     requestedDeliveryDate: "2026-09-30",
-    currentStage: "production",
+    currentStage: "packing",
     priority: "urgent",
     assignedSalesperson: "Marcus Reyes",
     productionStatus: "on_hold",
@@ -762,14 +762,14 @@ export const SALES_ORDERS: SalesOrder[] = [
     productionQtyRejected: 0,
     plannedCompletionDate: "2026-08-05",
     delayReason: "Awaiting raw material restock for Hi-Ex 250D twine",
-    stages: buildStages("production", {
+    stages: buildStages("packing", {
       quotation: { status: "completed", completedDate: "2026-07-12" },
       customer_confirmation: { status: "completed", completedDate: "2026-07-14" },
       deposit: { status: "completed", completedDate: "2026-07-17" },
-      production: {
+      packing: {
         status: "blocked",
-        responsibleRole: "Production",
-        pendingAction: "Resume production once raw material restock is confirmed",
+        responsibleRole: "Logistics",
+        pendingAction: "Raise the packing list once the raw material restock is confirmed",
         blocker: "Delayed 2 days — raw material shortage on Hi-Ex 250D twine",
       },
     }),

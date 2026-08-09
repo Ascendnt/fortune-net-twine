@@ -34,6 +34,15 @@ export interface PricingLineInputs {
   wastageKg: number;
   twineKg: number;
   twineRate: number;
+  /**
+   * A new price per kg typed by the user instead of arrived at through the rules.
+   *
+   * Prices are often settled in conversation, and the rule chain is there to work out what the
+   * number ought to be, not to dictate what was actually agreed. When this is set the chain is
+   * still walked and still shown, so the difference between the agreed figure and the calculated
+   * one stays visible, but the typed number is what the rest of the line is built from.
+   */
+  manualNewPriceKg?: number;
   /** Resolves a rule's lookup key for this specific line (e.g. mesh-depth bucket, item category). */
   lookupKeyForRule: (rule: PricingRule) => string;
 }
@@ -41,6 +50,8 @@ export interface PricingLineInputs {
 export interface PricingLineResult {
   chain: PricingChainStep[];
   newPriceKg: number;
+  /** What the rule chain alone produced, so a typed price can be shown against it. */
+  calculatedNewPriceKg: number;
   pricePerPiece: number;
   laborCost: number;
   wastageCost: number;
@@ -102,7 +113,13 @@ export function computeLinePricing(
   // U/P is always derived, never gated on the pricing modal having been opened. With no rules
   // applied the chain is a no-op and newPriceKg collapses to the Given Price — doc §5.1 row 1:
   // base 5.0000, no operation, Weight/PC 495 -> U/P 2,475.00.
-  const newPriceKg = p;
+  // A typed price wins over the chain. Zero and negative values are ignored rather than honoured,
+  // since an empty or half-typed box should not silently price a line at nothing.
+  const calculatedNewPriceKg = p;
+  const newPriceKg =
+    inputs.manualNewPriceKg !== undefined && Number.isFinite(inputs.manualNewPriceKg) && inputs.manualNewPriceKg > 0
+      ? inputs.manualNewPriceKg
+      : calculatedNewPriceKg;
   const pricePerPiece = newPriceKg * inputs.weightPerPc;
   const laborCost = inputs.laborHours * inputs.laborRate;
   const wastageCost = inputs.wastageKg * newPriceKg;
@@ -113,7 +130,18 @@ export function computeLinePricing(
   const totalPrice = unitPrice * inputs.qtyPcs;
   const weightKg = inputs.weightPerPc * inputs.qtyPcs;
 
-  return { chain, newPriceKg, pricePerPiece, laborCost, wastageCost, twineCost, unitPrice, totalPrice, weightKg };
+  return {
+    chain,
+    newPriceKg,
+    calculatedNewPriceKg,
+    pricePerPiece,
+    laborCost,
+    wastageCost,
+    twineCost,
+    unitPrice,
+    totalPrice,
+    weightKg,
+  };
 }
 
 /**

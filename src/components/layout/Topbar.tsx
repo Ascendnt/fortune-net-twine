@@ -1,25 +1,31 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Bell, Plus, ChevronDown, Check, Menu } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { ROLES } from "@/lib/mockData";
 import { initials } from "@/lib/format";
+import { buildNotifications } from "@/lib/notifications";
 import type { Role } from "@/lib/types";
 import clsx from "clsx";
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
-  const { role, setRole, currentUser, pushToast } = useStore();
+  const { role, setRole, currentUser, pushToast, quotations, salesOrders, payments, inspections } = useStore();
   const [roleOpen, setRoleOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const navigate = useNavigate();
 
   const activeRole = ROLES.find((r) => r.id === role)!;
 
-  const notifications = [
-    { title: "Remaining balance overdue on SO-1048", tone: "Finance", time: "2h ago" },
-    { title: "Deposit remittance submitted for SO-1046", tone: "Finance", time: "5h ago" },
-    { title: "PI-33011 awaiting your approval", tone: "Sales", time: "1d ago" },
-  ];
+  // Derived from live state, not a fixed list. An item disappears the moment the thing it is
+  // chasing is dealt with, which is the only way a feed like this stays worth reading.
+  const notifications = useMemo(
+    () =>
+      buildNotifications(
+        { quotations, salesOrders, payments, inspections },
+        new Date().toISOString().slice(0, 10)
+      ),
+    [quotations, salesOrders, payments, inspections]
+  );
 
   return (
     <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-paper-200 bg-white/90 px-3 backdrop-blur sm:gap-3 sm:px-5">
@@ -53,25 +59,57 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           <button
             onClick={() => setNotifOpen((v) => !v)}
             className="relative flex h-9 w-9 items-center justify-center rounded-lg text-paper-500 hover:bg-paper-100"
+            aria-label={
+              notifications.length === 0
+                ? "Notifications, nothing needs attention"
+                : `Notifications, ${notifications.length} needing attention`
+            }
           >
             <Bell className="h-[18px] w-[18px]" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-vermillion-500 ring-2 ring-white" />
+            {/* The dot only appears when there is genuinely something to look at. A permanent
+                badge teaches people that the bell means nothing. */}
+            {notifications.length > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-vermillion-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">
+                {notifications.length > 9 ? "9+" : notifications.length}
+              </span>
+            )}
           </button>
           {notifOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-              <div className="absolute right-0 z-50 mt-2 w-[calc(100vw-1.5rem)] max-w-80 rounded-xl border border-paper-200 bg-white p-2 shadow-[var(--shadow-pop)]">
+              <div className="absolute right-0 z-50 mt-2 max-h-[70vh] w-[calc(100vw-1.5rem)] max-w-80 overflow-y-auto rounded-xl border border-paper-200 bg-white p-2 shadow-[var(--shadow-pop)]">
                 <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-paper-400">
-                  Notifications
+                  Needs attention
                 </p>
-                {notifications.map((n, i) => (
-                  <div key={i} className="rounded-lg px-2 py-2 hover:bg-paper-50">
-                    <p className="text-sm font-medium text-paper-800">{n.title}</p>
-                    <p className="mt-0.5 text-xs text-paper-400">
-                      {n.tone} · {n.time}
-                    </p>
-                  </div>
-                ))}
+                {notifications.length === 0 ? (
+                  <p className="px-2 py-4 text-center text-sm text-paper-400">
+                    Nothing is waiting on you right now.
+                  </p>
+                ) : (
+                  notifications.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        setNotifOpen(false);
+                        navigate(n.href);
+                      }}
+                      className="flex w-full gap-2 rounded-lg px-2 py-2 text-left hover:bg-paper-50"
+                    >
+                      <span
+                        className={clsx(
+                          "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                          n.tone === "alert" && "bg-vermillion-500",
+                          n.tone === "warning" && "bg-amber-500",
+                          n.tone === "info" && "bg-manifest-500"
+                        )}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium leading-snug text-paper-800">{n.title}</span>
+                        <span className="mt-0.5 block text-xs leading-snug text-paper-400">{n.detail}</span>
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </>
           )}

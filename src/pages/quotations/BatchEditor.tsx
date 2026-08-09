@@ -250,7 +250,19 @@ function SpecRow({
           {spec.description}
         </button>
       </td>
-      <td className="px-2 py-1.5 text-right font-mono text-[11px] text-paper-500">{spec.weightPerPc.toFixed(2)}</td>
+      <td className="px-2 py-1.5">
+        {/* Editable. The catalog weight is a standard, and a real panel comes off the machine a
+            little heavier or lighter; the quoted weight has to be the one being shipped, because
+            the freight and the total weight on the document both come off it. */}
+        <input
+          {...NON_NEGATIVE}
+          step="0.01"
+          value={spec.weightPerPc}
+          onChange={(e) => handlers.onPatchSpec(itemId, spec.id, { weightPerPc: toNonNegative(e.target.value) })}
+          className={clsx(miniInput, "text-right")}
+          title="Weight of one piece. Change it if the actual differs from the catalog standard."
+        />
+      </td>
       <td className="px-2 py-1.5">
         <input
           {...NON_NEGATIVE}
@@ -283,7 +295,11 @@ function SpecRow({
             title="Edit pricing"
           >
             <span className="block truncate font-mono text-[10px] text-manifest-900">
-              {summary.length > 0 ? summary.join(" · ") : "Manual costs only"}
+              {spec.pricing.manualNewPriceKg !== undefined
+                ? "Price entered manually"
+                : summary.length > 0
+                  ? summary.join(" · ")
+                  : "Manual costs only"}
             </span>
             <span className="block font-mono text-[10px] text-paper-500">
               → {spec.pricing.newPriceKg.toFixed(4)} /kg · edit

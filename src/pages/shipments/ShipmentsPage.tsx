@@ -7,7 +7,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import type { ShipmentStatus } from "@/lib/types";
 
 // Shipment closes the loop. Booking pulls the gross weight from what was actually packed, and
@@ -33,6 +33,7 @@ export function ShipmentsPage() {
     packingLists,
     inspections,
     invoices,
+    payments,
     createShipment,
     updateShipment,
     departShipment,
@@ -65,6 +66,25 @@ export function ShipmentsPage() {
     return customers.find((c) => c.id === so?.customerId)?.name ?? "—";
   };
 
+  /**
+   * What is still owed on an order, across every payment line raised against it.
+   *
+   * Shipping is not blocked on it. A container that misses its sailing costs more than the risk on
+   * a customer who has always paid, and that call belongs to the sales team, not to a rule in a
+   * form. What the system owes them is the number, in front of them, at the moment they book —
+   * rather than leaving it to be discovered on a statement weeks later.
+   */
+  const outstandingOn = (soId: string) =>
+    payments
+      .filter((p) => p.salesOrderId === soId && p.status !== "rejected")
+      .reduce((sum, p) => sum + Math.max(0, p.expectedAmount - p.amountReceived), 0);
+
+  const currencyOf = (soId: string) => salesOrders.find((s) => s.id === soId)?.currency ?? "USD";
+
+  const totalOutstanding = shipments
+    .filter((s) => s.status !== "arrived")
+    .reduce((sum, s) => sum + outstandingOn(s.salesOrderId), 0);
+
   return (
     <div>
       <PageHeader
@@ -74,10 +94,15 @@ export function ShipmentsPage() {
         description="Container booking, bill of lading and departure. Released orders only."
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-3">
+      <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Booked, not sailed" value={String(stats.booked)} tone="amber" />
         <StatCard label="In transit" value={String(stats.inTransit)} tone="pine" />
         <StatCard label="Gross weight shipped" value={`${stats.gross.toFixed(2)} KG`} />
+        <StatCard
+          label="Outstanding on shipments"
+          value={formatMoney(totalOutstanding)}
+          tone={totalOutstanding > 0 ? "alert" : "pine"}
+        />
       </div>
 
       {bookable.length > 0 && (
@@ -240,6 +265,19 @@ export function ShipmentsPage() {
                     Gross weight from packing:{" "}
                     <span className="font-mono font-semibold text-pine-800">{s.grossWeightKg.toFixed(2)} KG</span>
                   </span>
+                  {/* Stated, not enforced. The container can still sail; somebody just has to know
+                      what is still owed while it does. */}
+                  {outstandingOn(s.salesOrderId) > 0 ? (
+                    <span className="rounded-md bg-alert-50 px-2 py-1 text-alert-700">
+                      Outstanding:{" "}
+                      <span className="font-mono font-semibold">
+                        {formatMoney(outstandingOn(s.salesOrderId), currencyOf(s.salesOrderId))}
+                      </span>{" "}
+                      · sales to follow up
+                    </span>
+                  ) : (
+                    <span className="rounded-md bg-pine-50 px-2 py-1 text-pine-700">Paid in full</span>
+                  )}
                   {invoice && (
                     <Link to={`/invoices/${invoice.id}`} className="font-mono text-manifest-600 hover:underline">
                       {invoice.id}

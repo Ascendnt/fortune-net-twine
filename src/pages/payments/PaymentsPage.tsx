@@ -12,6 +12,15 @@ import { EmptyState } from "@/components/ui/Feedback";
 import { HowToUse } from "@/components/ui/HowToUse";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/format";
+import {
+  approvalStateOf,
+  approvalSummary,
+  canApprovePayments,
+  canVerifyPayment,
+  isOverride,
+  isPendingApproval,
+  validateApproval,
+} from "@/lib/paymentApproval";
 import type { PaymentRecord, PaymentStatus, PaymentType } from "@/lib/types";
 
 const formClass =
@@ -47,7 +56,11 @@ export function PaymentsPage() {
     addPayment,
     updatePayment,
     removePayment,
+    approvePayment,
+    declinePayment,
+    reopenPaymentApproval,
     role,
+    currentUser,
     pushToast,
     customers: CUSTOMERS,
   } = useStore();
@@ -55,6 +68,49 @@ export function PaymentsPage() {
   const [query, setQuery] = useState("");
   const [form, setForm] = useState<{ draft: PaymentDraft; id: string | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<PaymentRecord | null>(null);
+  /** Only pending lines, when switched on. Sits beside the status filters, not inside them. */
+  const [pendingOnly, setPendingOnly] = useState(false);
+  /** The approval dialog: which payment, and whether it is being approved or declined. */
+  const [approving, setApproving] = useState<{ payment: PaymentRecord; mode: "approve" | "decline" } | null>(null);
+  const [approverName, setApproverName] = useState("");
+  const [approvalReason, setApprovalReason] = useState("");
+
+  const canApprove = canApprovePayments(role);
+
+  function openApproval(payment: PaymentRecord, mode: "approve" | "decline") {
+    setApproving({ payment, mode });
+    // Defaults to whoever is signed in, but stays editable: someone approving on a colleague's
+    // behalf needs their own name on the record, not the account the browser happens to hold.
+    setApproverName(currentUser);
+    setApprovalReason("");
+  }
+
+  function submitApproval() {
+    if (!approving) return;
+    const { payment, mode } = approving;
+    if (mode === "decline") {
+      if (!approverName.trim()) {
+        pushToast({ tone: "warning", title: "Enter who is declining this payment." });
+        return;
+      }
+      declinePayment(payment.id, { actualApprover: approverName, reason: approvalReason });
+      pushToast({ tone: "info", title: "Payment declined", description: payment.id });
+      setApproving(null);
+      return;
+    }
+    const problem = validateApproval({
+      approval: payment.approval,
+      actualApprover: approverName,
+      overrideReason: approvalReason,
+    });
+    if (problem) {
+      pushToast({ tone: "warning", title: "Approval not recorded", description: problem });
+      return;
+    }
+    approvePayment(payment.id, { actualApprover: approverName, overrideReason: approvalReason });
+    pushToast({ tone: "success", title: "Payment approved", description: payment.id });
+    setApproving(null);
+  }
 
   function emptyDraft(): PaymentDraft {
     return {
@@ -93,21 +149,23 @@ export function PaymentsPage() {
         return { p, order, customer };
       })
       .filter(({ p, order, customer }) => {
+        void order;
         if (filter !== "all" && p.status !== filter) return false;
+        if (pendingOnly && !isPendingApproval(p)) return false;
         if (query) {
-          const haystack = `${p.salesOrderId} ${customer?.name ?? ""}`.toLowerCase();
+          const haystack = `${p.salesOrderId} ${customer?.name ?? ""} ${p.approval?.author ?? ""}`.toLowerCase();
           if (!haystack.includes(query.toLowerCase())) return false;
         }
         return true;
       });
-  }, [payments, salesOrders, filter, query]);
+  }, [payments, salesOrders, filter, pendingOnly, query, CUSTOMERS]);
 
   const totals = useMemo(() => {
     const expected = payments.reduce((s, p) => s + p.expectedAmount, 0);
     const received = payments.reduce((s, p) => s + p.amountReceived, 0);
     const overdue = payments.filter((p) => p.status === "overdue").reduce((s, p) => s + p.expectedAmount, 0);
-    const pendingVerification = payments.filter((p) => p.status === "submitted_for_verification").length;
-    return { expected, received, overdue, pendingVerification };
+    const pendingApproval = payments.filter(isPendingApproval).length;
+    return { expected, received, overdue, pendingApproval };
   }, [payments]);
 
   const canVerify = role === "finance" || role === "admin";
@@ -143,6 +201,11 @@ export function PaymentsPage() {
                     { header: "Due Date", value: ({ p }) => p.dueDate },
                     { header: "Date Received", value: ({ p }) => p.dateReceived },
                     { header: "Verified By", value: ({ p }) => p.verifiedBy },
+                    { header: "Approval", value: ({ p }) => approvalStateOf(p).replace(/_/g, " ") },
+                    { header: "Raised By", value: ({ p }) => p.approval?.author },
+                    { header: "Routed To", value: ({ p }) => p.approval?.intendedApprover },
+                    { header: "Approved By", value: ({ p }) => p.approval?.actualApprover },
+                    { header: "Override Reason", value: ({ p }) => p.approval?.overrideReason },
                     { header: "Remarks", value: ({ p }) => p.remarks },
                   ]
                 );
@@ -171,19 +234,21 @@ export function PaymentsPage() {
         id="payments"
         steps={[
           "Find the payment using the search box or the status buttons.",
-          "When money arrives, press Verify. The order it belongs to is then allowed to move forward.",
+          "Record Payment raises a new line. Whoever raises it is recorded, and it waits for approval before anything else can happen to it.",
+          "In the Approval column, press Approve. If the payment was routed to a colleague who is away, you can still approve it, and the system asks you why so both names are kept.",
+          "Once approved and the money has arrived, press Verify. The order it belongs to is then allowed to move forward.",
           "Wrong status? Use the dropdown beside Verify to set the correct one. Anything can be corrected, including undoing a verification.",
           "Use the pencil to change amounts, dates, bank reference or remarks. Use the bin to remove a payment recorded in error.",
           "Export CSV downloads whatever is currently on screen, including your filters, for Excel.",
         ]}
-        note="Only Finance and the System Administrator can verify or change a status. Everyone else can see payments but not alter them."
+        note="Anyone can raise a payment. Only Management, Finance and the System Administrator can approve one, and a payment must be approved before it can be verified."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Total expected" value={formatMoney(totals.expected)} />
         <StatCard label="Total received" value={formatMoney(totals.received)} tone="pine" />
         <StatCard label="Overdue balance" value={formatMoney(totals.overdue)} tone="alert" />
-        <StatCard label="Awaiting verification" value={String(totals.pendingVerification)} tone="amber" />
+        <StatCard label="Awaiting approval" value={String(totals.pendingApproval)} tone="amber" />
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -209,6 +274,17 @@ export function PaymentsPage() {
             </button>
           ))}
         </div>
+        <button
+          onClick={() => setPendingOnly((v) => !v)}
+          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+            pendingOnly
+              ? "border-amber-500 bg-amber-500 text-white"
+              : "border-paper-200 bg-white text-paper-600 hover:bg-paper-50"
+          }`}
+          title="Show only payments still waiting for an approver"
+        >
+          Awaiting approval ({totals.pendingApproval})
+        </button>
       </div>
 
       {rows.length === 0 ? (
@@ -223,6 +299,7 @@ export function PaymentsPage() {
             <TH>Expected</TH>
             <TH>Received</TH>
             <TH>Bank Ref.</TH>
+            <TH>Approval</TH>
             <TH>Status</TH>
             <TH>Action</TH>
             <TH> </TH>
@@ -240,6 +317,18 @@ export function PaymentsPage() {
                 <TD className="text-xs capitalize">{p.type}</TD>
                 <TD className="font-mono">{formatMoney(p.expectedAmount, order?.currency)}</TD>
                 <TD className="font-mono">{formatMoney(p.amountReceived, order?.currency)}</TD>
+                <TD>
+                  <ApprovalCell
+                    payment={p}
+                    canApprove={canApprove}
+                    onApprove={() => openApproval(p, "approve")}
+                    onDecline={() => openApproval(p, "decline")}
+                    onReopen={() => {
+                      reopenPaymentApproval(p.id);
+                      pushToast({ tone: "info", title: "Sent back for approval", description: p.id });
+                    }}
+                  />
+                </TD>
                 <TD className="font-mono text-xs">{p.bankRef ?? "—"}</TD>
                 <TD>
                   <Badge status={p.status} />
@@ -251,18 +340,29 @@ export function PaymentsPage() {
                       is restricted by role, not by which state the row happens to be in. */}
                   {canVerify ? (
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {p.status !== "verified" && (
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => {
-                            verifyPayment(p.id);
-                            pushToast({ tone: "success", title: "Payment verified", description: p.id });
-                          }}
-                        >
-                          Verify
-                        </Button>
-                      )}
+                      {p.status !== "verified" &&
+                        (canVerifyPayment(p) ? (
+                          <Button
+                            variant="success"
+                            size="sm"
+                            onClick={() => {
+                              verifyPayment(p.id);
+                              pushToast({ tone: "success", title: "Payment verified", description: p.id });
+                            }}
+                          >
+                            Verify
+                          </Button>
+                        ) : (
+                          // Not a dead end: the Approval column beside this one is where the line
+                          // gets unblocked, and this says so rather than showing a disabled button
+                          // with no explanation.
+                          <span
+                            className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700"
+                            title="A payment has to be approved before the money against it can be verified."
+                          >
+                            Approve first
+                          </span>
+                        ))}
                       <select
                         value={p.status}
                         onChange={(e) => {
@@ -368,6 +468,36 @@ export function PaymentsPage() {
                 <option value="balance">Balance</option>
                 <option value="adjustment">Adjustment</option>
               </select>
+            </div>
+            <div className="sm:col-span-2">
+              <label className={formLabel}>Route approval to</label>
+              {/* Optional on purpose. Naming someone routes it and makes an override visible when
+                  a different person signs. Leaving it blank means anyone in Management or Finance
+                  can pick it up, which is what a small team usually wants. */}
+              <input
+                value={form.draft.approval?.intendedApprover ?? ""}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    draft: {
+                      ...form.draft,
+                      approval: {
+                        state: form.draft.approval?.state ?? "pending_approval",
+                        author: form.draft.approval?.author ?? currentUser,
+                        authoredDate: form.draft.approval?.authoredDate ?? new Date().toISOString().slice(0, 10),
+                        ...form.draft.approval,
+                        intendedApprover: e.target.value,
+                      },
+                    },
+                  })
+                }
+                placeholder="Leave blank for anyone in Management or Finance"
+                className={formClass}
+              />
+              <p className="mt-1 text-[11px] leading-snug text-paper-400">
+                Name a person and the payment waits for them. If they are away, someone else can still approve it by
+                giving a reason, and both names are kept on the record.
+              </p>
             </div>
             <div>
               <label className={formLabel}>Expected amount</label>
@@ -493,6 +623,163 @@ export function PaymentsPage() {
           checks verified payments.
         </p>
       </Modal>
+
+      <Modal
+        open={approving !== null}
+        onClose={() => setApproving(null)}
+        title={approving?.mode === "decline" ? `Decline ${approving.payment.id}` : `Approve ${approving?.payment.id}`}
+        subtitle={
+          approving
+            ? `${approving.payment.type} of ${formatMoney(approving.payment.expectedAmount)} on ${approving.payment.salesOrderId}`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setApproving(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={approving?.mode === "decline" ? "danger" : "success"}
+              size="sm"
+              onClick={submitApproval}
+            >
+              {approving?.mode === "decline" ? "Decline payment" : "Approve payment"}
+            </Button>
+          </>
+        }
+      >
+        {approving && (
+          <div className="space-y-3">
+            <div className="rounded-lg bg-paper-50 px-3 py-2 text-xs text-paper-600">
+              Raised by <span className="font-medium text-paper-800">{approving.payment.approval?.author ?? "—"}</span>
+              {approving.payment.approval?.authoredDate
+                ? ` on ${formatDate(approving.payment.approval.authoredDate)}`
+                : ""}
+              {approving.payment.approval?.intendedApprover
+                ? `, routed to ${approving.payment.approval.intendedApprover}`
+                : ", not routed to anyone in particular"}
+              .
+            </div>
+
+            <div>
+              <label className={formLabel}>
+                {approving.mode === "decline" ? "Declined by" : "Approved by"}
+              </label>
+              <input
+                value={approverName}
+                onChange={(e) => setApproverName(e.target.value)}
+                className={formClass}
+                placeholder="Your name"
+              />
+            </div>
+
+            {/* The override. It appears only when the person signing is not the one the line was
+                routed to, so the normal case stays a two-click job and the exception is the thing
+                that asks a question. */}
+            {approving.mode === "approve" && isOverride(approving.payment.approval, approverName) && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="mb-2 text-xs font-medium text-amber-800">
+                  This payment was routed to {approving.payment.approval?.intendedApprover}. You are approving in their
+                  place, so the reason goes on the record.
+                </p>
+                <input
+                  value={approvalReason}
+                  onChange={(e) => setApprovalReason(e.target.value)}
+                  className={formClass}
+                  placeholder="e.g. On leave until 14 Aug, shipment cannot wait"
+                />
+              </div>
+            )}
+
+            {approving.mode === "decline" && (
+              <div>
+                <label className={formLabel}>Reason for declining</label>
+                <input
+                  value={approvalReason}
+                  onChange={(e) => setApprovalReason(e.target.value)}
+                  className={formClass}
+                  placeholder="e.g. Amount does not match the PI"
+                />
+                <p className="mt-1 text-[11px] leading-snug text-paper-400">
+                  The payment stays on the order so the decline is visible. It can be sent back for approval once the
+                  problem is fixed.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/**
+ * The approval state of one payment, with whatever action is available on it.
+ *
+ * Kept as its own component because the cell has four distinct states and inlining them made the
+ * table row impossible to read.
+ */
+function ApprovalCell({
+  payment,
+  canApprove,
+  onApprove,
+  onDecline,
+  onReopen,
+}: {
+  payment: PaymentRecord;
+  canApprove: boolean;
+  onApprove: () => void;
+  onDecline: () => void;
+  onReopen: () => void;
+}) {
+  const state = approvalStateOf(payment);
+  const summary = approvalSummary(payment);
+
+  if (state === "pending_approval") {
+    return (
+      <div className="min-w-[180px]">
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-800">
+          Pending
+        </span>
+        <p className="mt-1 text-[11px] leading-snug text-paper-500">{summary}</p>
+        {canApprove ? (
+          <div className="mt-1.5 flex gap-1.5">
+            <Button variant="success" size="sm" onClick={onApprove}>
+              Approve
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onDecline}>
+              Decline
+            </Button>
+          </div>
+        ) : (
+          <p className="mt-1 text-[11px] text-paper-400">Management or Finance signs this off.</p>
+        )}
+      </div>
+    );
+  }
+
+  if (state === "declined") {
+    return (
+      <div className="min-w-[180px]">
+        <span className="rounded-full bg-alert-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-alert-700">
+          Declined
+        </span>
+        <p className="mt-1 text-[11px] leading-snug text-paper-500">{summary}</p>
+        {canApprove && (
+          <Button variant="ghost" size="sm" onClick={onReopen} className="mt-1.5">
+            Send back for approval
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-[150px]">
+      <span className="rounded-full bg-pine-100 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-pine-800">
+        Approved
+      </span>
+      <p className="mt-1 text-[11px] leading-snug text-paper-500">{summary}</p>
     </div>
   );
 }

@@ -24,7 +24,7 @@ import { Modal } from "@/components/ui/Modal";
 import { PIDocumentPreview } from "@/components/domain/PIDocumentPreview";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, piRef, revisionLabel, revisionTag } from "@/lib/format";
 import { totalsForQuotation } from "@/lib/totals";
 
 type ModalKind = "revision" | "response" | "convert" | "delete" | "restore" | "preview" | null;
@@ -141,9 +141,9 @@ export function QuotationDetail() {
     <div>
       <div className="no-print">
       <PageHeader
-        breadcrumb={["Fortune Net & Twine ERP", "Quotations", q.id]}
-        eyebrow={`Revision ${q.revisionNo}`}
-        title={q.id}
+        breadcrumb={["Fortune Net & Twine ERP", "Quotations", piRef(q.id, q.revisionNo)]}
+        eyebrow={revisionLabel(q.revisionNo)}
+        title={piRef(q.id, q.revisionNo)}
         description={`${customer?.name ?? q.consignee} · ${customer?.country ?? "—"}`}
         actions={
           <div className="flex items-center gap-2">
@@ -160,7 +160,7 @@ export function QuotationDetail() {
             revision could be sent out carrying the previous version's sign-off. */}
         {(q.status === "draft" || q.status === "revised") && (
           <Button variant="primary" size="sm" icon={<Send className="h-3.5 w-3.5" />} onClick={handleSubmitForApproval}>
-            {q.status === "revised" ? `Submit Revision ${q.revisionNo} for Approval` : "Submit for Approval"}
+            Submit
           </Button>
         )}
         {q.status === "for_approval" && canApprove && (
@@ -292,11 +292,12 @@ export function QuotationDetail() {
                 return (
                   <div key={r.revisionNo} className="flex gap-2.5 text-xs">
                     <span
-                      className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono font-semibold ${
+                      title={revisionLabel(r.revisionNo)}
+                      className={`mt-0.5 flex h-5 shrink-0 items-center justify-center rounded-full px-1.5 font-mono text-[10px] font-semibold ${
                         isCurrent ? "bg-pine-700 text-white" : "bg-pine-100 text-pine-700"
                       }`}
                     >
-                      {r.revisionNo}
+                      {r.revisionNo > 0 ? revisionTag(r.revisionNo) : "ORIG"}
                     </span>
                     <div className="min-w-0 flex-1">
                       {editingNoteNo === r.revisionNo ? (
@@ -511,7 +512,7 @@ export function QuotationDetail() {
           closeModal();
           setPreviewNo(null);
         }}
-        title={`Revision ${previewNo} preview${previewNo === q.revisionNo ? " (current, live)" : ""}`}
+        title={`${revisionLabel(previewNo ?? 0)} preview${previewNo === q.revisionNo ? " (current, live)" : ""}`}
         subtitle={
           previewRevision
             ? `${previewRevision.note} · ${previewRevision.changedBy} · ${formatDate(previewRevision.date)}`
@@ -588,7 +589,7 @@ export function QuotationDetail() {
                   pushToast({
                     tone: "success",
                     title: "Revision restored",
-                    description: `${q.id} is now Revision ${q.revisionNo + 1}, restored from Revision ${restoreTarget}.`,
+                    description: `${piRef(q.id, restoreTarget)} is current again. The restore is in the Activity Logs.`,
                   });
                 }
                 closeModal();
@@ -601,10 +602,11 @@ export function QuotationDetail() {
         }
       >
         <p className="text-sm text-paper-600">
-          What's on screen now is captured into Revision {q.revisionNo} first, so nothing is lost. The batch groups,
-          items, pricing and terms from Revision {restoreTarget} then become the current content as Revision{" "}
-          {q.revisionNo + 1}, which you can restore away from again. Approval resets, so the restored version has to be
-          approved again.
+          What's on screen now is captured into the {revisionLabel(q.revisionNo).toLowerCase()} first, so nothing is
+          lost. The quotation then goes back to being{" "}
+          <span className="font-semibold">{revisionLabel(restoreTarget ?? 0).toLowerCase()}</span> — the same number the
+          customer already has for this content, rather than a new one. The restore is recorded in the Activity Logs
+          with your name against it. Approval resets, so the restored version has to be approved again.
         </p>
       </Modal>
 

@@ -6,7 +6,7 @@ import {
   AlertTriangle,
   FileText,
   Wallet,
-  Package,
+  Plus,
   CheckCircle2,
   ReceiptText,
 } from "lucide-react";
@@ -18,23 +18,40 @@ import { Tabs } from "@/components/ui/Tabs";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Modal } from "@/components/ui/Modal";
 import { LifecycleStepper } from "@/components/domain/LifecycleStepper";
-import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate, formatDateTime } from "@/lib/format";
-import { ORDER_STAGES } from "@/lib/types";
+import { approvalSummary, canVerifyPayment } from "@/lib/paymentApproval";
+import { actualAmountFor, settleInspection } from "@/lib/inspectionPricing";
+import { ORDER_STAGES, stageMeta } from "@/lib/types";
+import type { OrderStage } from "@/lib/types";
 
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "items", label: "Items" },
   { id: "payments", label: "Payments" },
+  { id: "documents", label: "Documents" },
   { id: "activity", label: "Activity History" },
 ];
 
 export function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { salesOrders, quotations, payments, invoices, activity, advanceStage, generateInvoice, verifyPayment, role, pushToast, customers } =
-    useStore();
+  const {
+    salesOrders,
+    quotations,
+    payments,
+    invoices,
+    activity,
+    advanceStage,
+    generateInvoice,
+    verifyPayment,
+    role,
+    pushToast,
+    customers,
+    packingLists,
+    inspections,
+    shipments,
+  } = useStore();
   const [tab, setTab] = useState("overview");
   const [shipModalOpen, setShipModalOpen] = useState(false);
   const [shippedQty, setShippedQty] = useState<Record<string, number>>({});
@@ -57,7 +74,9 @@ export function OrderDetail() {
     );
   }
 
-  const currentStageMeta = ORDER_STAGES.find((s) => s.id === order.currentStage)!;
+  // Resolved through stageMeta, not a non-null find: an order saved before the lifecycle changed
+  // can still name a retired stage, and asserting here would crash the page on open.
+  const currentStageMeta = stageMeta(order.currentStage);
   const currentStageRec = order.stages.find((s) => s.stage === order.currentStage);
   const blockedStage = order.stages.find((s) => s.status === "blocked");
   const depositPayment = orderPayments.find((p) => p.type === "deposit");
@@ -75,6 +94,76 @@ export function OrderDetail() {
     (currentStageMeta.role === "Factory Technical" && role === "factory_technical") ||
     role === "admin" ||
     role === "management";
+
+  const orderPackingList = packingLists.find((p) => p.salesOrderId === order.id);
+  const orderInspection = inspections.find((i) => i.salesOrderId === order.id);
+  const orderShipment = shipments.find((s) => s.salesOrderId === order.id);
+
+  /**
+   * Actual weights are only meaningful once the goods have been packed and are being weighed.
+   * Before Inspection there is nothing measured, so the columns stay hidden rather than showing a
+   * row of dashes that looks like something is missing.
+   */
+  const STAGES_WITH_ACTUALS: OrderStage[] = ["inspection", "final_payment", "shipment", "completed"];
+  const showActuals = STAGES_WITH_ACTUALS.includes(order.currentStage) && Boolean(orderInspection?.lines?.length);
+  const settlement = orderInspection?.lines?.length ? settleInspection(orderInspection.lines) : null;
+
+  /** Everything the order has produced on paper, listed in the order it is normally raised. */
+  const orderDocuments: {
+    label: string;
+    reference: string;
+    date?: string;
+    status: string;
+    href?: string;
+  }[] = [
+    {
+      label: "Proforma Invoice",
+      reference: quotation?.id ?? "",
+      date: quotation?.issueDate,
+      status: quotation ? "Issued" : "Raised outside the system",
+      href: quotation ? `/quotations/${quotation.id}` : undefined,
+    },
+    {
+      label: "Customer Purchase Order",
+      reference: order.customerPoNo ?? "",
+      date: order.orderDate,
+      status: order.customerPoNo ? "On file" : "Awaiting the customer PO",
+    },
+    {
+      label: "Packing List",
+      reference: orderPackingList?.id ?? "",
+      date: orderPackingList?.finalizedDate ?? orderPackingList?.createdDate,
+      status: !orderPackingList ? "Not started" : orderPackingList.finalizedDate ? "Finalised" : "Open",
+      href: orderPackingList ? "/packing" : undefined,
+    },
+    {
+      label: "Inspection Report",
+      reference: orderInspection?.id ?? "",
+      date: orderInspection?.inspectedDate,
+      status: !orderInspection
+        ? "Not started"
+        : orderInspection.result === "pending"
+          ? "Awaiting inspection"
+          : orderInspection.result === "pass"
+            ? "Passed"
+            : "Failed",
+      href: orderInspection ? "/inspection" : undefined,
+    },
+    {
+      label: "Commercial Invoice",
+      reference: invoice?.id ?? "",
+      date: invoice?.issueDate,
+      status: invoice ? "Issued" : "Raised once the goods ship",
+      href: invoice ? `/invoices/${invoice.id}` : undefined,
+    },
+    {
+      label: "Bill of Lading",
+      reference: orderShipment?.billOfLadingNo ?? "",
+      date: orderShipment?.etd,
+      status: orderShipment ? `Shipment ${orderShipment.status}` : "Not booked",
+      href: orderShipment ? "/shipments" : undefined,
+    },
+  ];
 
   function handleAdvance() {
     advanceStage(order!.id);
@@ -212,7 +301,7 @@ export function OrderDetail() {
                   {order.stages
                     .filter((s) => s.completedDate || s.status === "in_progress" || s.status === "blocked")
                     .map((s) => {
-                      const meta = ORDER_STAGES.find((m) => m.id === s.stage)!;
+                      const meta = stageMeta(s.stage);
                       return (
                         <div key={s.stage} className="flex gap-3">
                           <div className="flex flex-col items-center">
@@ -239,34 +328,12 @@ export function OrderDetail() {
                 </div>
               </Card>
 
-              <Card>
-                <CardHeader title="Production Summary" eyebrow="Factory" />
-                <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
-                  <div className="rounded-lg bg-paper-50 py-3">
-                    <p className="text-lg font-bold text-paper-900">{order.productionQtyOrdered}</p>
-                    <p className="text-[11px] text-paper-400">Ordered</p>
-                  </div>
-                  <div className="rounded-lg bg-pine-50 py-3">
-                    <p className="text-lg font-bold text-pine-700">{order.productionQtyCompleted}</p>
-                    <p className="text-[11px] text-paper-400">Completed</p>
-                  </div>
-                  <div className="rounded-lg bg-alert-50 py-3">
-                    <p className="text-lg font-bold text-alert-700">{order.productionQtyRejected}</p>
-                    <p className="text-[11px] text-paper-400">Rejected</p>
-                  </div>
-                  <div className="rounded-lg bg-amber-50 py-3">
-                    <p className="text-lg font-bold text-amber-700">
-                      {order.productionQtyOrdered - order.productionQtyCompleted}
-                    </p>
-                    <p className="text-[11px] text-paper-400">Remaining</p>
-                  </div>
-                </div>
-                {order.delayReason && (
-                  <p className="mt-3 rounded-lg bg-alert-50 px-3 py-2 text-xs text-alert-700">
-                    Delay noted: {order.delayReason}
-                  </p>
-                )}
-              </Card>
+              {order.delayReason && (
+                <Card>
+                  <CardHeader title="Delay Noted" eyebrow="Attention" />
+                  <p className="rounded-lg bg-alert-50 px-3 py-2 text-xs text-alert-700">{order.delayReason}</p>
+                </Card>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -285,58 +352,110 @@ export function OrderDetail() {
                 <KeyValue label="Deposit" value={depositPayment ? <Badge status={depositPayment.status} /> : "—"} />
                 <KeyValue label="Balance" value={balancePayment ? <Badge status={balancePayment.status} /> : "—"} />
               </Card>
-              <ProcessDiscoveryNote
-                items={[
-                  "Should Production Planner be notified automatically once deposit clears, or is this still a manual handoff?",
-                  "Retention period for superseded PI/PL versions, to confirm with client for audit purposes.",
-                ]}
-              />
             </div>
           </div>
         )}
 
         {tab === "items" && quotation && (
-          <Table>
-            <THead>
-              <TH>Item Code</TH>
-              <TH>Description</TH>
-              <TH>Specification</TH>
-              <TH>Qty</TH>
-              <TH>Weight</TH>
-              <TH>Unit Price</TH>
-              <TH>Total</TH>
-            </THead>
-            <tbody>
-              {quotation.items.map((li) => (
-                <TR key={li.id}>
-                  <TD className="font-mono text-xs">{li.itemCode}</TD>
-                  <TD className="font-medium">{li.description}</TD>
-                  <TD className="text-xs text-paper-500">{li.specification}</TD>
-                  <TD className="font-mono">{li.qtyPcs} {li.unit}</TD>
-                  <TD className="font-mono">{li.weightKg.toFixed(1)} kg</TD>
-                  <TD className="font-mono">{formatMoney(li.unitPrice, order.currency)}</TD>
-                  <TD className="font-mono font-semibold">{formatMoney(li.totalPrice, order.currency)}</TD>
-                </TR>
-              ))}
-            </tbody>
-          </Table>
+          <div className="space-y-3">
+            {/* Actual weight and the settled amount appear from Inspection onward. Before then
+                there is nothing to show but the quoted figures, and empty columns invite people to
+                type into something that is not ready. */}
+            {showActuals && (
+              <p className="text-xs text-paper-500">
+                {orderInspection?.result === "pass"
+                  ? "Weights below were measured at inspection and the order value has been settled against them."
+                  : "Actual weights are entered on the Inspection screen. Until it passes, these are the quoted figures."}
+              </p>
+            )}
+            <Table>
+              <THead>
+                <TH>Item Code</TH>
+                <TH>Description</TH>
+                <TH>Specification</TH>
+                <TH>Qty</TH>
+                <TH>{showActuals ? "Quoted Weight" : "Weight"}</TH>
+                {showActuals && <TH>Actual Weight</TH>}
+                <TH>Unit Price</TH>
+                <TH>Total</TH>
+                {showActuals && <TH>Final Amount</TH>}
+              </THead>
+              <tbody>
+                {quotation.items.map((li) => {
+                  const measured = orderInspection?.lines?.find((l) => l.itemId === li.id);
+                  const finalAmount = measured ? actualAmountFor(measured) : li.totalPrice;
+                  const moved = Math.abs(finalAmount - li.totalPrice) >= 0.005;
+                  return (
+                    <TR key={li.id}>
+                      <TD className="font-mono text-xs">{li.itemCode}</TD>
+                      <TD className="font-medium">{li.description}</TD>
+                      <TD className="text-xs text-paper-500">{li.specification}</TD>
+                      <TD className="font-mono">{li.qtyPcs} {li.unit}</TD>
+                      <TD className="font-mono">{li.weightKg.toFixed(1)} kg</TD>
+                      {showActuals && (
+                        <TD className="font-mono">
+                          {measured ? (
+                            <span className={moved ? "font-semibold text-manifest-700" : undefined}>
+                              {measured.actualWeightKg.toFixed(1)} kg
+                            </span>
+                          ) : (
+                            <span className="text-paper-300">—</span>
+                          )}
+                        </TD>
+                      )}
+                      <TD className="font-mono">{formatMoney(li.unitPrice, order.currency)}</TD>
+                      <TD className="font-mono">{formatMoney(li.totalPrice, order.currency)}</TD>
+                      {showActuals && (
+                        <TD
+                          className={`font-mono font-semibold ${
+                            !moved ? "" : finalAmount > li.totalPrice ? "text-pine-700" : "text-alert-600"
+                          }`}
+                        >
+                          {formatMoney(finalAmount, order.currency)}
+                        </TD>
+                      )}
+                    </TR>
+                  );
+                })}
+              </tbody>
+            </Table>
+            {showActuals && settlement && (
+              <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1 rounded-lg bg-paper-50 px-3 py-2 text-xs">
+                <span className="text-paper-500">
+                  Quoted: <span className="font-mono">{formatMoney(settlement.quotedValue, order.currency)}</span>
+                </span>
+                <span className="text-paper-500">
+                  Weight: <span className="font-mono">{settlement.actualWeightKg.toFixed(2)} KG</span>
+                </span>
+                <span>
+                  <span className="text-paper-500">Final order value: </span>
+                  <span className="font-mono font-bold text-pine-800">
+                    {formatMoney(settlement.actualValue, order.currency)}
+                  </span>
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         {tab === "payments" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <FinanceControl
-                label="Production Release"
-                allowed={depositPayment?.status === "verified"}
-              />
-              <FinanceControl
-                label="Container Loading"
-                allowed={balancePayment?.status === "verified"}
-              />
-              <FinanceControl
-                label="Final Document Release"
-                allowed={order.currentStage === "documents" || order.currentStage === "completed"}
-              />
+            {/* The three release indicators that used to sit here are gone. They restated what the
+                payment rows below already say, and nothing in the system acted on them, so they
+                were three red "Blocked" badges that could not be cleared by doing anything. */}
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-paper-500">
+                Deposit and balance are raised automatically from the quotation. Add a line here for an adjustment or a
+                correction.
+              </p>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Plus className="h-3.5 w-3.5" />}
+                onClick={() => navigate("/payments")}
+              >
+                Add payment
+              </Button>
             </div>
             <Table>
               <THead>
@@ -345,6 +464,7 @@ export function OrderDetail() {
                 <TH>Expected</TH>
                 <TH>Received</TH>
                 <TH>Method</TH>
+                <TH>Approval</TH>
                 <TH>Status</TH>
                 <TH>Action</TH>
               </THead>
@@ -356,11 +476,18 @@ export function OrderDetail() {
                     <TD className="font-mono">{formatMoney(p.expectedAmount, order.currency)}</TD>
                     <TD className="font-mono">{formatMoney(p.amountReceived, order.currency)}</TD>
                     <TD className="text-xs">{p.method ?? "—"}</TD>
+                    <TD className="text-xs text-paper-500">{approvalSummary(p)}</TD>
                     <TD>
                       <Badge status={p.status} />
                     </TD>
                     <TD>
-                      {p.status === "submitted_for_verification" && (role === "finance" || role === "admin") ? (
+                      {/* Approval happens on the Payments screen, which is where the override and
+                          its reason live. This tab shows where a line stands and points there. */}
+                      {!canVerifyPayment(p) ? (
+                        <Link to="/payments" className="text-xs font-medium text-amber-700 hover:underline">
+                          Needs approval
+                        </Link>
+                      ) : p.status === "submitted_for_verification" && (role === "finance" || role === "admin") ? (
                         <Button variant="success" size="sm" onClick={() => verifyPayment(p.id)}>
                           Verify
                         </Button>
@@ -376,6 +503,47 @@ export function OrderDetail() {
               View all payments across orders →
             </Link>
           </div>
+        )}
+
+        {tab === "documents" && (
+          <Card>
+            <CardHeader
+              title="Order Documents"
+              eyebrow="Paper trail"
+              subtitle="Every document raised against this order, in the order it is produced."
+            />
+            <Table>
+              <THead>
+                <TH>Document</TH>
+                <TH>Reference</TH>
+                <TH>Date</TH>
+                <TH>Status</TH>
+                <TH>Open</TH>
+              </THead>
+              <tbody>
+                {orderDocuments.map((d) => (
+                  <TR key={d.label + d.reference}>
+                    <TD className="font-medium">{d.label}</TD>
+                    <TD className="font-mono text-xs">{d.reference || "—"}</TD>
+                    <TD className="text-xs text-paper-500">{d.date ? formatDate(d.date) : "—"}</TD>
+                    <TD className="text-xs text-paper-600">{d.status}</TD>
+                    <TD>
+                      {d.href ? (
+                        <Link
+                          to={d.href}
+                          className="text-xs font-medium text-manifest-600 hover:underline"
+                        >
+                          Open
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-paper-300">Not yet raised</span>
+                      )}
+                    </TD>
+                  </TR>
+                ))}
+              </tbody>
+            </Table>
+          </Card>
         )}
 
         {tab === "activity" && (
@@ -457,18 +625,3 @@ export function OrderDetail() {
   );
 }
 
-function FinanceControl({ label, allowed }: { label: string; allowed: boolean }) {
-  return (
-    <div
-      className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
-        allowed ? "border-pine-200 bg-pine-50" : "border-alert-200 bg-alert-50"
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <Package className={`h-4 w-4 ${allowed ? "text-pine-600" : "text-alert-600"}`} />
-        <p className="text-sm font-medium text-paper-800">{label}</p>
-      </div>
-      <Badge status={allowed ? "allowed" : "blocked"} label={allowed ? "Allowed" : "Blocked"} />
-    </div>
-  );
-}

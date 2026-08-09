@@ -24,6 +24,8 @@ export const PERSIST_KEYS = {
   packing: "packing",
   inspections: "inspections",
   shipments: "shipments",
+  /** How often each specification code has been picked, so the picker can lead with the usual ones. */
+  specUsage: "specUsage",
 } as const;
 
 export type PersistKey = (typeof PERSIST_KEYS)[keyof typeof PERSIST_KEYS];

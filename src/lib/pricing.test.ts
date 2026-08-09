@@ -144,6 +144,53 @@ describe("rules default to off", () => {
   });
 });
 
+describe("manual new price / kg", () => {
+  it("uses the typed price instead of the one the rules produce", () => {
+    const result = price(["comm3"], { manualNewPriceKg: 6 });
+    expect(result.newPriceKg).toBe(6);
+  });
+
+  it("still calculates and reports what the rules would have given", () => {
+    const calculated = price(["comm3"]).newPriceKg;
+    const result = price(["comm3"], { manualNewPriceKg: 6 });
+    // The gap between agreed and calculated is the whole point of keeping both.
+    expect(result.calculatedNewPriceKg).toBeCloseTo(calculated, 10);
+    expect(result.calculatedNewPriceKg).not.toBe(result.newPriceKg);
+  });
+
+  it("still records the chain so the workings survive on the line", () => {
+    const result = price(["comm3", "ins"], { manualNewPriceKg: 6 });
+    expect(result.chain).toHaveLength(2);
+  });
+
+  it("builds U/P and Amount from the typed price, not the calculated one", () => {
+    const result = price([], { manualNewPriceKg: 6, weightPerPc: 10, qtyPcs: 3 });
+    expect(result.pricePerPiece).toBe(60);
+    expect(result.unitPrice).toBe(60);
+    expect(result.totalPrice).toBe(180);
+  });
+
+  it("prices wastage off the typed figure too", () => {
+    const result = price([], { manualNewPriceKg: 6, weightPerPc: 10, qtyPcs: 1, wastageKg: 2 });
+    expect(result.wastageCost).toBe(12);
+  });
+
+  it("falls back to the calculation when the box is empty or nonsense", () => {
+    const calculated = price(["comm3"]).newPriceKg;
+    // A zero or negative typed price is a half-finished edit, not an instruction to price at nothing.
+    expect(price(["comm3"], { manualNewPriceKg: undefined }).newPriceKg).toBeCloseTo(calculated, 10);
+    expect(price(["comm3"], { manualNewPriceKg: 0 }).newPriceKg).toBeCloseTo(calculated, 10);
+    expect(price(["comm3"], { manualNewPriceKg: -4 }).newPriceKg).toBeCloseTo(calculated, 10);
+    expect(price(["comm3"], { manualNewPriceKg: Number.NaN }).newPriceKg).toBeCloseTo(calculated, 10);
+  });
+
+  it("works with no rules applied at all", () => {
+    const result = price([], { manualNewPriceKg: 7.25 });
+    expect(result.newPriceKg).toBe(7.25);
+    expect(result.calculatedNewPriceKg).toBe(5);
+  });
+});
+
 describe("chain ordering", () => {
   it("applies rules in sequence order regardless of the order they were ticked", () => {
     const ticked = price(["ins", "comm3"]).newPriceKg;

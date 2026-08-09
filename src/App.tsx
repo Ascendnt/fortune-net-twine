@@ -13,7 +13,6 @@ import { OrderDetail } from "@/pages/orders/OrderDetail";
 import { PaymentsPage } from "@/pages/payments/PaymentsPage";
 import { InvoiceDetail } from "@/pages/invoices/InvoiceDetail";
 import { CustomersList } from "@/pages/customers/CustomersList";
-import { ProductionPage } from "@/pages/production/ProductionPage";
 import { PackingPage } from "@/pages/packing/PackingPage";
 import { InspectionPage } from "@/pages/inspection/InspectionPage";
 import { ShipmentsPage } from "@/pages/shipments/ShipmentsPage";
@@ -49,7 +48,6 @@ export default function App() {
 
           <Route path="/inquiries" element={<InquiriesPage />} />
           <Route path="/technical" element={<TechnicalAssessmentsPage />} />
-          <Route path="/production" element={<ProductionPage />} />
           <Route path="/packing" element={<PackingPage />} />
           <Route path="/inspection" element={<InspectionPage />} />
           <Route path="/shipments" element={<ShipmentsPage />} />

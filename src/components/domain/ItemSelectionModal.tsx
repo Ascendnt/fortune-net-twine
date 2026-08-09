@@ -41,8 +41,8 @@ const FIELDS: { key: keyof SpecSelection; label: string; options: readonly strin
   { key: "reinforcement", label: "Reinforcement", options: SPEC_REINFORCEMENT, optional: true },
   { key: "others", label: "Others", options: SPEC_OTHERS, optional: true },
   { key: "color", label: "Color", options: SPEC_COLORS, optional: true },
-  { key: "weightUnit", label: "Weight UOM", options: SPEC_WEIGHT_UNITS },
-  { key: "qtyUnit", label: "Quantity QUOM", options: SPEC_QTY_UNITS },
+  { key: "weightUnit", label: "Weight", options: SPEC_WEIGHT_UNITS },
+  { key: "qtyUnit", label: "Quantity UOM", options: SPEC_QTY_UNITS },
 ];
 
 export function ItemSelectionModal({

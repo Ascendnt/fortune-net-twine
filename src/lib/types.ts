@@ -133,6 +133,12 @@ export interface LinePricing {
   twineRate: number;
   chain: PricingChainStep[];
   newPriceKg: number;
+  /**
+   * A new price per kg typed in place of the one the rules produce. The chain is still calculated
+   * and still displayed beside it, so the gap between the agreed price and the calculated one is
+   * visible rather than hidden.
+   */
+  manualNewPriceKg?: number;
   pricePerPiece: number;
   laborCost: number;
   wastageCost: number;
@@ -312,7 +318,21 @@ export interface Quotation {
   linkedInquiryId?: string;
   linkedTechAssessmentId?: string;
   salesOrderId?: string;
+  /**
+   * A short line that belongs with the header, printed on the document directly under "Attn:".
+   * This is where a "Revised pricing per your 12 Aug email" or "Supersedes PI-33006" goes.
+   *
+   * Distinct from `remarks` below, which is the free block of notes at the foot of the document and
+   * is labelled "Notes" in the form.
+   */
+  headerRemarks?: string;
+  /** The block of notes printed at the foot of the document. Labelled "Notes" in the form. */
   remarks: string;
+  /**
+   * Which company issues this PI. Fortune Net & Twine and Nettex share an office and a sales team,
+   * so the entity is chosen per quotation rather than fixed for the whole system.
+   */
+  issuingEntity?: string;
   approver?: string;
   approvedDate?: string;
   customerResponseNote?: string;
@@ -434,11 +454,18 @@ export interface TechnicalAssessment {
 
 // ---------- Sales Order lifecycle ----------
 
+/**
+ * `production`, `documents` and `internal_verification` remain in the union but are no longer part
+ * of the tracked lifecycle. Orders saved by an earlier build still carry stage records naming them,
+ * and dropping the union members would make those records fail to type and their labels fail to
+ * resolve. `stageMeta()` below is what the UI should use, and it copes with a retired stage.
+ */
 export type OrderStage =
   | "quotation"
   | "customer_confirmation"
   | "deposit"
   | "production"
+  | "internal_verification"
   | "packing"
   | "inspection"
   | "shipment"
@@ -446,20 +473,53 @@ export type OrderStage =
   | "documents"
   | "completed";
 
-// Final payment sits BEFORE inspection: the balance is collected once packing is done, and
-// inspection then releases the goods. Nothing ships until it is both paid for and inspected.
+/**
+ * The lifecycle an order actually moves through.
+ *
+ * Goods are packed, then inspected, and only once they have passed is the balance collected and
+ * the container loaded. Inspecting before invoicing the balance means a failure is found before the
+ * customer is asked for the rest of the money.
+ *
+ * Production is not a stage here. The factory's own scheduling is not run from this system, so a
+ * stage nobody could advance was a step that sat on screen doing nothing. Documents is not a stage
+ * either: the paperwork accumulates throughout the order rather than at one point in it, and lives
+ * on the Documents tab of the sales order.
+ */
 export const ORDER_STAGES: { id: OrderStage; label: string; role: string }[] = [
   { id: "quotation", label: "Quotation", role: "Sales" },
-  { id: "customer_confirmation", label: "Customer Confirmation", role: "Sales" },
+  { id: "customer_confirmation", label: "Customer Verification", role: "Sales" },
   { id: "deposit", label: "Deposit", role: "Finance" },
-  { id: "production", label: "Production", role: "Production" },
-  { id: "packing", label: "Packing", role: "Logistics" },
-  { id: "final_payment", label: "Final Payment", role: "Finance" },
+  { id: "packing", label: "Packing List", role: "Logistics" },
   { id: "inspection", label: "Inspection", role: "QC" },
+  { id: "final_payment", label: "Final Payment", role: "Finance" },
   { id: "shipment", label: "Shipment", role: "Logistics" },
-  { id: "documents", label: "Documents", role: "Sales" },
   { id: "completed", label: "Completed", role: "—" },
 ];
+
+/** Labels for stages that have been retired, so old records still read sensibly. */
+const RETIRED_STAGE_LABELS: Partial<Record<OrderStage, string>> = {
+  production: "Production",
+  internal_verification: "Internal Verification",
+  documents: "Documents",
+};
+
+/**
+ * Resolves a stage to its label and owning role, including stages retired from the lifecycle.
+ *
+ * Every lookup should go through this rather than indexing ORDER_STAGES directly. An order saved
+ * before the lifecycle changed can hold a `production` stage record, and a non-null assertion on a
+ * missing entry is a crash on a page the user simply opened.
+ */
+export function stageMeta(stage: OrderStage): { id: OrderStage; label: string; role: string } {
+  const live = ORDER_STAGES.find((s) => s.id === stage);
+  if (live) return live;
+  return { id: stage, label: RETIRED_STAGE_LABELS[stage] ?? stage, role: "—" };
+}
+
+/** True when a stage is still part of the lifecycle, as opposed to left over on an older order. */
+export function isLiveStage(stage: OrderStage): boolean {
+  return ORDER_STAGES.some((s) => s.id === stage);
+}
 
 export type StageStatus = "completed" | "in_progress" | "blocked" | "pending";
 
@@ -549,18 +609,81 @@ export interface PackingCarton {
   status: CartonStatus;
 }
 
-export interface PackingList {
+/**
+ * Whether this list covers the whole order or part of it.
+ *
+ * Export nets rarely leave in one go: the plant finishes what it finishes, and the customer takes
+ * partial loads against the same order. Marking the scope is what lets the system tell a legitimate
+ * partial from a short shipment, and what makes "final" mean something — at final, the cumulative
+ * packed quantity across every list for the order is expected to reconcile with what was ordered.
+ */
+export type ShipmentScope = "full" | "partial" | "final";
+
+/**
+ * A free-form grouping inside a packing list.
+ *
+ * The plant sends its packing details in whatever shape the job took — by container, by bundle, by
+ * production batch. Forcing that into a fixed carton grid meant retyping it into a structure that
+ * matched nothing, so sections are named by the user and hold whatever rows belong together.
+ */
+export interface PackingSection {
   id: string;
-  salesOrderId: string;
-  createdDate: string;
-  packedBy: string;
-  cartons: PackingCarton[];
-  /** Set once the list is closed; no further cartons may be added. */
-  finalizedDate?: string;
+  title: string;
+  lines: PackingLine[];
+}
+
+export interface PackingLine {
+  id: string;
+  /** The quotation line this row packs against, when it was drawn from the order. */
+  itemId?: string;
+  itemCode: string;
+  description: string;
+  qtyPcs: number;
+  netWeightKg: number;
+  grossWeightKg: number;
   remarks?: string;
 }
 
+export interface PackingList {
+  id: string;
+  salesOrderId: string;
+  customerId: string;
+  createdDate: string;
+  packedBy: string;
+  scope: ShipmentScope;
+  sections: PackingSection[];
+  /** Set once the list is closed; no further rows may be added. */
+  finalizedDate?: string;
+  remarks?: string;
+  /**
+   * @deprecated The carton grid this screen used to be. Kept so lists saved by an earlier build
+   * still load and can be read; `migratePackingLists` folds them into a section on first load.
+   */
+  cartons?: PackingCarton[];
+}
+
 export type InspectionResult = "pass" | "fail" | "pending";
+
+/**
+ * One item weighed at inspection.
+ *
+ * Nets are quoted from a standard weight per piece, but what comes off the machine is never exactly
+ * that. The customer is billed for the kilos actually shipped, so inspection is where the real
+ * weight is captured and the order value is settled. Both the quoted and the actual figures are
+ * kept: the difference between them is the thing Finance and the customer will ask about.
+ */
+export interface InspectionLine {
+  id: string;
+  /** The quotation line this measurement belongs to. */
+  itemId: string;
+  itemCode: string;
+  description: string;
+  qtyPcs: number;
+  quotedWeightKg: number;
+  /** Left at the quoted figure until somebody weighs it. */
+  actualWeightKg: number;
+  quotedAmount: number;
+}
 
 export interface InspectionRecord {
   id: string;
@@ -573,6 +696,13 @@ export interface InspectionRecord {
   cartonsChecked: number;
   defectsFound: number;
   remarks: string;
+  /** Per-item weights. Absent until the inspection is opened against a finalised packing list. */
+  lines?: InspectionLine[];
+  /**
+   * The order value once actual weights are applied. Written when the inspection passes, and is
+   * what the balance payment is then raised against.
+   */
+  revisedOrderValue?: number;
 }
 
 export type ShipmentStatus = "booked" | "loaded" | "departed" | "arrived";
@@ -605,6 +735,38 @@ export type PaymentStatus =
   | "rejected"
   | "overdue";
 
+/**
+ * Where a payment sits in the approval chain, independent of whether the money has arrived.
+ *
+ * Anyone in Sales or Finance can raise a payment line, but nobody can raise one and act on it
+ * alone. A newly raised line is `pending_approval` until someone in Management or Finance signs it
+ * off, and only an approved line can be verified against a bank advice.
+ */
+export type PaymentApprovalState = "pending_approval" | "approved" | "declined";
+
+/** Who signed a payment off, and whether they were the person it was actually routed to. */
+export interface PaymentApproval {
+  state: PaymentApprovalState;
+  /** Who raised the line. Recorded at creation and never rewritten. */
+  author: string;
+  authoredDate: string;
+  /**
+   * The person the line was routed to. Usually the one who ends up approving it, but they go on
+   * leave, and the order still has to move.
+   */
+  intendedApprover?: string;
+  /** Who actually signed. Differs from `intendedApprover` when the override was used. */
+  actualApprover?: string;
+  decidedDate?: string;
+  /**
+   * Required when `actualApprover` is not `intendedApprover`. This is the audit's answer to "why
+   * did someone other than the named approver sign this off?", so it is not optional in practice.
+   */
+  overrideReason?: string;
+  /** Why the line was declined, when it was. */
+  declineReason?: string;
+}
+
 export interface PaymentRecord {
   id: string;
   salesOrderId: string;
@@ -620,6 +782,11 @@ export interface PaymentRecord {
   status: PaymentStatus;
   dueDate?: string;
   remarks?: string;
+  /**
+   * Absent on records seeded or saved before the approval chain existed. Those are treated as
+   * already approved, since they came from a period when raising a line was the whole process.
+   */
+  approval?: PaymentApproval;
 }
 
 // ---------- Commercial Invoice ----------

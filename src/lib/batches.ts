@@ -58,7 +58,10 @@ export function isPricingUntouched(p: LinePricing): boolean {
     p.laborRate === 0 &&
     p.wastageKg === 0 &&
     p.twineKg === 0 &&
-    p.twineRate === 0
+    p.twineRate === 0 &&
+    // A typed price per kg is a pricing decision like any other. Without this the row would go on
+    // offering "Add Pricing" as though nothing had been set.
+    p.manualNewPriceKg === undefined
   );
 }
 

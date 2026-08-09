@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/format";
-import { ORDER_STAGES } from "@/lib/types";
+import { ORDER_STAGES, stageMeta } from "@/lib/types";
 import type { OrderStage } from "@/lib/types";
 
 export function OrdersList() {
@@ -77,7 +77,7 @@ export function OrdersList() {
           <tbody>
             {filtered.map((o) => {
               const customer = CUSTOMERS.find((c) => c.id === o.customerId);
-              const stageMeta = ORDER_STAGES.find((s) => s.id === o.currentStage);
+              const currentStage = stageMeta(o.currentStage);
               const blocked = o.stages.some((s) => s.status === "blocked");
               return (
                 <TR key={o.id} onClick={() => navigate(`/orders/${o.id}`)}>
@@ -93,10 +93,10 @@ export function OrdersList() {
                   </TD>
                   <TD>
                     <div className="flex items-center gap-2">
-                      <Badge status={blocked ? "blocked" : o.currentStage} label={stageMeta?.label} />
+                      <Badge status={blocked ? "blocked" : o.currentStage} label={currentStage.label} />
                     </div>
                   </TD>
-                  <TD className="text-xs text-paper-500">{stageMeta?.role}</TD>
+                  <TD className="text-xs text-paper-500">{currentStage.role}</TD>
                 </TR>
               );
             })}

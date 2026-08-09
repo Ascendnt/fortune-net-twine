@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate, initials } from "@/lib/format";
-import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
+import clsx from "clsx";
 import type { Contact, Currency, Customer } from "@/lib/types";
 
 const fieldClass =
@@ -463,17 +463,18 @@ export function CustomersList() {
             </div>
             <div>
               <label className={formLabel}>Outstanding balance (USD)</label>
+              {/* Read only on purpose. The balance is the sum of what the invoices say and what
+                  Finance has verified as received. Letting anyone type over it would let a customer
+                  be shown as paid up without a single payment being recorded against them. */}
               <input
-                {...NON_NEGATIVE}
-                value={customerForm.draft.outstandingBalanceUSD}
-                onChange={(e) =>
-                  setCustomerForm({
-                    ...customerForm,
-                    draft: { ...customerForm.draft, outstandingBalanceUSD: toNonNegative(e.target.value) },
-                  })
-                }
-                className={formClass}
+                value={formatMoney(customerForm.draft.outstandingBalanceUSD ?? 0)}
+                readOnly
+                tabIndex={-1}
+                className={clsx(formClass, "cursor-not-allowed bg-paper-50 text-paper-500")}
               />
+              <p className="mt-1 text-[11px] leading-snug text-paper-400">
+                Calculated from invoices raised less payments verified. To change it, record or verify a payment.
+              </p>
             </div>
             <div>
               <label className={formLabel}>Customer since</label>
