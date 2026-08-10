@@ -15,6 +15,7 @@ import {
   Copy,
   Undo2,
   Eye,
+  AlertTriangle,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
@@ -26,8 +27,9 @@ import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate, piRef, revisionLabel, revisionTag } from "@/lib/format";
 import { totalsForQuotation } from "@/lib/totals";
+import { ORDER_STAGES, stageMeta } from "@/lib/types";
 
-type ModalKind = "revision" | "response" | "convert" | "delete" | "restore" | "preview" | null;
+type ModalKind = "revision" | "response" | "convert" | "delete" | "restore" | "preview" | "editWarning" | null;
 
 export function QuotationDetail() {
   const { id } = useParams();
@@ -46,6 +48,8 @@ export function QuotationDetail() {
     customers,
     inquiries,
     assessments,
+    salesOrders,
+    payments,
   } = useStore();
   const [modal, setModal] = useState<ModalKind>(null);
   const [restoreTarget, setRestoreTarget] = useState<number | null>(null);
@@ -63,6 +67,32 @@ export function QuotationDetail() {
   // Single shared roll-up. Prefers the authored batch tree, falls back to the flat line list for
   // quotations that predate it.
   const total = useMemo(() => (q ? totalsForQuotation(q).grandTotal : 0), [q]);
+
+  /**
+   * The sales order raised from this quotation, if there is one.
+   *
+   * Its existence changes what editing means. Up to that point a quotation is a proposal and can
+   * be reworked freely; afterwards it is the basis of a live order, and its figures are what the
+   * customer will be invoiced against.
+   */
+  const linkedOrder = q?.salesOrderId ? salesOrders.find((so) => so.id === q.salesOrderId) : undefined;
+  /** Past deposit means money has moved, so a change of value is somebody else's decision too. */
+  const orderPastDeposit = linkedOrder
+    ? ORDER_STAGES.findIndex((s) => s.id === linkedOrder.currentStage) >
+      ORDER_STAGES.findIndex((s) => s.id === "deposit")
+    : false;
+  /**
+   * Whether a revision may safely send the order back to quotation-only.
+   *
+   * Nothing has been lost if nothing has been paid — the order is just the figures, raised again
+   * once the revision is accepted. Once money has actually arrived, deleting the order would delete
+   * the record of that money with it, so the order is left alone instead. Mirrors the same check
+   * `createRevision` makes in the store; kept here too so the warning describes what will actually
+   * happen rather than the general rule.
+   */
+  const orderRevertible = linkedOrder
+    ? !payments.some((p) => p.salesOrderId === linkedOrder.id && p.amountReceived > 0)
+    : false;
 
   // Traceability back up the chain: which inquiry this came from, and whether the plant costed it.
   const sourceInquiry = inquiries.find((i) => i.quotationId === q?.id);
@@ -209,7 +239,7 @@ export function QuotationDetail() {
           variant="secondary"
           size="sm"
           icon={<Pencil className="h-3.5 w-3.5" />}
-          onClick={() => navigate(`/quotations/${q.id}/edit`)}
+          onClick={() => (linkedOrder ? setModal("editWarning") : navigate(`/quotations/${q.id}/edit`))}
         >
           Edit
         </Button>
@@ -440,6 +470,7 @@ export function QuotationDetail() {
         onClose={closeModal}
         title="Create New Revision"
         subtitle={`This will create Revision ${q.revisionNo + 1} of ${q.id}.`}
+        width="max-w-lg"
         footer={
           <>
             <Button variant="secondary" size="sm" onClick={closeModal}>
@@ -451,6 +482,38 @@ export function QuotationDetail() {
           </>
         }
       >
+        {/* A quotation that has already become an order is not a document on its own any more.
+            Revising it moves real numbers downstream, so the consequence is spelled out before
+            the click rather than discovered at final payment. */}
+        {linkedOrder && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+            <p className="mb-1 flex items-center gap-1.5 font-semibold">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {linkedOrder.id} was raised from this quotation
+            </p>
+            {orderRevertible ? (
+              <p className="leading-snug">
+                Nothing has been paid against {linkedOrder.id} yet, so creating this revision sends it back to
+                quotation-only — {linkedOrder.id} is deleted and this quotation's Sales Order link is cleared. Once the
+                revised terms are accepted, convert it to a sales order again.
+              </p>
+            ) : (
+              <ul className="ml-5 list-disc space-y-0.5 leading-snug">
+                <li>Money has already moved on this order, so it is kept rather than deleted.</li>
+                <li>The order value follows this quotation once the revised figures are saved.</li>
+                <li>Deposit and balance are restated to match — anything already verified is left alone.</li>
+                <li>Approval resets, and the customer's acceptance is cleared: they agreed to the current version, not this one.</li>
+                {orderPastDeposit && (
+                  <li className="font-semibold">
+                    This order has already reached {stageMeta(linkedOrder.currentStage).label}. Check with Finance before
+                    changing what it is worth.
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+        )}
+
         <label className="mb-1.5 block text-xs font-medium text-paper-600">Reason for revision</label>
         <textarea
           value={noteText}
@@ -506,6 +569,53 @@ export function QuotationDetail() {
           that revision's snapshot over the current record. Nothing is written, so looking costs
           nothing in the audit trail. Restore is offered from here for when looking was enough to
           decide. */}
+      <Modal
+        open={modal === "editWarning"}
+        onClose={closeModal}
+        title="This quotation already has a sales order"
+        subtitle={linkedOrder ? `${linkedOrder.id} was raised from ${piRef(q.id, q.revisionNo)}.` : undefined}
+        width="max-w-lg"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<GitBranch className="h-3.5 w-3.5" />}
+              onClick={() => setModal("revision")}
+            >
+              Create a revision instead
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => navigate(`/quotations/${q.id}/edit`)}>
+              Edit anyway
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm text-paper-600">
+          <p>
+            Saving changes here updates {linkedOrder?.id} to match: the order value, and the deposit and balance still
+            outstanding against it. Payments already verified are left alone, because that money actually arrived.
+          </p>
+          {orderPastDeposit && linkedOrder && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {linkedOrder.id} has reached {stageMeta(linkedOrder.currentStage).label}. Money has already moved on this
+              order, so check with Finance before changing what it is worth.
+            </p>
+          )}
+          <p className="text-xs text-paper-500">
+            Editing in place leaves no trace of what the figures used to be. If the customer needs to see what changed,
+            create a revision instead — it keeps the old version and issues the document as{" "}
+            {piRef(q.id, q.revisionNo + 1)}.{" "}
+            {orderRevertible
+              ? `Nothing has been paid against ${linkedOrder?.id} yet, so a revision sends it back to quotation-only rather than updating it in place.`
+              : `${linkedOrder?.id} stays linked either way — money has already moved on it.`}
+          </p>
+        </div>
+      </Modal>
+
       <Modal
         open={modal === "preview" && previewRevision !== undefined}
         onClose={() => {

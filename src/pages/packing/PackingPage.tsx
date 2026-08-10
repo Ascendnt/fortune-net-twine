@@ -1,6 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { PackageCheck, Search, Plus, Trash2, Lock, Unlock, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  PackageCheck,
+  Search,
+  Plus,
+  Trash2,
+  Lock,
+  Unlock,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  Printer,
+} from "lucide-react";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -8,8 +19,10 @@ import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/Feedback";
 import { HowToUse } from "@/components/ui/HowToUse";
 import { useStore } from "@/lib/store";
-import { formatDate } from "@/lib/format";
+import { formatDate, piRef } from "@/lib/format";
 import { reconcilePacking, sectionTotals, verifyPacking } from "@/lib/packing";
+import { canPack } from "@/lib/paymentLedger";
+import { PackingListDocument } from "@/components/domain/PackingListDocument";
 import type { PackingList, ShipmentScope } from "@/lib/types";
 import clsx from "clsx";
 
@@ -44,13 +57,28 @@ export function PackingPage() {
     removePackingLine,
     finalizePackingList,
     reopenPackingList,
+    payments,
     pushToast,
   } = useStore();
 
   const [query, setQuery] = useState("");
   const [customerFilter, setCustomerFilter] = useState<string>("all");
   const [openFilter, setOpenFilter] = useState<"all" | "open" | "closed">("all");
-  const [creating, setCreating] = useState<{ salesOrderId: string; scope: ShipmentScope } | null>(null);
+  /**
+   * Creating a list is two decisions, so it is two steps.
+   *
+   * Scope first, because it changes what the second step is: a full or final shipment takes
+   * everything still outstanding and needs no picking, while a partial is precisely the case where
+   * somebody has to say which items are going.
+   */
+  const [creating, setCreating] = useState<{
+    salesOrderId: string;
+    scope: ShipmentScope;
+    step: "scope" | "items";
+    picked: Record<string, number>;
+  } | null>(null);
+  /** The list being previewed as a printable document. */
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState<PackingList | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<PackingList | null>(null);
 
@@ -66,12 +94,38 @@ export function PackingPage() {
     return quotation?.items ?? [];
   };
 
-  /** Reconciliation counts every list on the order, so a partial is not mistaken for a shortfall. */
-  const reconcileFor = (salesOrderId: string) =>
+  /**
+   * Reconciliation counts every list on the order, so a partial is not mistaken for a shortfall.
+   * `currentListId` marks which rows the user can actually edit, which decides whether a problem
+   * blocks or is merely reported.
+   */
+  const reconcileFor = (salesOrderId: string, currentListId?: string) =>
     reconcilePacking(
       orderItems(salesOrderId),
-      packingLists.filter((p) => p.salesOrderId === salesOrderId)
+      packingLists.filter((p) => p.salesOrderId === salesOrderId),
+      currentListId
     );
+
+  const previewList = previewId ? packingLists.find((p) => p.id === previewId) : undefined;
+
+  /** The PI reference as the customer knows it, revision suffix and all. */
+  const quotationRefFor = (list: PackingList) => {
+    const order = salesOrders.find((o) => o.id === list.salesOrderId);
+    const q = order?.quotationId ? quotations.find((x) => x.id === order.quotationId) : undefined;
+    return q ? piRef(q.id, q.revisionNo) : order?.quotationId;
+  };
+
+  /**
+   * Which partial this is, counting only the partials on the same order and in the order they were
+   * raised. A second load against one PI is the "2nd-Partial Shipment" on the customer's copy.
+   */
+  const partialNoFor = (list: PackingList) => {
+    const partials = packingLists
+      .filter((p) => p.salesOrderId === list.salesOrderId && p.scope === "partial")
+      .sort((a, b) => a.createdDate.localeCompare(b.createdDate) || a.id.localeCompare(b.id));
+    const idx = partials.findIndex((p) => p.id === list.id);
+    return idx >= 0 ? idx + 1 : 1;
+  };
 
   const customerOf = (list: PackingList) => {
     const order = salesOrders.find((o) => o.id === list.salesOrderId);
@@ -100,8 +154,58 @@ export function PackingPage() {
     return { open, gross, partials };
   }, [packingLists]);
 
+  /**
+   * Creates the list with its rows already on it.
+   *
+   * A full or final shipment takes everything still outstanding; a partial takes what was ticked.
+   * Either way the list opens populated, because a list that starts empty makes the user re-pick
+   * what they have just decided, and that is where rows get missed.
+   */
+  /** Order lines with something still to pack. Fully packed items are not offered again. */
+  const remainingFor = (salesOrderId: string) =>
+    reconcileFor(salesOrderId).filter((r) => r.orderedQty > 0 && r.variance < 0);
+
+  function confirmCreate(c: NonNullable<typeof creating>) {
+    const rows = reconcileFor(c.salesOrderId).filter((r) => r.orderedQty > 0);
+    const lines = rows
+      .map((r) => {
+        const outstanding = Math.max(0, -r.variance);
+        const qty = c.scope === "partial" ? (c.picked[r.itemId] ?? 0) : outstanding;
+        return { row: r, qty };
+      })
+      .filter((x) => x.qty > 0)
+      .map(({ row, qty }) => ({
+        itemId: row.itemId,
+        itemCode: row.itemCode,
+        description: row.description,
+        qtyPcs: qty,
+        netWeightKg: 0,
+        grossWeightKg: 0,
+      }));
+
+    if (lines.length === 0) {
+      pushToast({
+        tone: "warning",
+        title: "Nothing to pack",
+        description:
+          c.scope === "partial"
+            ? "Tick at least one item for this load."
+            : "Everything on this order is already packed.",
+      });
+      return;
+    }
+
+    const id = createPackingList(c.salesOrderId, c.scope, lines);
+    pushToast({
+      tone: "success",
+      title: "Packing list created",
+      description: `${id} opened with ${lines.length} item${lines.length === 1 ? "" : "s"}. Add the weights next.`,
+    });
+    setCreating(null);
+  }
+
   function handleClose(list: PackingList) {
-    const verdict = verifyPacking(reconcileFor(list.salesOrderId), list.scope);
+    const verdict = verifyPacking(reconcileFor(list.salesOrderId, list.id), list.scope);
     if (!verdict.ok) {
       pushToast({ tone: "warning", title: "Cannot close this list", description: verdict.message });
       return;
@@ -111,6 +215,11 @@ export function PackingPage() {
 
   return (
     <div>
+      {/* Everything on this screen is marked no-print, and the document is rendered again below,
+          outside it. That is exactly how the PI prints: Ctrl+P produces the document alone rather
+          than the application around it. Modals render inline rather than through a portal, so the
+          preview dialog is inside this wrapper and disappears from the printed page with it. */}
+      <div className="no-print">
       <PageHeader
         breadcrumb={["Fortune Net & Twine ERP", "Operations"]}
         eyebrow="Outbound Preparation"
@@ -121,6 +230,7 @@ export function PackingPage() {
       <HowToUse
         id="packing-v2"
         steps={[
+          "An order only appears here once its deposit has cleared. If it is waiting on payment, the panel says so and links you to the order.",
           "Press Create packing list on the order you are packing, and say whether this load is the full order, a partial, or the final one.",
           "Add sections in whatever shape the plant sent you: by container, by bundle, by batch. Name them however makes sense.",
           "Inside a section, press Add from order to pull a line off the order, or Add blank row to type one in by hand.",
@@ -148,6 +258,10 @@ export function PackingPage() {
             {packableOrders.map((o) => {
               const rows = reconcileFor(o.id);
               const outstanding = rows.filter((r) => r.variance < 0).length;
+              // The factory works to the deposit. Packing before it clears commits material and
+              // machine time against a customer who has not put money down, which is the exact
+              // risk the deposit exists to cover.
+              const deposit = canPack(o, payments);
               return (
                 <div
                   key={o.id}
@@ -163,15 +277,39 @@ export function PackingPage() {
                         ? "Everything on this order is packed."
                         : `${outstanding} item${outstanding === 1 ? "" : "s"} still to pack.`}
                     </p>
+                    {!deposit.ok && (
+                      <p className="mt-1 flex items-start gap-1.5 text-[11px] leading-snug text-amber-700">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                        {deposit.reason}
+                      </p>
+                    )}
                   </div>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<Plus className="h-3.5 w-3.5" />}
-                    onClick={() => setCreating({ salesOrderId: o.id, scope: outstanding === 0 ? "final" : "partial" })}
-                  >
-                    Create packing list
-                  </Button>
+                  {deposit.ok ? (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<Plus className="h-3.5 w-3.5" />}
+                      onClick={() =>
+                        setCreating({
+                          salesOrderId: o.id,
+                          scope: outstanding === 0 ? "final" : "partial",
+                          step: "scope",
+                          picked: {},
+                        })
+                      }
+                    >
+                      Create packing list
+                    </Button>
+                  ) : (
+                    // Not a disabled button. A dead control tells you nothing; a link to the place
+                    // the blockage is cleared tells you what to do next.
+                    <Link
+                      to={`/orders/${o.id}`}
+                      className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                    >
+                      Record the deposit first
+                    </Link>
+                  )}
                 </div>
               );
             })}
@@ -230,7 +368,7 @@ export function PackingPage() {
           {visible.map((list) => {
             const closed = Boolean(list.finalizedDate);
             const cust = customerOf(list);
-            const rows = reconcileFor(list.salesOrderId);
+            const rows = reconcileFor(list.salesOrderId, list.id);
             const verdict = verifyPacking(rows, list.scope);
             const totals = sectionTotals(list.sections ?? []);
             const items = orderItems(list.salesOrderId);
@@ -254,6 +392,14 @@ export function PackingPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<FileText className="h-3.5 w-3.5" />}
+                      onClick={() => setPreviewId(list.id)}
+                    >
+                      Preview
+                    </Button>
                     {closed ? (
                       <Button
                         variant="secondary"
@@ -466,44 +612,64 @@ export function PackingPage() {
                         </tbody>
                       </table>
 
-                      {!closed && (
-                        <div className="flex flex-wrap items-center gap-2 border-t border-paper-100 px-2.5 py-2">
-                          <span className="text-[11px] text-paper-400">Add from order:</span>
-                          {items.length === 0 && <span className="text-[11px] text-paper-300">No order lines found.</span>}
-                          {items.map((li) => (
-                            <button
-                              key={li.id}
-                              onClick={() =>
-                                addPackingLine(list.id, section.id, {
-                                  itemId: li.id,
-                                  itemCode: li.itemCode,
-                                  description: li.description,
-                                  qtyPcs: 0,
-                                  netWeightKg: 0,
-                                  grossWeightKg: 0,
-                                })
-                              }
-                              className="rounded-full border border-paper-200 px-2 py-1 font-mono text-[10.5px] text-pine-800 hover:border-manifest-400 hover:bg-manifest-50"
-                            >
-                              + {li.itemCode}
-                            </button>
-                          ))}
-                          <button
-                            onClick={() =>
-                              addPackingLine(list.id, section.id, {
-                                itemCode: "",
-                                description: "",
-                                qtyPcs: 0,
-                                netWeightKg: 0,
-                                grossWeightKg: 0,
-                              })
-                            }
-                            className="ml-auto rounded-full border border-dashed border-paper-300 px-2.5 py-1 text-[10.5px] text-paper-500 hover:border-manifest-400 hover:text-manifest-700"
-                          >
-                            + Add blank row
-                          </button>
-                        </div>
-                      )}
+                      {!closed &&
+                        (() => {
+                          // Anything already on this list is not offered again — it is technically
+                          // already chosen, and re-offering it invites a duplicate row that then
+                          // has to be spotted and deleted.
+                          const onList = new Set(
+                            (list.sections ?? []).flatMap((s) => s.lines.map((l) => l.itemId ?? l.itemCode))
+                          );
+                          const available = items.filter((li) => !onList.has(li.id) && !onList.has(li.itemCode));
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5 border-t border-paper-100 px-2.5 py-2">
+                              <span className="mr-1 text-[11px] font-medium text-paper-500">Add from order</span>
+                              {items.length === 0 && (
+                                <span className="text-[11px] text-paper-300">No order lines found.</span>
+                              )}
+                              {items.length > 0 && available.length === 0 && (
+                                <span className="rounded-full bg-pine-50 px-2.5 py-1 text-[11px] text-pine-700">
+                                  Every item on the order is already on this list
+                                </span>
+                              )}
+                              {available.map((li) => (
+                                <button
+                                  key={li.id}
+                                  onClick={() =>
+                                    addPackingLine(list.id, section.id, {
+                                      itemId: li.id,
+                                      itemCode: li.itemCode,
+                                      description: li.description,
+                                      qtyPcs: 0,
+                                      netWeightKg: 0,
+                                      grossWeightKg: 0,
+                                    })
+                                  }
+                                  title={li.description}
+                                  className="group flex items-center gap-1.5 rounded-full border border-paper-200 bg-white py-1 pl-2 pr-2.5 text-[10.5px] transition-colors hover:border-manifest-500 hover:bg-manifest-50"
+                                >
+                                  <Plus className="h-3 w-3 text-paper-400 group-hover:text-manifest-600" />
+                                  <span className="font-mono font-semibold text-pine-800">{li.itemCode}</span>
+                                  <span className="max-w-[9rem] truncate text-paper-400">{li.description}</span>
+                                </button>
+                              ))}
+                              <button
+                                onClick={() =>
+                                  addPackingLine(list.id, section.id, {
+                                    itemCode: "",
+                                    description: "",
+                                    qtyPcs: 0,
+                                    netWeightKg: 0,
+                                    grossWeightKg: 0,
+                                  })
+                                }
+                                className="ml-auto rounded-full border border-dashed border-paper-300 px-2.5 py-1 text-[10.5px] text-paper-500 hover:border-manifest-400 hover:text-manifest-700"
+                              >
+                                + Blank row
+                              </button>
+                            </div>
+                          );
+                        })()}
                     </div>
                   ))}
                 </div>
@@ -549,51 +715,212 @@ export function PackingPage() {
       <Modal
         open={creating !== null}
         onClose={() => setCreating(null)}
-        title="Create packing list"
-        subtitle={creating ? `Against ${creating.salesOrderId}` : undefined}
+        title={creating?.step === "items" ? "Which items are going?" : "Create packing list"}
+        subtitle={
+          creating
+            ? creating.step === "items"
+              ? `${SCOPES.find((s) => s.id === creating.scope)?.label} against ${creating.salesOrderId}`
+              : `Against ${creating.salesOrderId}`
+            : undefined
+        }
+        width={creating?.step === "items" ? "max-w-3xl" : "max-w-lg"}
+        footer={
+          creating?.step === "items" ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setCreating({ ...creating, step: "scope" })}>
+                Back
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setCreating(null)}>
+                Cancel
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => confirmCreate(creating)}>
+                Create list with {Object.values(creating.picked).filter((q) => q > 0).length} item
+                {Object.values(creating.picked).filter((q) => q > 0).length === 1 ? "" : "s"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => setCreating(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  if (!creating) return;
+                  // A partial is the only scope where somebody has to choose. Full and final take
+                  // everything still outstanding, so asking would be a click that decides nothing.
+                  if (creating.scope === "partial") {
+                    setCreating({ ...creating, step: "items", picked: {} });
+                    return;
+                  }
+                  confirmCreate(creating);
+                }}
+              >
+                {creating?.scope === "partial" ? "Choose items" : "Create list"}
+              </Button>
+            </>
+          )
+        }
+      >
+        {creating?.step === "scope" && (
+          <div className="space-y-2">
+            <p className="text-xs text-paper-500">What does this load cover?</p>
+            {SCOPES.map((s) => (
+              <label
+                key={s.id}
+                className={clsx(
+                  "flex cursor-pointer items-start gap-2 rounded-lg border p-3 transition-colors",
+                  creating.scope === s.id
+                    ? "border-manifest-400 bg-manifest-50/50"
+                    : "border-paper-200 hover:border-paper-300"
+                )}
+              >
+                <input
+                  type="radio"
+                  checked={creating.scope === s.id}
+                  onChange={() => setCreating({ ...creating, scope: s.id })}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-paper-800">{s.label}</span>
+                  <span className="block text-[11px] text-paper-500">{s.help}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {creating?.step === "items" && (
+          <div className="space-y-2">
+            <p className="text-xs text-paper-500">
+              Tick what is going in this load and set the quantity. Anything already packed on an earlier list is
+              counted, so the outstanding figure is what is genuinely left.
+            </p>
+            <div className="overflow-hidden rounded-lg border border-paper-200">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-paper-700 text-left font-mono text-[9.5px] uppercase tracking-wide text-white">
+                    <th className="w-10 py-2 pl-3" />
+                    <th className="px-2 py-2">Item</th>
+                    <th className="w-20 px-2 py-2 text-right">Ordered</th>
+                    <th className="w-20 px-2 py-2 text-right">Packed</th>
+                    <th className="w-24 px-2 py-2 text-right">Outstanding</th>
+                    <th className="w-28 px-2 py-2 text-right">This load</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Anything already packed in full is gone from the list, not greyed out. It
+                      cannot be chosen, so showing it is just noise between the rows that can. */}
+                  {remainingFor(creating.salesOrderId).length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-6 text-center text-paper-400">
+                        Everything on this order has already been packed. Close this and use a final shipment instead.
+                      </td>
+                    </tr>
+                  )}
+                  {remainingFor(creating.salesOrderId).map((r) => {
+                    const outstanding = Math.max(0, -r.variance);
+                    const picked = creating.picked[r.itemId] ?? 0;
+                    return (
+                      <tr
+                        key={r.itemId}
+                        className={clsx("border-t border-paper-100", picked > 0 && "bg-manifest-50/60")}
+                      >
+                        <td className="py-1.5 pl-3">
+                          <input
+                            type="checkbox"
+                            checked={picked > 0}
+                            onChange={(e) =>
+                              setCreating({
+                                ...creating,
+                                picked: { ...creating.picked, [r.itemId]: e.target.checked ? outstanding : 0 },
+                              })
+                            }
+                            className="h-3.5 w-3.5 rounded border-paper-300 accent-pine-700"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <span className="font-mono text-pine-800">{r.itemCode}</span>
+                          <span className="ml-2 text-paper-500">{r.description}</span>
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-mono">{r.orderedQty}</td>
+                        <td className="px-2 py-1.5 text-right font-mono">{r.packedQty}</td>
+                        <td className="px-2 py-1.5 text-right font-mono font-semibold text-amber-700">
+                          {outstanding}
+                        </td>
+                        <td className="px-2 py-1.5 text-right">
+                          <input
+                            type="number"
+                            min={0}
+                            max={outstanding}
+                            value={picked}
+                            onChange={(e) =>
+                              setCreating({
+                                ...creating,
+                                picked: {
+                                  ...creating.picked,
+                                  [r.itemId]: Math.max(0, Math.min(outstanding, Number(e.target.value) || 0)),
+                                },
+                              })
+                            }
+                            className="w-20 rounded-md border border-paper-200 px-2 py-1 text-right font-mono text-xs"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* The draft document, exactly as the PI works: what you see here is what prints, so the two
+          cannot drift apart. */}
+      <Modal
+        open={previewId !== null}
+        onClose={() => setPreviewId(null)}
+        title={previewList ? `${previewList.id} — packing list` : "Packing list"}
+        subtitle={
+          previewList
+            ? `${SCOPES.find((s) => s.id === previewList.scope)?.label} · ${
+                previewList.finalizedDate ? "closed" : "draft, not yet closed"
+              }`
+            : undefined
+        }
+        width="max-w-4xl"
         footer={
           <>
-            <Button variant="secondary" size="sm" onClick={() => setCreating(null)}>
-              Cancel
+            <span className="mr-auto text-xs text-paper-500">
+              {previewList?.finalizedDate
+                ? "This is the final document."
+                : "Draft. Weights can still change until the list is closed."}
+            </span>
+            <Button variant="secondary" size="sm" onClick={() => setPreviewId(null)}>
+              Close
             </Button>
             <Button
               variant="primary"
               size="sm"
-              onClick={() => {
-                if (!creating) return;
-                const id = createPackingList(creating.salesOrderId, creating.scope);
-                pushToast({ tone: "success", title: "Packing list created", description: id });
-                setCreating(null);
-              }}
+              icon={<Printer className="h-3.5 w-3.5" />}
+              onClick={() => window.print()}
             >
-              Create list
+              Print
             </Button>
           </>
         }
       >
-        <div className="space-y-2">
-          <p className="text-xs text-paper-500">What does this load cover?</p>
-          {SCOPES.map((s) => (
-            <label
-              key={s.id}
-              className={clsx(
-                "flex cursor-pointer items-start gap-2 rounded-lg border p-3",
-                creating?.scope === s.id ? "border-manifest-400 bg-manifest-50/50" : "border-paper-200"
-              )}
-            >
-              <input
-                type="radio"
-                checked={creating?.scope === s.id}
-                onChange={() => setCreating((c) => (c ? { ...c, scope: s.id } : c))}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="block text-sm font-medium text-paper-800">{s.label}</span>
-                <span className="block text-[11px] text-paper-500">{s.help}</span>
-              </span>
-            </label>
-          ))}
-        </div>
+        {previewList && (
+          <PackingListDocument
+            list={previewList}
+            order={salesOrders.find((o) => o.id === previewList.salesOrderId)}
+            customer={customerOf(previewList)}
+            quotationRef={quotationRefFor(previewList)}
+            partialNo={partialNoFor(previewList)}
+          />
+        )}
       </Modal>
 
       <Modal
@@ -661,6 +988,21 @@ export function PackingPage() {
           Everything recorded on this list is removed, and the quantities on it stop counting towards the order.
         </p>
       </Modal>
+      </div>
+
+      {/* The printed copy. Hidden on screen, and the only thing on the page when printing. */}
+      {previewList && (
+        <div className="hidden print:block">
+          <PackingListDocument
+            list={previewList}
+            order={salesOrders.find((o) => o.id === previewList.salesOrderId)}
+            customer={customerOf(previewList)}
+            quotationRef={quotationRefFor(previewList)}
+            partialNo={partialNoFor(previewList)}
+            domId="packing-list-print"
+          />
+        </div>
+      )}
     </div>
   );
 }

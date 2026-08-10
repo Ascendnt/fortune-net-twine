@@ -226,6 +226,12 @@ body {
   body {
     background: white;
   }
+  /* Keeps a document's fills when the browser's "Background graphics" box is unchecked.
+     Without this the header bars print white-on-white and the document loses its identity.
+     .print-color-exact is the general hook: put it on any new document component and its colours
+     survive printing. The two ids predate the class and stay so nothing already working breaks. */
+  .print-color-exact,
+  .print-color-exact *,
   #pi-document-root,
   #pi-document-root *,
   #ci-document-root,

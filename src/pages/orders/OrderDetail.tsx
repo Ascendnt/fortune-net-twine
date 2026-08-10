@@ -20,13 +20,29 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Modal } from "@/components/ui/Modal";
 import { LifecycleStepper } from "@/components/domain/LifecycleStepper";
 import { useStore } from "@/lib/store";
-import { formatMoney, formatDate, formatDateTime } from "@/lib/format";
+import { formatMoney, formatDate, formatDateTime, piRef } from "@/lib/format";
 import { approvalSummary, canApprovePayments, canVerifyPayment } from "@/lib/paymentApproval";
 import { selectableUsers } from "@/lib/users";
+import {
+  canRecordAgainst,
+  ledgerForLine,
+  ledgerForOrder,
+  lineStatusText,
+  nextLineToSettle,
+  requiresFullPayment,
+  validateReceipt,
+} from "@/lib/paymentLedger";
 import { actualAmountFor, settleInspection } from "@/lib/inspectionPricing";
 import { DOCUMENT_CATEGORIES, fileKind, formatBytes, validateUpload } from "@/lib/documents";
 import { ORDER_STAGES, stageMeta } from "@/lib/types";
 import type { OrderDocumentCategory, OrderStage, PaymentRecord, PaymentType } from "@/lib/types";
+
+/** How a shipment scope reads on the order, where there is no room to explain it. */
+const SCOPE_LABEL: Record<string, string> = {
+  full: "Full shipment",
+  partial: "Partial shipment",
+  final: "Final shipment",
+};
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -60,6 +76,7 @@ export function OrderDetail() {
     removeOrderDocument,
     currentUser,
     users,
+    updatePayment,
   } = useStore();
   const [tab, setTab] = useState("overview");
   /** The Add payment dialog. Null when closed. */
@@ -71,6 +88,22 @@ export function OrderDetail() {
     intendedApprover: string;
     remarks: string;
   } | null>(null);
+  /**
+   * Recording money against an existing expectation, which is what actually happens. The amount
+   * prefills with what is outstanding on that line, so the common case is confirm-and-save rather
+   * than retyping a figure the system already holds.
+   */
+  const [receipt, setReceipt] = useState<{
+    paymentId: string;
+    amount: number;
+    dateReceived: string;
+    method: PaymentRecord["method"];
+    bankRef: string;
+    /** Proof of payment, read in the dialog and attached to the order when the receipt is saved. */
+    proof?: { name: string; mimeType: string; sizeBytes: number; dataUrl?: string };
+  } | null>(null);
+  /** The line being verified. Verification confirms an amount, so it asks before it acts. */
+  const [verifying, setVerifying] = useState<PaymentRecord | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadCategory, setUploadCategory] = useState<OrderDocumentCategory>("internal");
   const [shipModalOpen, setShipModalOpen] = useState(false);
@@ -115,7 +148,7 @@ export function OrderDetail() {
     role === "admin" ||
     role === "management";
 
-  const orderPackingList = packingLists.find((p) => p.salesOrderId === order.id);
+  const orderLists = packingLists.filter((p) => p.salesOrderId === order.id);
   const orderInspection = inspections.find((i) => i.salesOrderId === order.id);
   const orderShipment = shipments.find((s) => s.salesOrderId === order.id);
 
@@ -127,8 +160,27 @@ export function OrderDetail() {
   /** Only people who hold the approval permission can be routed to. */
   const approvers = selectableUsers(users).filter((u) => canApprovePayments(u.role));
 
+  const ledger = ledgerForOrder(order, payments);
+  const nextToSettle = nextLineToSettle(order, payments);
+  const receiptLine = receipt ? ledger.lines.find((l) => l.payment.id === receipt.paymentId) : undefined;
+
+  function openReceipt(p: PaymentRecord) {
+    const line = ledgerForLine(p);
+    setReceipt({
+      paymentId: p.id,
+      // Prefilled with what is still owed, not with zero. Typing an amount the system already knows
+      // is how a 1,276.78 expectation ends up matched by a 1,276.87 receipt.
+      amount: line.outstanding > 0 ? line.outstanding : p.expectedAmount,
+      dateReceived: new Date().toISOString().slice(0, 10),
+      method: p.method ?? "Telegraphic Transfer",
+      bankRef: p.bankRef ?? "",
+    });
+  }
+
   const myDocuments = orderDocuments.filter((d) => d.salesOrderId === order.id);
   const usedBytes = myDocuments.reduce((s, d) => s + d.sizeBytes, 0);
+  /** Proof attached to a particular payment line. */
+  const proofFor = (paymentId: string) => myDocuments.filter((d) => d.paymentId === paymentId);
 
   /**
    * Reads a chosen file and attaches it.
@@ -191,13 +243,25 @@ export function OrderDetail() {
       date: order.orderDate,
       status: order.customerPoNo ? "On file" : "Awaiting the customer PO",
     },
-    {
-      label: "Packing List",
-      reference: orderPackingList?.id ?? "",
-      date: orderPackingList?.finalizedDate ?? orderPackingList?.createdDate,
-      status: !orderPackingList ? "Not started" : orderPackingList.finalizedDate ? "Finalised" : "Open",
-      href: orderPackingList ? "/packing" : undefined,
-    },
+    ...(orderLists.length === 0
+      ? [
+          {
+            label: "Packing List",
+            reference: "",
+            date: undefined,
+            status: "Not started",
+            href: undefined as string | undefined,
+          },
+        ]
+      : // One row per list. An order shipped in three partials has three packing lists, and
+        // collapsing them into one line hides two of the documents the customer was sent.
+        orderLists.map((p) => ({
+          label: `Packing List · ${SCOPE_LABEL[p.scope] ?? p.scope}`,
+          reference: p.id,
+          date: p.finalizedDate ?? p.createdDate,
+          status: p.finalizedDate ? "Closed" : "Open",
+          href: "/packing" as string | undefined,
+        }))),
     {
       label: "Inspection Report",
       reference: orderInspection?.id ?? "",
@@ -272,7 +336,9 @@ export function OrderDetail() {
         title={order.id}
         description={`${customer?.name} · ${order.country} · ${
           order.quotationId
-            ? `from ${order.quotationId}`
+            ? // The revision matters: an order raised from PI-33007 and later revised is resting on
+              // PI-33007-R1, and the customer's copy says so.
+              `from ${quotation ? piRef(quotation.id, quotation.revisionNo) : order.quotationId}`
             : order.customerPoNo
               ? `on customer PO ${order.customerPoNo}`
               : "direct order"
@@ -288,6 +354,28 @@ export function OrderDetail() {
       <Card className="mb-5">
         <LifecycleStepper stages={order.stages} />
       </Card>
+
+      {/* Shipment scope belongs on the order, not only inside Packing. Whether the goods went in
+          one load or three is the first thing anyone asks when the counts do not tie up. */}
+      {orderLists.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-paper-500">Shipping as</span>
+          {orderLists.map((p) => (
+            <Link
+              key={p.id}
+              to="/packing"
+              className={`rounded-full border px-2.5 py-1 font-medium transition-colors ${
+                p.finalizedDate
+                  ? "border-pine-200 bg-pine-50 text-pine-800 hover:border-pine-400"
+                  : "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-400"
+              }`}
+            >
+              <span className="font-mono">{p.id}</span> · {SCOPE_LABEL[p.scope] ?? p.scope}
+              {!p.finalizedDate && " · open"}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {blockedStage && (
         <div className="mb-5 flex flex-wrap items-start gap-3 rounded-xl border border-alert-200 bg-alert-50 px-4 py-3">
@@ -505,30 +593,61 @@ export function OrderDetail() {
             {/* The three release indicators that used to sit here are gone. They restated what the
                 payment rows below already say, and nothing in the system acted on them, so they
                 were three red "Blocked" badges that could not be cleared by doing anything. */}
-            <div className="flex items-center justify-between gap-3">
+            {/* The money position, before the rows. Expected and received are facts; outstanding
+                is the number anyone actually came to this tab to find. */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <LedgerStat label="Expected" value={formatMoney(ledger.expected, order.currency)} />
+              <LedgerStat label="Received" value={formatMoney(ledger.received, order.currency)} tone="pine" />
+              <LedgerStat
+                label="Outstanding"
+                value={formatMoney(ledger.outstanding, order.currency)}
+                tone={ledger.outstanding > 0 ? "alert" : "pine"}
+              />
+              {ledger.overpaid > 0 ? (
+                <LedgerStat label="Overpaid" value={formatMoney(ledger.overpaid, order.currency)} tone="pine" />
+              ) : (
+                <LedgerStat
+                  label="Deposit"
+                  value={ledger.depositSettled ? "Cleared" : formatMoney(ledger.depositExpected - ledger.depositReceived, order.currency)}
+                  tone={ledger.depositSettled ? "pine" : "amber"}
+                />
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-paper-500">
-                Deposit and balance are raised automatically from the quotation. Add a line here for an adjustment or a
-                correction.
+                Deposit and balance are raised from the quotation. Record what arrives against them rather than typing a
+                new line — an adjustment is for a genuine extra, like a freight recharge.
               </p>
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Plus className="h-3.5 w-3.5" />}
-                onClick={() => {
-                  // Opens here rather than sending the user to Payments. Recording an adjustment is
-                  // a two-field job; losing the order you were looking at to do it is not worth it.
-                  setPaymentDraft({
-                    type: "adjustment",
-                    expectedAmount: 0,
-                    dueDate: new Date().toISOString().slice(0, 10),
-                    method: "Telegraphic Transfer",
-                    intendedApprover: "",
-                    remarks: "",
-                  });
-                }}
-              >
-                Add payment
-              </Button>
+              <div className="flex gap-2">
+                {nextToSettle && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Wallet className="h-3.5 w-3.5" />}
+                    onClick={() => openReceipt(nextToSettle.payment)}
+                  >
+                    Record payment
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Plus className="h-3.5 w-3.5" />}
+                  onClick={() =>
+                    setPaymentDraft({
+                      type: "adjustment",
+                      expectedAmount: 0,
+                      dueDate: new Date().toISOString().slice(0, 10),
+                      method: "Telegraphic Transfer",
+                      intendedApprover: "",
+                      remarks: "",
+                    })
+                  }
+                >
+                  Add adjustment
+                </Button>
+              </div>
             </div>
             <Table>
               <THead>
@@ -552,16 +671,30 @@ export function OrderDetail() {
                     <TD className="text-xs text-paper-500">{approvalSummary(p)}</TD>
                     <TD>
                       <Badge status={p.status} />
+                      {/* An overpaid line reads green, not amber. It is complete — the surplus is
+                          a note, not a fault, and colouring it as a warning puts a red mark
+                          against the account that is furthest ahead. */}
+                      <p
+                        className={`mt-0.5 text-[11px] ${
+                          ledgerForLine(p).outstanding > 0 ? "text-alert-600" : "text-pine-700"
+                        }`}
+                      >
+                        {lineStatusText(ledgerForLine(p), order.currency)}
+                      </p>
                     </TD>
                     <TD>
                       {/* Approval happens on the Payments screen, which is where the override and
                           its reason live. This tab shows where a line stands and points there. */}
-                      {!canVerifyPayment(p) ? (
+                      {!canRecordAgainst(p) ? (
                         <Link to="/payments" className="text-xs font-medium text-amber-700 hover:underline">
                           Needs approval
                         </Link>
-                      ) : p.status === "submitted_for_verification" && (role === "finance" || role === "admin") ? (
-                        <Button variant="success" size="sm" onClick={() => verifyPayment(p.id)}>
+                      ) : ledgerForLine(p).outstanding > 0 ? (
+                        <Button variant="primary" size="sm" onClick={() => openReceipt(p)}>
+                          Record
+                        </Button>
+                      ) : p.status !== "verified" && (role === "finance" || role === "admin") ? (
+                        <Button variant="success" size="sm" onClick={() => setVerifying(p)}>
                           Verify
                         </Button>
                       ) : (
@@ -733,6 +866,325 @@ export function OrderDetail() {
           </Card>
         )}
       </div>
+
+      <Modal
+        open={verifying !== null}
+        onClose={() => setVerifying(null)}
+        title="Verify this payment"
+        subtitle={verifying ? `${verifying.id} · ${verifying.type}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setVerifying(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              size="sm"
+              onClick={() => {
+                if (!verifying) return;
+                verifyPayment(verifying.id);
+                pushToast({
+                  tone: "success",
+                  title: "Payment verified",
+                  description: `${formatMoney(verifying.amountReceived, order.currency)} confirmed on ${verifying.id}.`,
+                });
+                setVerifying(null);
+              }}
+            >
+              Verify {formatMoney(verifying?.amountReceived ?? 0, order.currency)}
+            </Button>
+          </>
+        }
+      >
+        {verifying && (
+          <div className="space-y-3">
+            {/* Verification used to fire on the first click. It is the point where a claim becomes
+                a fact and releases the next stage of the order, so it states the figure and waits. */}
+            <div className="grid grid-cols-2 gap-3 rounded-lg bg-paper-50 p-3 text-xs">
+              <div>
+                <p className="text-paper-400">Expected</p>
+                <p className="font-mono text-paper-800">{formatMoney(verifying.expectedAmount, order.currency)}</p>
+              </div>
+              <div>
+                <p className="text-paper-400">Recorded as received</p>
+                <p className="font-mono text-sm font-bold text-pine-800">
+                  {formatMoney(verifying.amountReceived, order.currency)}
+                </p>
+              </div>
+              <div>
+                <p className="text-paper-400">Method</p>
+                <p className="text-paper-700">{verifying.method ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-paper-400">Bank reference</p>
+                <p className="font-mono text-paper-700">{verifying.bankRef || "—"}</p>
+              </div>
+            </div>
+
+            {ledgerForLine(verifying).overpaid > 0 && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">
+                This is {formatMoney(ledgerForLine(verifying).overpaid, order.currency)} more than was expected. The
+                line will be completed and the surplus recorded against the order.
+              </p>
+            )}
+            {ledgerForLine(verifying).outstanding > 0 && (
+              <p className="rounded-lg bg-paper-50 px-3 py-2 text-[11.5px] text-paper-600">
+                {formatMoney(ledgerForLine(verifying).outstanding, order.currency)} will remain outstanding on this
+                line after verifying.
+              </p>
+            )}
+
+            {proofFor(verifying.id).length > 0 ? (
+              <div className="text-xs">
+                <p className="mb-1 font-medium text-paper-600">Proof on file</p>
+                {proofFor(verifying.id).map((d) => (
+                  <a
+                    key={d.id}
+                    href={d.dataUrl}
+                    download={d.name}
+                    className="block truncate text-manifest-600 hover:underline"
+                  >
+                    {d.name}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-amber-700">
+                No proof of payment is attached to this line. Verify only if you have the bank advice in front of you.
+              </p>
+            )}
+
+            <p className="text-xs text-paper-500">
+              Verifying confirms the money arrived and releases the next stage of this order.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={receipt !== null}
+        onClose={() => setReceipt(null)}
+        title="Record payment received"
+        subtitle={
+          receiptLine
+            ? `Against ${receiptLine.payment.id} · ${receiptLine.payment.type} · ${formatMoney(
+                receiptLine.payment.expectedAmount,
+                order.currency
+              )} expected`
+            : undefined
+        }
+        width="max-w-lg"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setReceipt(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                if (!receipt || !receiptLine) return;
+                const problem = validateReceipt(receiptLine, receipt.amount);
+                if (problem) {
+                  pushToast({ tone: "warning", title: "Cannot record this", description: problem });
+                  return;
+                }
+                const total = receiptLine.payment.amountReceived + receipt.amount;
+                updatePayment(receipt.paymentId, {
+                  amountReceived: Math.round(total * 100) / 100,
+                  dateReceived: receipt.dateReceived,
+                  method: receipt.method,
+                  bankRef: receipt.bankRef || undefined,
+                  // A receipt is a claim until Finance confirms it against the bank.
+                  status: "submitted_for_verification",
+                });
+                if (receipt.proof) {
+                  addOrderDocument({
+                    salesOrderId: order.id,
+                    paymentId: receipt.paymentId,
+                    name: receipt.proof.name,
+                    mimeType: receipt.proof.mimeType,
+                    sizeBytes: receipt.proof.sizeBytes,
+                    category: "finance",
+                    dataUrl: receipt.proof.dataUrl,
+                    notes: `Proof of payment for ${receipt.paymentId}`,
+                  });
+                }
+                pushToast({
+                  tone: "success",
+                  title: "Payment recorded",
+                  description: "Finance verifies it against the bank advice before it counts as settled.",
+                });
+                setReceipt(null);
+              }}
+            >
+              Record payment
+            </Button>
+          </>
+        }
+      >
+        {receipt && receiptLine && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2 rounded-lg bg-paper-50 p-3 text-xs">
+              <div>
+                <p className="text-paper-400">Expected</p>
+                <p className="font-mono text-paper-800">
+                  {formatMoney(receiptLine.payment.expectedAmount, order.currency)}
+                </p>
+              </div>
+              <div>
+                <p className="text-paper-400">Already received</p>
+                <p className="font-mono text-paper-800">
+                  {formatMoney(receiptLine.payment.amountReceived, order.currency)}
+                </p>
+              </div>
+              <div>
+                <p className="text-paper-400">Outstanding</p>
+                <p className="font-mono font-semibold text-alert-600">
+                  {formatMoney(receiptLine.outstanding, order.currency)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-xs">
+                <span className="mb-1 block font-medium text-paper-600">Amount received</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  // The deposit has exactly one correct amount — what is still outstanding on it —
+                  // and typing anything else would only be rejected on save. Locked rather than
+                  // editable-then-corrected, so the field cannot say something the rule already
+                  // forbids.
+                  disabled={requiresFullPayment(receiptLine.payment.type)}
+                  value={requiresFullPayment(receiptLine.payment.type) ? receiptLine.outstanding : receipt.amount}
+                  onChange={(e) => setReceipt({ ...receipt, amount: Math.max(0, Number(e.target.value) || 0) })}
+                  className="w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-right font-mono text-sm disabled:cursor-not-allowed disabled:bg-paper-100 disabled:text-paper-500"
+                />
+                {requiresFullPayment(receiptLine.payment.type) && (
+                  <span className="mt-1 block text-[11px] leading-snug text-paper-400">
+                    The deposit is settled in full — a part payment would not release production.
+                  </span>
+                )}
+              </label>
+              <label className="text-xs">
+                <span className="mb-1 block font-medium text-paper-600">Date received</span>
+                <input
+                  type="date"
+                  value={receipt.dateReceived}
+                  onChange={(e) => setReceipt({ ...receipt, dateReceived: e.target.value })}
+                  className="w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="text-xs">
+                <span className="mb-1 block font-medium text-paper-600">Method</span>
+                <select
+                  value={receipt.method}
+                  onChange={(e) => setReceipt({ ...receipt, method: e.target.value as PaymentRecord["method"] })}
+                  className="w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="Telegraphic Transfer">Telegraphic Transfer</option>
+                  <option value="Wire Transfer">Wire Transfer</option>
+                  <option value="LC">LC</option>
+                  <option value="Check">Check</option>
+                  <option value="Cash">Cash</option>
+                </select>
+              </label>
+              <label className="text-xs">
+                <span className="mb-1 block font-medium text-paper-600">Bank reference</span>
+                <input
+                  value={receipt.bankRef}
+                  onChange={(e) => setReceipt({ ...receipt, bankRef: e.target.value })}
+                  placeholder="From the bank advice"
+                  className="w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+
+            {/* Proof of payment. Finance verifies against a bank advice, so the advice should
+                travel with the receipt rather than sitting in somebody's inbox. */}
+            <div className="rounded-lg border border-dashed border-paper-300 px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-paper-700">Proof of payment</p>
+                  <p className="text-[11px] leading-snug text-paper-400">
+                    Bank advice, remittance slip or deposit receipt. Attached to the order and linked to this line.
+                  </p>
+                </div>
+                <label className="cursor-pointer rounded-lg border border-paper-200 px-3 py-1.5 text-xs font-medium text-paper-700 hover:bg-paper-50">
+                  {receipt.proof ? "Replace file" : "Attach file"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!file) return;
+                      const problem = validateUpload({
+                        sizeBytes: file.size,
+                        name: file.name,
+                        existingTotalBytes: usedBytes,
+                      });
+                      if (problem) {
+                        pushToast({ tone: "warning", title: "Cannot attach that", description: problem });
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = () =>
+                        setReceipt((r) =>
+                          r
+                            ? {
+                                ...r,
+                                proof: {
+                                  name: file.name,
+                                  mimeType: file.type || "application/octet-stream",
+                                  sizeBytes: file.size,
+                                  dataUrl: typeof reader.result === "string" ? reader.result : undefined,
+                                },
+                              }
+                            : r
+                        );
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+              </div>
+              {receipt.proof && (
+                <p className="mt-2 flex items-center gap-2 text-[11px] text-pine-700">
+                  <span className="rounded bg-paper-100 px-1.5 py-0.5 font-mono text-[10px] text-paper-600">
+                    {fileKind(receipt.proof.name)}
+                  </span>
+                  <span className="min-w-0 truncate">{receipt.proof.name}</span>
+                  <span className="text-paper-400">{formatBytes(receipt.proof.sizeBytes)}</span>
+                  <button
+                    onClick={() => setReceipt({ ...receipt, proof: undefined })}
+                    className="text-paper-400 hover:text-alert-600"
+                    aria-label="Remove attachment"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </p>
+              )}
+            </div>
+
+            {/* Overpayment is stated, not blocked. Customers round up and settle two invoices in
+                one transfer; refusing the entry only means it gets recorded wrongly instead. */}
+            {receipt.amount > receiptLine.outstanding && receiptLine.outstanding > 0 && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">
+                That is {formatMoney(receipt.amount - receiptLine.outstanding, order.currency)} more than outstanding on
+                this line. It will be recorded as an overpayment and shown on the order.
+              </p>
+            )}
+            {receipt.amount > 0 && receipt.amount < receiptLine.outstanding && (
+              <p className="rounded-lg bg-paper-50 px-3 py-2 text-[11.5px] text-paper-600">
+                Part payment. {formatMoney(receiptLine.outstanding - receipt.amount, order.currency)} will remain
+                outstanding on this line.
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={paymentDraft !== null}
@@ -917,3 +1369,24 @@ export function OrderDetail() {
   );
 }
 
+/** One figure in the money strip above the payment rows. */
+function LedgerStat({ label, value, tone }: { label: string; value: string; tone?: "pine" | "alert" | "amber" }) {
+  return (
+    <div className="rounded-xl border border-paper-200 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-paper-400">{label}</p>
+      <p
+        className={`font-mono text-sm font-semibold ${
+          tone === "pine"
+            ? "text-pine-700"
+            : tone === "alert"
+              ? "text-alert-600"
+              : tone === "amber"
+                ? "text-amber-700"
+                : "text-paper-800"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}

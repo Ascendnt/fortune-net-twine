@@ -82,7 +82,16 @@ type ModalState =
 
 export function QuotationBuilder({ existing }: { existing?: Quotation }) {
   const navigate = useNavigate();
-  const { createQuotation, updateQuotation, pushToast, currentUser, pricingRules, lookupTables, customers } = useStore();
+  const {
+    createQuotation,
+    updateQuotation,
+    syncSalesOrderFromQuotation,
+    pushToast,
+    currentUser,
+    pricingRules,
+    lookupTables,
+    customers,
+  } = useStore();
   const isEdit = Boolean(existing);
 
   const [customerId, setCustomerId] = useState(existing?.customerId ?? customers[0]?.id ?? "");
@@ -458,7 +467,19 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
 
     if (existing) {
       updateQuotation(existing.id, shared);
-      pushToast({ tone: "success", title: "Quotation updated", description: `${existing.id} saved.` });
+      // The sales order raised from this quotation follows it. Called explicitly here rather than
+      // hidden inside updateQuotation, so it is visible at the call site that saving a quotation
+      // can move money on an order.
+      if (existing.salesOrderId) {
+        syncSalesOrderFromQuotation({ ...existing, ...shared });
+        pushToast({
+          tone: "info",
+          title: "Quotation updated",
+          description: `${existing.salesOrderId} has been updated to match.`,
+        });
+      } else {
+        pushToast({ tone: "success", title: "Quotation updated", description: `${existing.id} saved.` });
+      }
       navigate(`/quotations/${existing.id}`);
       return;
     }

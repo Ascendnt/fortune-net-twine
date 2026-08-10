@@ -30,7 +30,7 @@ import { ORDER_STAGES, isLiveStage } from "./types";
 import { INQUIRIES, TECHNICAL_ASSESSMENTS, MAIL_MESSAGES } from "./inquiryData";
 import { PRODUCTION_RUNS, PACKING_LISTS, INSPECTIONS, SHIPMENTS } from "./operationsData";
 import { emptyPricing, flattenBatches, newBatch, newBatchItem } from "./batches";
-import { recomputeSpecLine } from "./totals";
+import { recomputeSpecLine, totalsForQuotation } from "./totals";
 import type { BatchItem, QuotationBatch } from "./types";
 import {
   QUOTATIONS,
@@ -51,6 +51,7 @@ import { PERSIST_KEYS, clearPersisted, loadPersisted, persist } from "./persist"
 import { revisionLabel } from "./format";
 import { applyApproval, applyDecline, canVerifyPayment } from "./paymentApproval";
 import { migratePackingList, sectionTotals } from "./packing";
+import { stageReleasedBy } from "./paymentLedger";
 import { buildInspectionLines, settleInspection } from "./inspectionPricing";
 import type { PaymentApproval, PackingLine, ShipmentScope, OrderDocument } from "./types";
 
@@ -93,7 +94,7 @@ interface StoreState {
   removeProductionRun: (id: string) => void;
   /** Marks every run on an order finished and moves the order to Packing. */
   completeProduction: (salesOrderId: string) => void;
-  createPackingList: (salesOrderId: string, scope?: ShipmentScope) => string;
+  createPackingList: (salesOrderId: string, scope?: ShipmentScope, lines?: Omit<PackingLine, "id">[]) => string;
   updatePackingList: (id: string, patch: Partial<PackingList>) => void;
   removePackingList: (id: string) => void;
   /** Files attached to sales orders. */
@@ -198,6 +199,8 @@ interface StoreState {
   createQuotation: (q: Omit<Quotation, "id" | "revisionNo" | "revisions" | "status">) => string;
   updateQuotationStatus: (id: string, status: QuotationStatus, note?: string) => void;
   createRevision: (id: string, note: string) => void;
+  /** Pushes the given quotation's figures onto the sales order raised from it. */
+  syncSalesOrderFromQuotation: (quotation: Quotation) => void;
   convertToSalesOrder: (quotationId: string) => string;
   verifyPayment: (paymentId: string) => void;
   rejectPayment: (paymentId: string) => void;
@@ -400,17 +403,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [quotations, setQuotations] = useState<Quotation[]>(() =>
     migrateQuotations(loadPersisted(PERSIST_KEYS.quotations, QUOTATIONS))
   );
-  const [salesOrders, setSalesOrders] = useState<SalesOrder[]>(() => migrateSalesOrders(SALES_ORDERS));
+  const [salesOrders, setSalesOrders] = useState<SalesOrder[]>(() =>
+    migrateSalesOrders(loadPersisted(PERSIST_KEYS.salesOrders, SALES_ORDERS))
+  );
   const [specUsage, setSpecUsage] = useState<Record<string, number>>(() =>
     loadPersisted(PERSIST_KEYS.specUsage, {} as Record<string, number>)
   );
   const [orderDocuments, setOrderDocuments] = useState<OrderDocument[]>(() =>
     loadPersisted(PERSIST_KEYS.orderDocuments, [] as OrderDocument[])
   );
-  const [payments, setPayments] = useState<PaymentRecord[]>(PAYMENTS);
-  const [invoices, setInvoices] = useState<CommercialInvoice[]>(INVOICES);
-  const [approvals, setApprovals] = useState<ApprovalRequest[]>(APPROVALS);
-  const [activity, setActivity] = useState<ActivityEntry[]>(ACTIVITY);
+  const [payments, setPayments] = useState<PaymentRecord[]>(() => loadPersisted(PERSIST_KEYS.payments, PAYMENTS));
+  const [invoices, setInvoices] = useState<CommercialInvoice[]>(() =>
+    loadPersisted(PERSIST_KEYS.invoices, INVOICES)
+  );
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>(() =>
+    loadPersisted(PERSIST_KEYS.approvals, APPROVALS)
+  );
+  const [activity, setActivity] = useState<ActivityEntry[]>(() => loadPersisted(PERSIST_KEYS.activity, ACTIVITY));
   const [pricingRules, setPricingRules] = useState<PricingRule[]>(() =>
     loadPersisted(PERSIST_KEYS.pricingRules, PRICING_RULES)
   );
@@ -446,6 +455,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   useEffect(() => persist(PERSIST_KEYS.quotations, quotations), [quotations]);
+  useEffect(() => persist(PERSIST_KEYS.salesOrders, salesOrders), [salesOrders]);
+  useEffect(() => persist(PERSIST_KEYS.payments, payments), [payments]);
+  useEffect(() => persist(PERSIST_KEYS.invoices, invoices), [invoices]);
+  useEffect(() => persist(PERSIST_KEYS.approvals, approvals), [approvals]);
+  useEffect(() => persist(PERSIST_KEYS.activity, activity), [activity]);
   useEffect(() => persist(PERSIST_KEYS.pricingRules, pricingRules), [pricingRules]);
   useEffect(() => persist(PERSIST_KEYS.lookupTables, lookupTables), [lookupTables]);
   useEffect(() => persist(PERSIST_KEYS.specMaster, specMaster), [specMaster]);
@@ -597,6 +611,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const resetDemoData = useCallback(() => {
     clearPersisted();
     setQuotations(QUOTATIONS);
+    setSalesOrders(SALES_ORDERS);
+    setPayments(PAYMENTS);
+    setInvoices(INVOICES);
+    setApprovals(APPROVALS);
+    setActivity(ACTIVITY);
     setPricingRules(PRICING_RULES);
     setLookupTables(LOOKUP_TABLES);
     setSpecMaster(SPEC_MASTER);
@@ -1080,6 +1099,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
             // looking approved when it now needs approving again.
             approver: undefined,
             approvedDate: undefined,
+            // The customer's acceptance goes with it. They accepted the document as it stood; a
+            // revision is a different document, whatever the number on it. Carrying "Accepted"
+            // forward would show a sales order resting on agreement that was never given.
+            customerResponseNote: undefined,
             revisions: [
               ...refreshCurrentSnapshot(q),
               {
@@ -1099,8 +1122,87 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         recordId: id,
         comment: note,
       });
+
+      /**
+       * A revision reopens the figures, and a sales order raised on the old figures did not survive
+       * that: it goes back to being a quotation until the revision is accepted and converted again.
+       *
+       * Only when nothing real has happened on the order yet. Once money has actually arrived,
+       * deleting the order would delete the payment record of that money along with it — the
+       * revision needs to be reconciled with Finance at that point, not silently erase the order.
+       */
+      const q = quotations.find((x) => x.id === id);
+      const order = q?.salesOrderId ? salesOrders.find((so) => so.id === q.salesOrderId) : undefined;
+      if (order && !payments.some((p) => p.salesOrderId === order.id && p.amountReceived > 0)) {
+        removeSalesOrder(order.id);
+        logActivity({
+          action: `${order.id} reverted to quotation — sent back for revision`,
+          recordType: "Sales Order",
+          recordId: order.id,
+        });
+        pushToast({
+          tone: "info",
+          title: `${order.id} sent back to quotation`,
+          description: "Nothing had been paid against it, so it was reverted rather than carried forward.",
+        });
+      }
     },
-    [currentUser, logActivity]
+    [currentUser, logActivity, quotations, salesOrders, payments, removeSalesOrder, pushToast]
+  );
+
+  /**
+   * Pushes a quotation's current figures onto the sales order raised from it.
+   *
+   * A sales order is not a copy taken once and left alone: it is the same agreement, further along.
+   * When the quotation behind it is revised, an order still carrying the old value quietly
+   * disagrees with the document the customer holds, and the difference surfaces at final payment
+   * when it is expensive.
+   *
+   * Called explicitly by the quotation editor rather than folded into `updateQuotation`, so it is
+   * obvious at the call site that saving a quotation can move money on an order.
+   */
+  const syncSalesOrderFromQuotation = useCallback(
+    (q: Quotation) => {
+      // The quotation is passed in rather than looked up by id. The caller has just saved it, and
+      // React has not flushed that state yet, so a lookup here would sync the order against the
+      // figures the user just replaced.
+      if (!q.salesOrderId) return;
+      const { grandTotal } = totalsForQuotation(q);
+      const order = salesOrders.find((so) => so.id === q.salesOrderId);
+      if (!order || Math.abs(order.orderValue - grandTotal) < 0.005) return;
+
+      setSalesOrders((prev) =>
+        prev.map((so) => (so.id === q.salesOrderId ? { ...so, orderValue: grandTotal } : so))
+      );
+      // The deposit and balance follow the value, but only while they are still expected. A
+      // payment already verified is money that actually arrived, and rewriting it would falsify
+      // the bank record.
+      setPayments((prev) => {
+        const mine = prev.filter((p) => p.salesOrderId === q.salesOrderId);
+        const deposit = grandTotal * (q.depositPercent / 100);
+        return prev.map((p) => {
+          if (p.salesOrderId !== q.salesOrderId || p.status === "verified") return p;
+          if (p.type === "deposit") return { ...p, expectedAmount: Math.round(deposit * 100) / 100 };
+          if (p.type === "balance") {
+            const verifiedDeposit = mine
+              .filter((x) => x.type === "deposit" && x.status === "verified")
+              .reduce((s, x) => s + x.amountReceived, 0);
+            const balance = Math.max(0, grandTotal - (verifiedDeposit || deposit));
+            return { ...p, expectedAmount: Math.round(balance * 100) / 100 };
+          }
+          return p;
+        });
+      });
+
+      logActivity({
+        action: `Order value updated to ${grandTotal.toFixed(2)} from ${q.id}`,
+        previousStatus: order.orderValue.toFixed(2),
+        newStatus: grandTotal.toFixed(2),
+        recordType: "Sales Order",
+        recordId: q.salesOrderId,
+      });
+    },
+    [salesOrders, logActivity]
   );
 
   const duplicateQuotation = useCallback(
@@ -1189,8 +1291,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // The sales order carries its quotation's number: PI-33011 becomes SO-33011. An arbitrary
       // sequence meant nothing on the SO tied it back to the PI it came from.
       const soId = q.id.startsWith("PI-") ? q.id.replace(/^PI-/, "SO-") : nextId("SO");
-      const totalValue =
-        q.items.reduce((sum, li) => sum + li.totalPrice, 0) + q.freight - q.discount + q.tax;
+      // Shared with syncSalesOrderFromQuotation so the value an order is raised with and the value
+      // it is later corrected to come from the same formula. Adding items + freight - discount + tax
+      // by hand here missed that discount can be a percent, not an amount, and ignored batches
+      // entirely — so a percent-discount quotation converted to an order carrying the wrong value,
+      // deposit and balance from the moment it was raised.
+      const { grandTotal: totalValue } = totalsForQuotation(q);
 
       const newOrder: SalesOrder = {
         id: soId,
@@ -1396,7 +1502,14 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                   if (idx < targetIdx) {
                     return rec.status === "completed" ? rec : { ...rec, status: "completed", completedDate: today };
                   }
-                  if (idx === targetIdx) return { ...rec, status: "in_progress", pendingAction };
+                  if (idx === targetIdx) {
+                    // "Completed" is the terminal stage — there is nothing left to do once it is
+                    // reached, so it is marked done immediately rather than left "in progress"
+                    // forever with a pending action the UI never offers a button for.
+                    return stage === "completed"
+                      ? { ...rec, status: "completed", completedDate: today, pendingAction: undefined }
+                      : { ...rec, status: "in_progress", pendingAction };
+                  }
                   return { ...rec, status: "pending", pendingAction: undefined };
                 }),
               }
@@ -1456,7 +1569,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
    * customer's statement rather than only from the order.
    */
   const createPackingList = useCallback(
-    (salesOrderId: string, scope: ShipmentScope = "full"): string => {
+    (salesOrderId: string, scope: ShipmentScope = "full", lines: Omit<PackingLine, "id">[] = []): string => {
       const order = salesOrders.find((o) => o.id === salesOrderId);
       const existing = packingLists.filter((p) => p.salesOrderId === salesOrderId).length;
       const base = salesOrderId.replace(/^SO-/, "PL-");
@@ -1469,7 +1582,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           createdDate: new Date().toISOString().slice(0, 10),
           packedBy: currentUser,
           scope,
-          sections: [{ id: nextId("SEC"), title: "Section 1", lines: [] }],
+          // Opened with the chosen items already on it. A list that starts empty makes the user
+          // re-pick what they just picked, which is where rows get missed.
+          sections: [
+            {
+              id: nextId("SEC"),
+              title: "Section 1",
+              lines: lines.map((l) => ({ ...l, id: nextId("PKL") })),
+            },
+          ],
         },
         ...prev,
       ]);
@@ -1794,8 +1915,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         )
       );
       // Documents is no longer a stage of its own: the paperwork accumulates across the order
-      // rather than at one point in it, so departure closes the order out.
-      advanceOrderTo(shipment.salesOrderId, "completed", "Release shipping documents to the customer and bank");
+      // rather than at one point in it, so departure closes the order out. Completed is terminal —
+      // there is no further action for anyone to take, so none is passed here.
+      advanceOrderTo(shipment.salesOrderId, "completed");
       logActivity({
         action: `Shipment departed on ${shipment.vessel || "vessel TBA"}`,
         recordType: "Sales Order",
@@ -1832,8 +1954,41 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         recordType: "Payment",
         recordId: paymentId,
       });
+
+      /**
+       * Verifying money is the event the process waits on, so it moves the order.
+       *
+       * The deposit is what lets the factory commit material; the balance is what lets the
+       * container be booked. Without this the order sat at Deposit or Final Payment with the money
+       * already in, and the next team never learned it was their turn — the only way forward was
+       * somebody noticing and pressing Mark Step Complete by hand.
+       *
+       * The verified state is applied to a local copy first, because the setPayments above has not
+       * flushed yet and the ledger has to be read against the payment as it now stands.
+       */
+      const order = payment ? salesOrders.find((o) => o.id === payment.salesOrderId) : undefined;
+      // Mirrors the guard above: if the payment could not actually be marked verified, there is
+      // nothing here to release the order against.
+      if (payment && order && canVerifyPayment(payment)) {
+        const settled: PaymentRecord = {
+          ...payment,
+          status: "verified",
+          amountReceived: payment.amountReceived > 0 ? payment.amountReceived : payment.expectedAmount,
+        };
+        const after = payments.map((p) => (p.id === paymentId ? settled : p));
+        const next = stageReleasedBy(order, settled, after);
+        if (next) {
+          advanceOrderTo(
+            order.id,
+            next,
+            next === "packing"
+              ? "Raise the packing list for this order"
+              : "Book the container and raise the bill of lading"
+          );
+        }
+      }
     },
-    [payments, currentUser, logActivity]
+    [payments, salesOrders, currentUser, advanceOrderTo, logActivity]
   );
 
   const rejectPayment = useCallback(
@@ -1953,7 +2108,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               return { ...s, status: "completed" as const, completedDate: today, blocker: undefined, pendingAction: undefined };
             }
             if (s.stage === nextStage.id) {
-              return { ...s, status: "in_progress" as const, blocker: undefined };
+              // Completed is terminal — reaching it finishes it on the spot rather than leaving it
+              // "in progress" with nothing further for anyone to click.
+              return nextStage.id === "completed"
+                ? { ...s, status: "completed" as const, completedDate: today, blocker: undefined, pendingAction: undefined }
+                : { ...s, status: "in_progress" as const, blocker: undefined };
             }
             return s;
           });
@@ -2086,6 +2245,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createQuotation,
       updateQuotationStatus,
       createRevision,
+      syncSalesOrderFromQuotation,
       convertToSalesOrder,
       verifyPayment,
       rejectPayment,
@@ -2191,6 +2351,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       createQuotation,
       updateQuotationStatus,
       createRevision,
+      syncSalesOrderFromQuotation,
       convertToSalesOrder,
       verifyPayment,
       rejectPayment,

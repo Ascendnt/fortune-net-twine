@@ -8,10 +8,15 @@
 // Bump PREFIX when a slice's shape changes incompatibly — old values then simply miss and the
 // seeds load, which is the desired behaviour for a prototype.
 
-const PREFIX = "fnt.v1.";
+const PREFIX = "fnt.v2.";
 
 export const PERSIST_KEYS = {
   quotations: "quotations",
+  salesOrders: "salesOrders",
+  payments: "payments",
+  invoices: "invoices",
+  approvals: "approvals",
+  activity: "activity",
   pricingRules: "pricingRules",
   lookupTables: "lookupTables",
   specMaster: "specMaster",

@@ -95,6 +95,21 @@ describe("reconcilePacking", () => {
     expect(extra!.status).toBe("over");
   });
 
+  it("separates what is on the current list from what other lists contributed", () => {
+    const first = list([{ itemId: "LI-1", itemCode: "N-1596", qtyPcs: 4 }]);
+    const second = { ...list([{ itemId: "LI-1", itemCode: "N-1596", qtyPcs: 3 }]), id: "PL-2" };
+    const rows = reconcilePacking([orderItem()], [first, second], "PL-2");
+    expect(rows[0].packedQty).toBe(7);
+    expect(rows[0].packedHere).toBe(3);
+  });
+
+  it("leaves packedHere unknown when no current list is given, rather than claiming it is zero", () => {
+    // Zero would read as "none of this is on the open list", which is a claim the caller never
+    // made. Unknown is the honest answer, and it makes verifyPacking fail safe.
+    const rows = reconcilePacking([orderItem()], [list([{ itemId: "LI-1", itemCode: "N-1596", qtyPcs: 4 }])]);
+    expect(rows[0].packedHere).toBeUndefined();
+  });
+
   it("adds up net and gross across matching rows", () => {
     const rows = reconcilePacking(
       [orderItem()],
@@ -144,6 +159,43 @@ describe("verifyPacking", () => {
     expect(verifyPacking(overRows, "full").ok).toBe(false);
     expect(verifyPacking(overRows, "partial").ok).toBe(false);
     expect(verifyPacking(overRows, "final").ok).toBe(false);
+  });
+
+  it("blocks an overship when it cannot tell which list it came from", () => {
+    // No current list was named, so there is no basis for calling it somebody else's problem.
+    // Fail safe: not knowing whether it can be fixed is no reason to let the goods go.
+    expect(overRows[0]?.packedHere ?? overRows.find((r) => r.status === "over")?.packedHere).toBeUndefined();
+    expect(verifyPacking(overRows, "partial").ok).toBe(false);
+  });
+
+  it("does not block on an overship inherited from a list that is already closed", () => {
+    // Nothing on the open list can be edited to fix it, so refusing to close strands the order
+    // with no way forward at all.
+    const closed = list([{ itemCode: "WRONG-1", qtyPcs: 8 }]);
+    const open = { ...list([{ itemId: "LI-1", itemCode: "N-1596", qtyPcs: 10 }]), id: "PL-2" };
+    const rows = reconcilePacking([orderItem()], [closed, open], "PL-2");
+    const v = verifyPacking(rows, "full");
+    expect(v.ok).toBe(true);
+    expect(v.message).toContain("earlier list");
+    expect(v.message).toContain("WRONG-1");
+  });
+
+  it("still blocks when the overship is on the list being closed", () => {
+    const closed = list([{ itemCode: "WRONG-1", qtyPcs: 8 }]);
+    const open = { ...list([{ itemCode: "WRONG-1", qtyPcs: 2 }]), id: "PL-2" };
+    const rows = reconcilePacking([orderItem()], [closed, open], "PL-2");
+    expect(verifyPacking(rows, "partial").ok).toBe(false);
+  });
+
+  it("still blocks a full shipment that is short, even when an unrelated inherited overship excuses itself", () => {
+    // An unfixable overship on WRONG-1 must not wave through a genuine shortfall on LI-1 — that
+    // would close a "full" shipment that never actually reconciled.
+    const closed = list([{ itemCode: "WRONG-1", qtyPcs: 8 }]);
+    const open = { ...list([{ itemId: "LI-1", itemCode: "N-1596", qtyPcs: 4 }]), id: "PL-2" };
+    const rows = reconcilePacking([orderItem()], [closed, open], "PL-2");
+    const v = verifyPacking(rows, "full");
+    expect(v.ok).toBe(false);
+    expect(v.message).toContain("short");
   });
 
   it("blocks closing a list with nothing packed", () => {

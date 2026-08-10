@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
 import { formatDate, formatMoney } from "@/lib/format";
+import { ledgerForOrder } from "@/lib/paymentLedger";
 import type { ShipmentStatus } from "@/lib/types";
 
 // Shipment closes the loop. Booking pulls the gross weight from what was actually packed, and
@@ -86,17 +87,28 @@ export function ShipmentsPage() {
    * a customer who has always paid, and that call belongs to the sales team, not to a rule in a
    * form. What the system owes them is the number, in front of them, at the moment they book —
    * rather than leaving it to be discovered on a statement weeks later.
+   *
+   * Goes through the same ledger the order page reads rather than summing each line's own shortfall:
+   * summed per line, an overpaid deposit and a short balance on the same order would not net against
+   * each other, and this screen would show money owed that the order page already shows as settled.
    */
-  const outstandingOn = (soId: string) =>
-    payments
-      .filter((p) => p.salesOrderId === soId && p.status !== "rejected")
-      .reduce((sum, p) => sum + Math.max(0, p.expectedAmount - p.amountReceived), 0);
+  const outstandingOn = (soId: string) => {
+    const so = salesOrders.find((s) => s.id === soId);
+    return so ? ledgerForOrder(so, payments).outstanding : 0;
+  };
 
   const currencyOf = (soId: string) => salesOrders.find((s) => s.id === soId)?.currency ?? "USD";
 
   const totalOutstanding = shipments
     .filter((s) => s.status !== "arrived")
     .reduce((sum, s) => sum + outstandingOn(s.salesOrderId), 0);
+
+  /** Passed inspection, but the balance has not been verified so nothing can be booked yet. */
+  const awaitingPayment = salesOrders.filter(
+    (so) =>
+      so.currentStage === "final_payment" &&
+      inspections.some((i) => i.salesOrderId === so.id && i.result === "pass")
+  );
 
   /** Containers already gone, or booked to go, with money still owed against them. */
   const unpaidShipped = shipments.filter((s) => outstandingOn(s.salesOrderId) > 0);
@@ -216,6 +228,42 @@ export function ShipmentsPage() {
           ))}
         </div>
       </div>
+
+      {/* Orders that have passed inspection but are waiting on the balance. Without this the
+          screen is silent about them, and the only clue that anything is pending is a container
+          that never appears. */}
+      {awaitingPayment.length > 0 && (
+        <Card className="mb-4 border-amber-200 bg-amber-50/40">
+          <CardHeader
+            title="Passed inspection, waiting on final payment"
+            eyebrow="Not yet bookable"
+            subtitle="The goods are cleared. The container can be booked once the balance is verified."
+          />
+          <div className="space-y-2">
+            {awaitingPayment.map((so) => (
+              <div
+                key={so.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs"
+              >
+                <div>
+                  <Link to={`/orders/${so.id}`} className="font-mono font-semibold text-manifest-600 hover:underline">
+                    {so.id}
+                  </Link>
+                  <span className="ml-2 text-paper-700">{customerName(so.id)}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono font-semibold text-amber-800">
+                    {formatMoney(outstandingOn(so.id), currencyOf(so.id))} outstanding
+                  </span>
+                  <Link to={`/orders/${so.id}`} className="font-medium text-manifest-600 hover:underline">
+                    Record payment
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {bookable.length > 0 && (
         <Card className="mb-4 border-manifest-200 bg-manifest-50/40">

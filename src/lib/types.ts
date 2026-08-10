@@ -823,6 +823,8 @@ export type OrderDocumentCategory = "internal" | "customer" | "shipping" | "fina
 export interface OrderDocument {
   id: string;
   salesOrderId: string;
+  /** Set when the file is proof of a specific receipt, so the payment row can link straight to it. */
+  paymentId?: string;
   name: string;
   mimeType: string;
   sizeBytes: number;
