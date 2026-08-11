@@ -262,22 +262,21 @@ function SpecRow({
         />
       </td>
       <td className="px-2 py-1.5">
-        {/* Empty while you are typing, and 1 if you leave it empty. A rate of 0 prices the line at
-            nothing and is indistinguishable from a rate somebody meant. */}
+        {/* Starts and stays blank until somebody types a rate. Zero is the stored stand-in for
+            "not entered", never shown as a figure — a rate nobody has decided is absent, not nil. */}
         <NumberInput
           value={spec.givenPriceKg}
-          fallback={1}
+          blankValue={0}
           step="0.0001"
           onCommit={(n) => handlers.onPatchSpec(itemId, spec.id, { givenPriceKg: n })}
           className={clsx(miniInput, "text-right")}
         />
       </td>
       <td className="px-2 py-1.5">
-        {/* Quantity is whole pieces, and an empty box settles back to 1 rather than 0 — a line
-            with no quantity is a line that should not be on the quotation. */}
+        {/* Whole pieces, and blank until entered. */}
         <NumberInput
           value={spec.qtyPcs}
-          fallback={1}
+          blankValue={0}
           integer
           onCommit={(n) => handlers.onPatchSpec(itemId, spec.id, { qtyPcs: n })}
           className={clsx(miniInput, "text-right")}
@@ -313,10 +312,16 @@ function SpecRow({
       <td className="px-2 py-1.5">
         {/* Typed directly. Pricing is manual; the Add Pricing helper can fill this in, but the
             number here is always the one that counts. */}
+        {/* Blank until a price exists. Clearing it also hands the line back to the calculation
+            rather than pinning it at a manual zero — an emptied box means "I have not decided",
+            not "the price is nothing". */}
         <NumberInput
           value={spec.unitPrice}
+          blankValue={0}
           step="0.0001"
-          onCommit={(n) => handlers.onPatchSpec(itemId, spec.id, { unitPrice: n, manualUnitPrice: true })}
+          onCommit={(n) =>
+            handlers.onPatchSpec(itemId, spec.id, { unitPrice: n, manualUnitPrice: n > 0 })
+          }
           className={clsx(miniInput, "text-right")}
         />
       </td>

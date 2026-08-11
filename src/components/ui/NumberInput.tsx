@@ -17,6 +17,7 @@ export function NumberInput({
   value,
   onCommit,
   fallback = 0,
+  blankValue,
   integer = false,
   min = 0,
   max,
@@ -28,8 +29,17 @@ export function NumberInput({
 }: {
   value: number;
   onCommit: (n: number) => void;
-  /** What an empty field becomes when focus leaves it. */
+  /** What an empty field becomes when focus leaves it. Ignored when `blankValue` is set. */
   fallback?: number;
+  /**
+   * The stored number that means "nothing entered yet", shown as an empty box.
+   *
+   * Some fields have no sensible default at all: a rate or a quantity nobody has typed is not
+   * zero and not one, it is simply absent. Without this the field could only look empty while it
+   * had focus, and snapped back to a number the moment you clicked away — which reads as the
+   * system refusing to let you clear it.
+   */
+  blankValue?: number;
   /** Whole numbers only — quantities and piece counts. Weights and rates keep their decimals. */
   integer?: boolean;
   min?: number;
@@ -59,7 +69,7 @@ export function NumberInput({
       title={title}
       aria-label={ariaLabel}
       className={className}
-      value={draft ?? String(value)}
+      value={draft ?? (blankValue !== undefined && value === blankValue ? "" : String(value))}
       onChange={(e) => {
         const raw = e.target.value;
         setDraft(raw);
@@ -70,7 +80,9 @@ export function NumberInput({
         if (Number.isFinite(parsed)) onCommit(clamp(parsed));
       }}
       onBlur={() => {
-        if (draft !== null && draft.trim() === "") onCommit(clamp(fallback));
+        // An empty box settles to blankValue where the field is allowed to be empty, and to
+        // fallback where it is not. Either way the draft is dropped so the stored value shows.
+        if (draft !== null && draft.trim() === "") onCommit(blankValue ?? clamp(fallback));
         setDraft(null);
       }}
     />

@@ -54,19 +54,18 @@ describe("factories", () => {
   it("creates spec lines at documented defaults", () => {
     const row = SPEC_MASTER.find((r) => r.code === "N-1596")!;
     const line = newSpecLine(row);
-    // USD/WT starts at 1, not 0. A zero rate prices the line at nothing, which is impossible to
-    // tell apart from a line nobody has priced yet; 1 is obviously a placeholder.
-    expect(line.givenPriceKg).toBe(1);
-    expect(line.pricing.givenPriceKg).toBe(1);
-    expect(line.qtyPcs).toBe(1);
+    // Rate and quantity start at 0, which the builder shows as an empty box. Zero is the stored
+    // stand-in for "not entered yet" and is never rendered as a figure, so it cannot be mistaken
+    // for a price or a count somebody decided on.
+    expect(line.givenPriceKg).toBe(0);
+    expect(line.pricing.givenPriceKg).toBe(0);
+    expect(line.qtyPcs).toBe(0);
+    expect(line.unitPrice).toBe(0);
+    expect(line.amount).toBe(0);
     expect(line.pricing.appliedRuleIds).toEqual([]);
     expect(line.weightPerPc).toBe(495);
-    // Weight lands immediately from the master row — before any pricing is entered.
+    // Weight is different: it comes from the catalog, so it is a real figure from the start.
     expect(line.weightKg).toBe(495);
-    // At 1 per kilo the opening U/P is simply the weight, so the row is arithmetically consistent
-    // from the moment it appears rather than showing a price of zero against a real weight.
-    expect(line.unitPrice).toBe(495);
-    expect(line.amount).toBe(495);
     expect(line.description).toBe(specRowLabel(row));
   });
 

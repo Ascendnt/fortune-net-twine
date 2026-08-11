@@ -73,14 +73,14 @@ export function newSpecLine(row: SpecMasterRow): SpecLine {
     meshDepth: row.meshDepth,
     length: row.length,
     weightPerPc: row.weightPerPc,
-    // Starts at 1 rather than 0. A zero rate prices the line at nothing, which is indistinguishable
-    // from a line somebody has not got to yet; 1 is obviously a placeholder and cannot be mistaken
-    // for a real quote.
-    givenPriceKg: 1,
-    qtyPcs: 1,
-    pricing: emptyPricing(1),
-    unitPrice: row.weightPerPc,
-    amount: row.weightPerPc,
+    // Rate and quantity start at 0, which the builder renders as an empty box. Zero is the stored
+    // stand-in for "nobody has typed this yet" and is never shown as a figure, so it cannot be
+    // read as a decision. Weight comes from the catalog and is a real number from the start.
+    givenPriceKg: 0,
+    qtyPcs: 0,
+    pricing: emptyPricing(0),
+    unitPrice: 0,
+    amount: 0,
     weightKg: row.weightPerPc,
   };
 }
