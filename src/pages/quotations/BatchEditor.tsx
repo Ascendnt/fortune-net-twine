@@ -5,7 +5,7 @@ import { BATCH_LABEL, isPricingUntouched, lacingAmount } from "@/lib/batches";
 import { batchTotal } from "@/lib/totals";
 import { formatMoney } from "@/lib/format";
 import { formatRuleRate, lookupKeyForSpecRow } from "@/lib/pricing";
-import { NON_NEGATIVE, NON_NEGATIVE_INT, toNonNegative } from "@/lib/num";
+import { NumberInput } from "@/components/ui/NumberInput";
 import type { BatchItem, Currency, LacingLine, LookupTable, PricingRule, QuotationBatch, SpecLine } from "@/lib/types";
 
 // Renders one batch group. All three types share the banner, delete and footer-total frame; the body
@@ -254,36 +254,32 @@ function SpecRow({
         {/* Editable. The catalog weight is a standard, and a real panel comes off the machine a
             little heavier or lighter; the quoted weight has to be the one being shipped, because
             the freight and the total weight on the document both come off it. */}
-        <input
-          {...NON_NEGATIVE}
-          step="0.01"
+        <NumberInput
           value={spec.weightPerPc}
-          onChange={(e) => handlers.onPatchSpec(itemId, spec.id, { weightPerPc: toNonNegative(e.target.value) })}
+          onCommit={(n) => handlers.onPatchSpec(itemId, spec.id, { weightPerPc: n })}
           className={clsx(miniInput, "text-right")}
           title="Weight of one piece. Change it if the actual differs from the catalog standard."
         />
       </td>
       <td className="px-2 py-1.5">
-        {/* Clearing the box falls back to 1, not 0. Backspacing to retype a rate briefly emptied
-            the field, which was read as zero and priced the whole line at nothing — and a zero
-            that arrived by accident looks exactly like a zero somebody meant. */}
-        <input
-          {...NON_NEGATIVE}
-          step="0.0001"
+        {/* Empty while you are typing, and 1 if you leave it empty. A rate of 0 prices the line at
+            nothing and is indistinguishable from a rate somebody meant. */}
+        <NumberInput
           value={spec.givenPriceKg}
-          onChange={(e) =>
-            handlers.onPatchSpec(itemId, spec.id, {
-              givenPriceKg: e.target.value.trim() === "" ? 1 : toNonNegative(e.target.value),
-            })
-          }
+          fallback={1}
+          step="0.0001"
+          onCommit={(n) => handlers.onPatchSpec(itemId, spec.id, { givenPriceKg: n })}
           className={clsx(miniInput, "text-right")}
         />
       </td>
       <td className="px-2 py-1.5">
-        <input
-          {...NON_NEGATIVE_INT}
+        {/* Quantity is whole pieces, and an empty box settles back to 1 rather than 0 — a line
+            with no quantity is a line that should not be on the quotation. */}
+        <NumberInput
           value={spec.qtyPcs}
-          onChange={(e) => handlers.onPatchSpec(itemId, spec.id, { qtyPcs: toNonNegative(e.target.value) })}
+          fallback={1}
+          integer
+          onCommit={(n) => handlers.onPatchSpec(itemId, spec.id, { qtyPcs: n })}
           className={clsx(miniInput, "text-right")}
         />
       </td>
@@ -317,15 +313,10 @@ function SpecRow({
       <td className="px-2 py-1.5">
         {/* Typed directly. Pricing is manual; the Add Pricing helper can fill this in, but the
             number here is always the one that counts. */}
-        <input
-          {...NON_NEGATIVE}
+        <NumberInput
           value={spec.unitPrice}
-          onChange={(e) =>
-            handlers.onPatchSpec(itemId, spec.id, {
-              unitPrice: toNonNegative(e.target.value),
-              manualUnitPrice: true,
-            })
-          }
+          step="0.0001"
+          onCommit={(n) => handlers.onPatchSpec(itemId, spec.id, { unitPrice: n, manualUnitPrice: true })}
           className={clsx(miniInput, "text-right")}
         />
       </td>
@@ -384,10 +375,9 @@ function LacingBody({
                   </td>
                   <td className="px-2 py-1.5">
                     {line.kind === "twine" ? (
-                      <input
-                        {...NON_NEGATIVE}
+                      <NumberInput
                         value={line.kgs}
-                        onChange={(e) => handlers.onPatchLacing(line.id, { kgs: toNonNegative(e.target.value) })}
+                        onCommit={(n) => handlers.onPatchLacing(line.id, { kgs: n })}
                         className={clsx(miniInput, "text-right")}
                       />
                     ) : (
@@ -395,10 +385,10 @@ function LacingBody({
                     )}
                   </td>
                   <td className="px-2 py-1.5">
-                    <input
-                      {...NON_NEGATIVE}
+                    <NumberInput
                       value={line.rate}
-                      onChange={(e) => handlers.onPatchLacing(line.id, { rate: toNonNegative(e.target.value) })}
+                      step="0.0001"
+                      onCommit={(n) => handlers.onPatchLacing(line.id, { rate: n })}
                       className={clsx(miniInput, "text-right")}
                     />
                   </td>

@@ -85,6 +85,9 @@ export function QuotationDetail() {
   const isEditable = q?.status === "draft" || q?.status === "revised";
 
   const linkedOrder = q?.salesOrderId ? salesOrders.find((so) => so.id === q.salesOrderId) : undefined;
+  /** A closed-out order is history. Nothing upstream of it can usefully change any more. */
+  const orderCompleted = linkedOrder?.currentStage === "completed";
+
   /** Past deposit means money has moved, so a change of value is somebody else's decision too. */
   const orderPastDeposit = linkedOrder
     ? ORDER_STAGES.findIndex((s) => s.id === linkedOrder.currentStage) >
@@ -258,9 +261,19 @@ export function QuotationDetail() {
             Edit
           </Button>
         )}
-        <Button variant="secondary" size="sm" icon={<GitBranch className="h-3.5 w-3.5" />} onClick={() => setModal("revision")}>
-          Create Revision
-        </Button>
+        {/* No revising a finished order. Once the goods have shipped, been paid for and the order
+            closed, there is nothing left for a new version of the quotation to change — it would
+            only put a document on file that contradicts what actually happened. */}
+        {!orderCompleted && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<GitBranch className="h-3.5 w-3.5" />}
+            onClick={() => setModal("revision")}
+          >
+            Create Revision
+          </Button>
+        )}
         <Button
           variant="secondary"
           size="sm"

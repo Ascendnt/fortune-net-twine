@@ -645,7 +645,6 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                 <input
                   value={headerRemarks}
                   onChange={(e) => setHeaderRemarks(e.target.value)}
-                  placeholder="e.g. Supersedes PI-33006"
                   className={inputClass}
                 />
               </Field>
