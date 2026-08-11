@@ -75,6 +75,15 @@ export function QuotationDetail() {
    * be reworked freely; afterwards it is the basis of a live order, and its figures are what the
    * customer will be invoiced against.
    */
+  /**
+   * Editing in place is only honest while the document is still a draft.
+   *
+   * Once it has been approved, somebody has signed off the figures and they may already be with
+   * the customer. Changing them silently means the copy in their inbox and the copy here disagree
+   * with nothing on the record to explain it. Create Revision does the same job and keeps both.
+   */
+  const isEditable = q?.status === "draft" || q?.status === "revised";
+
   const linkedOrder = q?.salesOrderId ? salesOrders.find((so) => so.id === q.salesOrderId) : undefined;
   /** Past deposit means money has moved, so a change of value is somebody else's decision too. */
   const orderPastDeposit = linkedOrder
@@ -235,14 +244,20 @@ export function QuotationDetail() {
             </Button>
           </Link>
         )}
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Pencil className="h-3.5 w-3.5" />}
-          onClick={() => (linkedOrder ? setModal("editWarning") : navigate(`/quotations/${q.id}/edit`))}
-        >
-          Edit
-        </Button>
+        {/* Edit disappears once the quotation has been approved. Past that point the customer, or
+            at least an approver, has seen the figures, and changing them in place leaves no trace
+            that they ever differed. Revising is the honest route: the old version is kept, the new
+            one is numbered, and the customer's copy can still be reconciled against ours. */}
+        {isEditable && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Pencil className="h-3.5 w-3.5" />}
+            onClick={() => (linkedOrder ? setModal("editWarning") : navigate(`/quotations/${q.id}/edit`))}
+          >
+            Edit
+          </Button>
+        )}
         <Button variant="secondary" size="sm" icon={<GitBranch className="h-3.5 w-3.5" />} onClick={() => setModal("revision")}>
           Create Revision
         </Button>

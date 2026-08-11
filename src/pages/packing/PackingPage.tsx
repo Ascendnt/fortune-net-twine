@@ -34,6 +34,64 @@ import clsx from "clsx";
 const input =
   "w-full rounded-lg border border-paper-200 bg-white px-2.5 py-1.5 text-xs focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
 
+/** Page controls, rendered above and below the list so neither end is a scroll away. */
+function Pager({
+  page,
+  pageCount,
+  pageSize,
+  total,
+  onPage,
+  onPageSize,
+}: {
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  onPage: (n: number) => void;
+  onPageSize: (n: number) => void;
+}) {
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-paper-200 bg-white px-3 py-2 text-xs">
+      <span className="text-paper-500">
+        Showing {from}–{to} of {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          className="rounded-md border border-paper-200 bg-white px-2 py-1 text-xs"
+          aria-label="Lists per page"
+        >
+          {[10, 25, 50].map((n) => (
+            <option key={n} value={n}>
+              {n} per page
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="rounded-md border border-paper-200 px-2 py-1 disabled:opacity-40"
+        >
+          Previous
+        </button>
+        <span className="font-mono text-paper-600">
+          {page} / {pageCount}
+        </span>
+        <button
+          onClick={() => onPage(Math.min(pageCount, page + 1))}
+          disabled={page >= pageCount}
+          className="rounded-md border border-paper-200 px-2 py-1 disabled:opacity-40"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const SCOPES: { id: ShipmentScope; label: string; help: string }[] = [
   { id: "full", label: "Full shipment", help: "Everything on the order goes in this one load." },
   { id: "partial", label: "Partial shipment", help: "Part of the order now, the rest to follow." },
@@ -63,7 +121,11 @@ export function PackingPage() {
 
   const [query, setQuery] = useState("");
   const [customerFilter, setCustomerFilter] = useState<string>("all");
-  const [openFilter, setOpenFilter] = useState<"all" | "open" | "closed">("all");
+  // Open first, and the default: an open list is one somebody still has work to do on. Closed
+  // lists are reference, and All is the fallback rather than the starting point.
+  const [openFilter, setOpenFilter] = useState<"open" | "closed" | "all">("open");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   /**
    * Creating a list is two decisions, so it is two steps.
    *
@@ -79,6 +141,10 @@ export function PackingPage() {
   } | null>(null);
   /** The list being previewed as a printable document. */
   const [previewId, setPreviewId] = useState<string | null>(null);
+  /** Which section is having items added to it, and what has been ticked so far. */
+  const [picking, setPicking] = useState<{ listId: string; sectionId: string } | null>(null);
+  const [pickQuery, setPickQuery] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
   const [confirmClose, setConfirmClose] = useState<PackingList | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<PackingList | null>(null);
 
@@ -109,11 +175,12 @@ export function PackingPage() {
   const previewList = previewId ? packingLists.find((p) => p.id === previewId) : undefined;
 
   /** The PI reference as the customer knows it, revision suffix and all. */
-  const quotationRefFor = (list: PackingList) => {
-    const order = salesOrders.find((o) => o.id === list.salesOrderId);
+  const refForOrder = (salesOrderId: string) => {
+    const order = salesOrders.find((o) => o.id === salesOrderId);
     const q = order?.quotationId ? quotations.find((x) => x.id === order.quotationId) : undefined;
-    return q ? piRef(q.id, q.revisionNo) : order?.quotationId;
+    return q ? piRef(q.id, q.revisionNo) : (order?.quotationId ?? salesOrderId);
   };
+  const quotationRefFor = (list: PackingList) => refForOrder(list.salesOrderId);
 
   /**
    * Which partial this is, counting only the partials on the same order and in the order they were
@@ -147,6 +214,12 @@ export function PackingPage() {
     // eslint-disable-next-line
   }, [packingLists, openFilter, customerFilter, query, salesOrders, customers]);
 
+  // Derived from `visible`, so it has to sit after it. `current` is clamped rather than trusted:
+  // deleting the last list on page 4 would otherwise leave the user on an empty page.
+  const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+  const current = Math.min(page, pageCount);
+  const paged = visible.slice((current - 1) * pageSize, current * pageSize);
+
   const stats = useMemo(() => {
     const open = packingLists.filter((l) => !l.finalizedDate).length;
     const gross = packingLists.reduce((s, l) => s + sectionTotals(l.sections ?? []).grossKg, 0);
@@ -161,6 +234,52 @@ export function PackingPage() {
    * Either way the list opens populated, because a list that starts empty makes the user re-pick
    * what they have just decided, and that is where rows get missed.
    */
+  const pickingList = picking ? packingLists.find((p) => p.id === picking.listId) : undefined;
+
+  /**
+   * What the picker can offer: order lines not already on this list, filtered by the search box.
+   *
+   * Already-on-the-list items are excluded rather than shown ticked, because adding one twice
+   * creates a duplicate row that then has to be spotted and deleted.
+   */
+  const pickableItems = (() => {
+    if (!pickingList) return [];
+    const onList = new Set(
+      (pickingList.sections ?? []).flatMap((s) => s.lines.map((l) => l.itemId ?? l.itemCode))
+    );
+    const q = pickQuery.trim().toLowerCase();
+    return orderItems(pickingList.salesOrderId)
+      .filter((li) => !onList.has(li.id) && !onList.has(li.itemCode))
+      .filter((li) => !q || `${li.itemCode} ${li.description} ${li.specification}`.toLowerCase().includes(q));
+  })();
+
+  /** Adds the ticked items in the order they were ticked, then clears the picker. */
+  function addPickedItems() {
+    if (!picking) return;
+    // Mapped over `picked` rather than the table, so the rows land in click order — the same rule
+    // the quotation builder's item selection follows.
+    picked.forEach((id) => {
+      const li = pickableItems.find((x) => x.id === id);
+      if (!li) return;
+      addPackingLine(picking.listId, picking.sectionId, {
+        itemId: li.id,
+        itemCode: li.itemCode,
+        description: li.description,
+        qtyPcs: 0,
+        netWeightKg: 0,
+        grossWeightKg: 0,
+      });
+    });
+    pushToast({
+      tone: "success",
+      title: `${picked.length} item${picked.length === 1 ? "" : "s"} added`,
+      description: "Set the pieces and weights on the rows.",
+    });
+    setPicking(null);
+    setPicked([]);
+    setPickQuery("");
+  }
+
   /** Order lines with something still to pack. Fully packed items are not offered again. */
   const remainingFor = (salesOrderId: string) =>
     reconcileFor(salesOrderId).filter((r) => r.orderedQty > 0 && r.variance < 0);
@@ -269,13 +388,15 @@ export function PackingPage() {
                 >
                   <div className="min-w-0">
                     <Link to={`/orders/${o.id}`} className="font-mono text-xs font-semibold text-manifest-600 hover:underline">
-                      {o.id}
+                      {refForOrder(o.id)}
                     </Link>
                     <span className="ml-2 text-sm text-paper-700">{o.consignee}</span>
+                    {/* Says what to do, not what is missing. "2 items still to pack" describes a
+                        state; "Ready to pack 2 items" is the next action. */}
                     <p className="text-[11px] text-paper-400">
                       {outstanding === 0
-                        ? "Everything on this order is packed."
-                        : `${outstanding} item${outstanding === 1 ? "" : "s"} still to pack.`}
+                        ? "All items packed — submit a final shipment to close this order out."
+                        : `Ready to pack ${outstanding} item${outstanding === 1 ? "" : "s"}.`}
                     </p>
                     {!deposit.ok && (
                       <p className="mt-1 flex items-start gap-1.5 text-[11px] leading-snug text-amber-700">
@@ -340,10 +461,13 @@ export function PackingPage() {
           ))}
         </select>
         <div className="flex gap-1.5">
-          {(["all", "open", "closed"] as const).map((f) => (
+          {(["open", "closed", "all"] as const).map((f) => (
             <button
               key={f}
-              onClick={() => setOpenFilter(f)}
+              onClick={() => {
+                setOpenFilter(f);
+                setPage(1);
+              }}
               className={clsx(
                 "rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
                 openFilter === f
@@ -365,13 +489,26 @@ export function PackingPage() {
         />
       ) : (
         <div className="space-y-4">
-          {visible.map((list) => {
+          {/* Pagination above and below. A packer working down a long list should not have to
+              scroll back to the top to reach the next page, and should not have to scroll to the
+              bottom to see how many there are. */}
+          <Pager
+            page={current}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            total={visible.length}
+            onPage={setPage}
+            onPageSize={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          />
+          {paged.map((list) => {
             const closed = Boolean(list.finalizedDate);
             const cust = customerOf(list);
             const rows = reconcileFor(list.salesOrderId, list.id);
             const verdict = verifyPacking(rows, list.scope);
             const totals = sectionTotals(list.sections ?? []);
-            const items = orderItems(list.salesOrderId);
             return (
               <Card key={list.id}>
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -380,9 +517,11 @@ export function PackingPage() {
                       {list.id} · {SCOPES.find((s) => s.id === list.scope)?.label ?? list.scope}
                       {closed && ` · closed ${formatDate(list.finalizedDate)}`}
                     </p>
+                    {/* The PI is what the customer and the factory both quote back at you, so it
+                        is the reference on screen. The sales order number is internal plumbing. */}
                     <p className="text-sm font-semibold text-paper-900">
                       <Link to={`/orders/${list.salesOrderId}`} className="font-mono text-manifest-600 hover:underline">
-                        {list.salesOrderId}
+                        {quotationRefFor(list) ?? list.salesOrderId}
                       </Link>{" "}
                       {cust?.name ?? "—"}
                     </p>
@@ -417,7 +556,7 @@ export function PackingPage() {
                           icon={<Lock className="h-3.5 w-3.5" />}
                           onClick={() => handleClose(list)}
                         >
-                          Close list
+                          Submit
                         </Button>
                         <button
                           onClick={() => setConfirmDelete(list)}
@@ -612,64 +751,35 @@ export function PackingPage() {
                         </tbody>
                       </table>
 
-                      {!closed &&
-                        (() => {
-                          // Anything already on this list is not offered again — it is technically
-                          // already chosen, and re-offering it invites a duplicate row that then
-                          // has to be spotted and deleted.
-                          const onList = new Set(
-                            (list.sections ?? []).flatMap((s) => s.lines.map((l) => l.itemId ?? l.itemCode))
-                          );
-                          const available = items.filter((li) => !onList.has(li.id) && !onList.has(li.itemCode));
-                          return (
-                            <div className="flex flex-wrap items-center gap-1.5 border-t border-paper-100 px-2.5 py-2">
-                              <span className="mr-1 text-[11px] font-medium text-paper-500">Add from order</span>
-                              {items.length === 0 && (
-                                <span className="text-[11px] text-paper-300">No order lines found.</span>
-                              )}
-                              {items.length > 0 && available.length === 0 && (
-                                <span className="rounded-full bg-pine-50 px-2.5 py-1 text-[11px] text-pine-700">
-                                  Every item on the order is already on this list
-                                </span>
-                              )}
-                              {available.map((li) => (
-                                <button
-                                  key={li.id}
-                                  onClick={() =>
-                                    addPackingLine(list.id, section.id, {
-                                      itemId: li.id,
-                                      itemCode: li.itemCode,
-                                      description: li.description,
-                                      qtyPcs: 0,
-                                      netWeightKg: 0,
-                                      grossWeightKg: 0,
-                                    })
-                                  }
-                                  title={li.description}
-                                  className="group flex items-center gap-1.5 rounded-full border border-paper-200 bg-white py-1 pl-2 pr-2.5 text-[10.5px] transition-colors hover:border-manifest-500 hover:bg-manifest-50"
-                                >
-                                  <Plus className="h-3 w-3 text-paper-400 group-hover:text-manifest-600" />
-                                  <span className="font-mono font-semibold text-pine-800">{li.itemCode}</span>
-                                  <span className="max-w-[9rem] truncate text-paper-400">{li.description}</span>
-                                </button>
-                              ))}
-                              <button
-                                onClick={() =>
-                                  addPackingLine(list.id, section.id, {
-                                    itemCode: "",
-                                    description: "",
-                                    qtyPcs: 0,
-                                    netWeightKg: 0,
-                                    grossWeightKg: 0,
-                                  })
-                                }
-                                className="ml-auto rounded-full border border-dashed border-paper-300 px-2.5 py-1 text-[10.5px] text-paper-500 hover:border-manifest-400 hover:text-manifest-700"
-                              >
-                                + Blank row
-                              </button>
-                            </div>
-                          );
-                        })()}
+                      {!closed && (
+                        <div className="flex flex-wrap items-center gap-2 border-t border-paper-100 px-2.5 py-2">
+                          {/* Opens the same searchable picker the quotation builder uses, rather
+                              than a row of chips. A customer with twenty specifications on one
+                              order made that row longer than the table it belonged to. */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<Plus className="h-3.5 w-3.5" />}
+                            onClick={() => setPicking({ listId: list.id, sectionId: section.id })}
+                          >
+                            Add Item
+                          </Button>
+                          <button
+                            onClick={() =>
+                              addPackingLine(list.id, section.id, {
+                                itemCode: "",
+                                description: "",
+                                qtyPcs: 0,
+                                netWeightKg: 0,
+                                grossWeightKg: 0,
+                              })
+                            }
+                            className="ml-auto rounded-full border border-dashed border-paper-300 px-2.5 py-1 text-[10.5px] text-paper-500 hover:border-manifest-400 hover:text-manifest-700"
+                          >
+                            + Blank row
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -699,16 +809,42 @@ export function PackingPage() {
                   </div>
                 )}
 
-                <input
-                  value={list.remarks ?? ""}
-                  disabled={closed}
-                  onChange={(e) => updatePackingList(list.id, { remarks: e.target.value })}
-                  placeholder="Packing remarks, marks and numbers, strapping…"
-                  className="mt-3 w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-xs focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
-                />
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <label className="text-[11px]">
+                    <span className="mb-1 block font-medium text-paper-600">Container no.</span>
+                    <input
+                      value={list.containerNo ?? ""}
+                      disabled={closed}
+                      onChange={(e) => updatePackingList(list.id, { containerNo: e.target.value })}
+                      placeholder="e.g. TCLU 4821960"
+                      className="w-full rounded-lg border border-paper-200 bg-white px-3 py-2 font-mono text-xs focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+                    />
+                  </label>
+                  <label className="text-[11px] sm:col-span-2">
+                    <span className="mb-1 block font-medium text-paper-600">Remarks</span>
+                    <input
+                      value={list.remarks ?? ""}
+                      disabled={closed}
+                      onChange={(e) => updatePackingList(list.id, { remarks: e.target.value })}
+                      placeholder="Packing remarks, marks and numbers, strapping…"
+                      className="w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-xs focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+                    />
+                  </label>
+                </div>
               </Card>
             );
           })}
+          <Pager
+            page={current}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            total={visible.length}
+            onPage={setPage}
+            onPageSize={(n) => {
+              setPageSize(n);
+              setPage(1);
+            }}
+          />
         </div>
       )}
 
@@ -880,6 +1016,111 @@ export function PackingPage() {
       {/* The draft document, exactly as the PI works: what you see here is what prints, so the two
           cannot drift apart. */}
       <Modal
+        open={picking !== null}
+        onClose={() => {
+          setPicking(null);
+          setPicked([]);
+          setPickQuery("");
+        }}
+        title="Add items to this section"
+        subtitle={pickingList ? `From ${refForOrder(pickingList.salesOrderId)}` : undefined}
+        width="max-w-3xl"
+        footer={
+          <>
+            <span className="mr-auto text-xs text-paper-500">
+              {picked.length} selected · added in the order you tick them
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setPicking(null);
+                setPicked([]);
+                setPickQuery("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" disabled={picked.length === 0} onClick={addPickedItems}>
+              Add Item
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-paper-400" />
+            <input
+              value={pickQuery}
+              onChange={(e) => setPickQuery(e.target.value)}
+              placeholder="Search code or specification…"
+              className="w-full rounded-lg border border-paper-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
+            />
+          </div>
+          <div className="overflow-hidden rounded-lg border border-paper-200">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="bg-pine-700 text-left font-mono text-[9.5px] uppercase tracking-wide text-white">
+                  <th className="w-10 py-2 pl-3" />
+                  <th className="w-32 px-2 py-2">Code</th>
+                  <th className="px-2 py-2">Specification</th>
+                  <th className="w-20 px-2 py-2 text-right">Qty</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pickableItems.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-paper-400">
+                      {pickQuery
+                        ? "Nothing matches that."
+                        : "Every item on this order is already on this list."}
+                    </td>
+                  </tr>
+                )}
+                {pickableItems.map((li) => {
+                  const at = picked.indexOf(li.id);
+                  return (
+                    <tr
+                      key={li.id}
+                      onClick={() =>
+                        setPicked((prev) => (prev.includes(li.id) ? prev.filter((x) => x !== li.id) : [...prev, li.id]))
+                      }
+                      className={clsx(
+                        "cursor-pointer border-t border-paper-100",
+                        at >= 0 ? "bg-manifest-50" : "hover:bg-paper-50"
+                      )}
+                    >
+                      <td className="py-1.5 pl-3">
+                        <input
+                          type="checkbox"
+                          checked={at >= 0}
+                          onChange={() => {}}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-3.5 w-3.5 rounded border-paper-300 accent-pine-700"
+                        />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="flex items-center gap-1.5">
+                          {at >= 0 && (
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-manifest-600 text-[9px] font-bold text-white">
+                              {at + 1}
+                            </span>
+                          )}
+                          <span className="font-mono text-pine-800">{li.itemCode}</span>
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-paper-600">{li.description}</td>
+                      <td className="px-2 py-1.5 text-right font-mono">{li.qtyPcs}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={previewId !== null}
         onClose={() => setPreviewId(null)}
         title={previewList ? `${previewList.id} — packing list` : "Packing list"}
@@ -926,7 +1167,7 @@ export function PackingPage() {
       <Modal
         open={confirmClose !== null}
         onClose={() => setConfirmClose(null)}
-        title={`Close ${confirmClose?.id}?`}
+        title={`Submit ${confirmClose?.id}?`}
         footer={
           <>
             <Button variant="secondary" size="sm" onClick={() => setConfirmClose(null)}>
@@ -947,16 +1188,22 @@ export function PackingPage() {
                 setConfirmClose(null);
               }}
             >
-              Close list
+              Submit to inspection
             </Button>
           </>
         }
       >
-        <p className="text-sm text-paper-600">
-          The weights on this list are the ones printed on the invoice and the bill of lading. Closing opens the
-          inspection for this order, where the goods are weighed and the order value is settled. You can reopen the list
-          afterwards if something needs correcting.
-        </p>
+        <div className="space-y-3 text-sm text-paper-600">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
+            Submitting sends this list to <span className="font-semibold">Inspection</span>. The goods are weighed
+            there and the order value is settled against the actual weight, so the figures below become the ones the
+            customer is invoiced on.
+          </p>
+          <p>
+            The weights on this list are also what print on the packing list and the bill of lading. Nothing is locked
+            permanently — you can reopen it if something needs correcting.
+          </p>
+        </div>
       </Modal>
 
       <Modal

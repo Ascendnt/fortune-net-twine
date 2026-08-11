@@ -264,11 +264,18 @@ function SpecRow({
         />
       </td>
       <td className="px-2 py-1.5">
+        {/* Clearing the box falls back to 1, not 0. Backspacing to retype a rate briefly emptied
+            the field, which was read as zero and priced the whole line at nothing — and a zero
+            that arrived by accident looks exactly like a zero somebody meant. */}
         <input
           {...NON_NEGATIVE}
           step="0.0001"
           value={spec.givenPriceKg}
-          onChange={(e) => handlers.onPatchSpec(itemId, spec.id, { givenPriceKg: toNonNegative(e.target.value) })}
+          onChange={(e) =>
+            handlers.onPatchSpec(itemId, spec.id, {
+              givenPriceKg: e.target.value.trim() === "" ? 1 : toNonNegative(e.target.value),
+            })
+          }
           className={clsx(miniInput, "text-right")}
         />
       </td>

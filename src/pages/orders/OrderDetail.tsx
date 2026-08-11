@@ -538,8 +538,11 @@ export function OrderDetail() {
                   return (
                     <TR key={li.id}>
                       <TD className="font-mono text-xs">{li.itemCode}</TD>
-                      <TD className="font-medium">{li.description}</TD>
-                      <TD className="text-xs text-paper-500">{li.specification}</TD>
+                      {/* Description is what the product IS — "Nylon Braided Net SK". Specification
+                          is how it is built — "NO.120(210/22x16) 122MD x 70FL". They were the
+                          wrong way round, so every row read as though the size were the name. */}
+                      <TD className="font-medium">{li.specification}</TD>
+                      <TD className="text-xs text-paper-500">{li.description}</TD>
                       <TD className="font-mono">{li.qtyPcs} {li.unit}</TD>
                       <TD className="font-mono">{li.weightKg.toFixed(1)} kg</TD>
                       {showActuals && (

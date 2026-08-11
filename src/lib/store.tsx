@@ -1875,7 +1875,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                 salesOrderId,
                 status: "booked",
                 vessel: "",
-                containerNo: "",
+                // Carried over from packing. The packer knows the container long before Logistics
+                // opens the shipment, so asking for it twice invites two different answers. It
+                // stays editable here, because containers do get reallocated.
+                containerNo:
+                  packingLists.find((p) => p.salesOrderId === salesOrderId && p.containerNo)?.containerNo ?? "",
                 billOfLadingNo: "",
                 portOfLoading: "Manila, Philippines",
                 portOfDischarge: "",

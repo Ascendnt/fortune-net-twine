@@ -70,8 +70,13 @@ export function PaymentsPage() {
   } = useStore();
   const [filter, setFilter] = useState<PaymentStatus | "all">("all");
   const [query, setQuery] = useState("");
-  const [form, setForm] = useState<{ draft: PaymentDraft; id: string | null } | null>(null);
+  /** `originalStatus` is kept so the dialog can say what a status change will actually do. */
+  const [form, setForm] = useState<{ draft: PaymentDraft; id: string | null; originalStatus: PaymentStatus } | null>(
+    null
+  );
   const [confirmDelete, setConfirmDelete] = useState<PaymentRecord | null>(null);
+  /** The line being verified. Verification confirms an amount, so it asks before it acts. */
+  const [verifying, setVerifying] = useState<PaymentRecord | null>(null);
   /** Only pending lines, when switched on. Sits beside the status filters, not inside them. */
   const [pendingOnly, setPendingOnly] = useState(false);
   /** The approval dialog: which payment, and whether it is being approved or declined. */
@@ -230,7 +235,7 @@ export function PaymentsPage() {
               variant="primary"
               size="sm"
               icon={<Plus className="h-3.5 w-3.5" />}
-              onClick={() => setForm({ draft: emptyDraft(), id: null })}
+              onClick={() => setForm({ draft: emptyDraft(), id: null, originalStatus: "expected" })}
             >
               Record Payment
             </Button>
@@ -350,14 +355,12 @@ export function PaymentsPage() {
                     <div className="flex flex-wrap items-center gap-1.5">
                       {p.status !== "verified" &&
                         (canVerifyPayment(p) ? (
-                          <Button
-                            variant="success"
-                            size="sm"
-                            onClick={() => {
-                              verifyPayment(p.id);
-                              pushToast({ tone: "success", title: "Payment verified", description: p.id });
-                            }}
-                          >
+                          // Verify confirms an amount before it acts, and the status dropdown that
+                          // used to sit beside it has moved into the edit dialog. Two controls a
+                          // few pixels apart, one of which quietly rewrites a verification, is a
+                          // misclick waiting to happen — and the one that fires by accident was
+                          // the one with no confirmation.
+                          <Button variant="success" size="sm" onClick={() => setVerifying(p)}>
                             Verify
                           </Button>
                         ) : (
@@ -371,31 +374,6 @@ export function PaymentsPage() {
                             Approve first
                           </span>
                         ))}
-                      <select
-                        value={p.status}
-                        onChange={(e) => {
-                          const status = e.target.value as PaymentStatus;
-                          updatePayment(p.id, {
-                            status,
-                            // Undoing a verification must also clear who verified it, otherwise the
-                            // row keeps a signature for a decision that no longer stands.
-                            ...(status !== "verified" ? { verifiedBy: undefined, verificationDate: undefined } : {}),
-                          });
-                          pushToast({
-                            tone: "info",
-                            title: "Status changed",
-                            description: `${p.id} is now ${status.replace(/_/g, " ")}.`,
-                          });
-                        }}
-                        className="rounded-md border border-paper-200 bg-white px-2 py-1 text-[11px] text-paper-700"
-                        title="Change this payment's status"
-                      >
-                        {PAYMENT_STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {s.replace(/_/g, " ")}
-                          </option>
-                        ))}
-                      </select>
                     </div>
                   ) : (
                     <span className="text-xs text-paper-400">
@@ -409,7 +387,7 @@ export function PaymentsPage() {
                       onClick={() => {
                         const { id, ...draft } = p;
                         void id;
-                        setForm({ draft, id: p.id });
+                        setForm({ draft, id: p.id, originalStatus: p.status });
                       }}
                       className="rounded p-1 text-paper-400 hover:bg-paper-100 hover:text-manifest-700"
                       title="Edit every field on this payment"
@@ -535,7 +513,19 @@ export function PaymentsPage() {
               <label className={formLabel}>Status</label>
               <select
                 value={form.draft.status}
-                onChange={(e) => setForm({ ...form, draft: { ...form.draft, status: e.target.value as PaymentStatus } })}
+                onChange={(e) => {
+                  const status = e.target.value as PaymentStatus;
+                  setForm({
+                    ...form,
+                    draft: {
+                      ...form.draft,
+                      status,
+                      // Undoing a verification clears who verified it. Leaving the signature on a
+                      // decision that no longer stands is worse than having no signature at all.
+                      ...(status !== "verified" ? { verifiedBy: undefined, verificationDate: undefined } : {}),
+                    },
+                  });
+                }}
                 className={formClass}
               >
                 {PAYMENT_STATUSES.map((s) => (
@@ -544,6 +534,15 @@ export function PaymentsPage() {
                   </option>
                 ))}
               </select>
+              {form.id && form.draft.status !== form.originalStatus && (
+                <p className="mt-1 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] leading-snug text-amber-800">
+                  Saving will move this payment from{" "}
+                  <span className="font-medium">{form.originalStatus.replace(/_/g, " ")}</span> to{" "}
+                  <span className="font-medium">{form.draft.status.replace(/_/g, " ")}</span>.
+                  {form.originalStatus === "verified" &&
+                    " Undoing a verification also removes who verified it, and may hold the order it released."}
+                </p>
+              )}
             </div>
             <div>
               <label className={formLabel}>Method</label>
@@ -603,6 +602,70 @@ export function PaymentsPage() {
                 className={formClass}
               />
             </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={verifying !== null}
+        onClose={() => setVerifying(null)}
+        title="Verify this payment"
+        subtitle={verifying ? `${verifying.id} · ${verifying.type} · ${verifying.salesOrderId}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setVerifying(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="success"
+              size="sm"
+              onClick={() => {
+                if (!verifying) return;
+                verifyPayment(verifying.id);
+                pushToast({
+                  tone: "success",
+                  title: "Payment verified",
+                  description: `${formatMoney(verifying.amountReceived || verifying.expectedAmount)} confirmed on ${verifying.id}.`,
+                });
+                setVerifying(null);
+              }}
+            >
+              Verify {formatMoney(verifying?.amountReceived || verifying?.expectedAmount || 0)}
+            </Button>
+          </>
+        }
+      >
+        {verifying && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 rounded-lg bg-paper-50 p-3 text-xs">
+              <div>
+                <p className="text-paper-400">Expected</p>
+                <p className="font-mono text-paper-800">{formatMoney(verifying.expectedAmount)}</p>
+              </div>
+              <div>
+                <p className="text-paper-400">Recorded as received</p>
+                <p className="font-mono text-sm font-bold text-pine-800">
+                  {formatMoney(verifying.amountReceived || verifying.expectedAmount)}
+                </p>
+              </div>
+              <div>
+                <p className="text-paper-400">Method</p>
+                <p className="text-paper-700">{verifying.method ?? "—"}</p>
+              </div>
+              <div>
+                <p className="text-paper-400">Bank reference</p>
+                <p className="font-mono text-paper-700">{verifying.bankRef || "—"}</p>
+              </div>
+            </div>
+            {verifying.amountReceived === 0 && (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">
+                Nothing has been recorded as received on this line. Verifying now will record the full expected amount
+                as having arrived.
+              </p>
+            )}
+            <p className="text-xs text-paper-500">
+              Verifying confirms the money arrived and releases the next stage of the order it belongs to.
+            </p>
           </div>
         )}
       </Modal>

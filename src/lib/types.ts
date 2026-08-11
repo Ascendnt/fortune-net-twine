@@ -648,6 +648,14 @@ export interface PackingList {
   id: string;
   salesOrderId: string;
   customerId: string;
+  /**
+   * The container this load goes into.
+   *
+   * Recorded here because the packer knows it at packing time, long before Logistics opens the
+   * shipment. Booking a shipment copies it across rather than asking for it again, and it stays
+   * editable on both — containers get reallocated.
+   */
+  containerNo?: string;
   createdDate: string;
   packedBy: string;
   scope: ShipmentScope;
