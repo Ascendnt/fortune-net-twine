@@ -8,8 +8,8 @@ import { formatRuleRate, lookupKeyForSpecRow } from "@/lib/pricing";
 import { NumberInput } from "@/components/ui/NumberInput";
 import type { BatchItem, Currency, LacingLine, LookupTable, PricingRule, QuotationBatch, SpecLine } from "@/lib/types";
 
-// Renders one batch group. All three types share the banner, delete and footer-total frame; the body
-// differs by type, per doc §3.2:
+// Renders one batch group. All three types share the banner, delete and footer-total frame; the
+// body differs by type, per doc §3.2:
 //
 //   ASSEMBLED  editable product title, then items      contributes to total and weight
 //   NORMAL     items only                              contributes to total and weight
@@ -263,7 +263,7 @@ function SpecRow({
       </td>
       <td className="px-2 py-1.5">
         {/* Starts and stays blank until somebody types a rate. Zero is the stored stand-in for
-            "not entered", never shown as a figure — a rate nobody has decided is absent, not nil. */}
+            "not entered", never shown as a figure. A rate nobody has decided is absent, not nil. */}
         <NumberInput
           value={spec.givenPriceKg}
           blankValue={0}
@@ -313,7 +313,7 @@ function SpecRow({
         {/* Typed directly. Pricing is manual; the Add Pricing helper can fill this in, but the
             number here is always the one that counts. */}
         {/* Blank until a price exists. Clearing it also hands the line back to the calculation
-            rather than pinning it at a manual zero — an emptied box means "I have not decided",
+            rather than pinning it at a manual zero. An emptied box means "I have not decided",
             not "the price is nothing". */}
         <NumberInput
           value={spec.unitPrice}
@@ -386,7 +386,7 @@ function LacingBody({
                         className={clsx(miniInput, "text-right")}
                       />
                     ) : (
-                      <span className="block text-right font-mono text-[11px] text-paper-300">—</span>
+                      <span className="block text-right font-mono text-[11px] text-paper-300">-</span>
                     )}
                   </td>
                   <td className="px-2 py-1.5">

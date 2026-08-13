@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fortune Net &amp; Twine — Quotation to Invoice</title>
+<title>Fortune Net &amp; Twine: Quotation to Invoice</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -273,7 +273,7 @@
       <li><button type="button" class="rail-step" data-section="quotation"><span class="num">02</span><span class="lbl"><b>Quotation</b><small>Header, line items, totals</small></span></button></li>
       <li><button type="button" class="rail-step" data-section="invoice"><span class="num">03</span><span class="lbl"><b>Convert &amp; Invoice</b><small>Shipped qty, tax, payments</small></span></button></li>
     </ul>
-    <div class="rail-foot">Prototype — in-memory session data.<br>No values leave this page.</div>
+    <div class="rail-foot">Prototype, in-memory session data.<br>No values leave this page.</div>
   </nav>
 
   <main class="main">
@@ -284,7 +284,7 @@
         <div>
           <span class="eyebrow">Configuration</span>
           <h1>Pricing rules &amp; specification catalog</h1>
-          <p>Rules are data, not code — add, reorder, or retune any adjustment without touching the computation engine. This replaces the hardcoded COMMISSION/PERCENTAGE/MD/DW/INSURANCE types from the original build.</p>
+          <p>Rules are data, not code, so you can add, reorder or retune any adjustment without touching the computation engine. This replaces the hardcoded COMMISSION/PERCENTAGE/MD/DW/INSURANCE types from the original build.</p>
         </div>
       </div>
 
@@ -304,7 +304,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Lookup tables <span class="hint">Referenced by rules with basis = lookup_table — editable by non-developers</span></div>
+        <div class="card-title">Lookup tables <span class="hint">Referenced by rules with basis = lookup_table, editable by non-developers</span></div>
         <div id="lookupTablesWrap"></div>
         <div class="btn-row">
           <button class="btn btn-secondary" id="addLookupTableBtn">+ Add lookup table</button>
@@ -312,7 +312,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Specification catalog <span class="hint">Pre-loaded specs by code — used to auto-fill line items</span></div>
+        <div class="card-title">Specification catalog <span class="hint">Pre-loaded specs by code, used to auto-fill line items</span></div>
         <div class="tbl-wrap">
           <table>
             <thead><tr>
@@ -342,7 +342,7 @@
         <div>
           <span class="eyebrow">Step 02</span>
           <h1>Quotation</h1>
-          <p>Company is fixed to the logged-in account. Everything else — customer, line items, applied pricing rules — is editable per quotation.</p>
+          <p>Company is fixed to the logged-in account. Everything else is editable per quotation: customer, line items and applied pricing rules.</p>
         </div>
         <span class="stamp" id="quoteStamp"></span>
       </div>
@@ -396,14 +396,14 @@
         <div>
           <span class="eyebrow">Step 03</span>
           <h1>Convert &amp; invoice</h1>
-          <p>Freezes the quotation's specs and unit price, then recalculates on actual shipped quantity — the gap the original build had no module for.</p>
+          <p>Freezes the quotation's specs and unit price, then recalculates on actual shipped quantity, which is the gap the original build had no module for.</p>
         </div>
         <span class="stamp" id="invStampHeader" style="display:none;"></span>
       </div>
 
       <div id="noInvoiceState" class="card">
         <div class="card-title">Convert this quotation to an invoice</div>
-        <p class="muted">Source: <span class="mono-field" id="convSourceId"></span> — <span id="convLineCount"></span> line item(s), grand total <span id="convGrandTotal" class="mono-field"></span>.</p>
+        <p class="muted">Source: <span class="mono-field" id="convSourceId"></span>, <span id="convLineCount"></span> line item(s), grand total <span id="convGrandTotal" class="mono-field"></span>.</p>
         <div class="callout" id="convWarn" style="display:none;">Add at least one line item to the quotation before converting.</div>
         <button class="btn btn-primary" id="convertBtn">Convert to Invoice</button>
       </div>
@@ -426,7 +426,7 @@
         </div>
 
         <div class="card">
-          <div class="card-title">Invoice lines <span class="hint">Spec and U/P are frozen from the quotation — only Shipped Qty is editable</span></div>
+          <div class="card-title">Invoice lines <span class="hint">Spec and U/P are frozen from the quotation, so only Shipped Qty is editable</span></div>
           <div class="tbl-wrap">
             <table>
               <thead><tr>
@@ -480,7 +480,7 @@
   "use strict";
 
   // ---------------------------------------------------------------
-  // STATE — everything downstream reads from here. Rules, lookup
+  // STATE. Everything downstream reads from here. Rules, lookup
   // tables and the catalog are data, so the computation engine never
   // needs to change when the business adds a new adjustment type.
   // ---------------------------------------------------------------
@@ -550,7 +550,7 @@
   state.quotation.lines.push(newLine());
 
   // ---------------------------------------------------------------
-  // COMPUTATION ENGINE — reads rule definitions as data. Adding a
+  // COMPUTATION ENGINE. Reads rule definitions as data. Adding a
   // new rule type never requires touching this function; only the
   // "basis" it declares matters.
   // ---------------------------------------------------------------
@@ -614,7 +614,7 @@
   }
 
   // Attempt to parse a "NN days" style payment term into a due date.
-  // Falls back to leaving the field for manual entry — never silently wrong.
+  // Falls back to leaving the field for manual entry, never silently wrong.
   function computeDueDate(paymentText, fromDateStr){
     if(!paymentText) return null;
     const m = paymentText.match(/(\d+)\s*days?/i);
@@ -626,7 +626,7 @@
   }
 
   // ---------------------------------------------------------------
-  // RENDER — section 1: Rules & Catalog
+  // RENDER, section 1: Rules & Catalog
   // ---------------------------------------------------------------
   function renderRules(){
     const tbody = document.getElementById('rulesTbody');
@@ -728,7 +728,7 @@
   }
 
   // ---------------------------------------------------------------
-  // RENDER — section 2: Quotation
+  // RENDER, section 2: Quotation
   // ---------------------------------------------------------------
   const STAMP_LABELS = { draft:'Draft', sent:'Sent', accepted:'Accepted', declined:'Declined' };
 
@@ -750,7 +750,7 @@
 
     const linesWrap = document.getElementById('linesWrap');
     linesWrap.innerHTML = q.lines.map((line, idx) => renderLineBlock(line, idx)).join('') ||
-      '<div class="callout">No line items yet — add one to start pricing.</div>';
+      '<div class="callout">No line items yet. Add one to start pricing.</div>';
 
     const totals = quotationTotals();
     document.getElementById('totWeight').textContent = fmt(totals.totWeight) + ' ' + state.units.weight;
@@ -768,7 +768,7 @@
         <input type="checkbox" ${line.appliedRuleIds.includes(r.id)?'checked':''}>
         ${escapeAttr(r.label)}
       </label>
-    `).join('') || '<span class="muted small">No rules enabled — turn some on in Rules &amp; Catalog.</span>';
+    `).join('') || '<span class="muted small">No rules enabled. Turn some on in Rules &amp; Catalog.</span>';
 
     return `
     <div class="line-block" data-line-id="${line.id}">
@@ -816,7 +816,7 @@
   }
 
   // ---------------------------------------------------------------
-  // RENDER — section 3: Invoice
+  // RENDER, section 3: Invoice
   // ---------------------------------------------------------------
   const INV_STAMP_LABELS = { draft:'Draft', sent:'Sent', partially_paid:'Partially Paid', paid:'Paid', closed:'Closed' };
 
@@ -860,7 +860,7 @@
     const hint = document.getElementById('dueDateHint');
     hint.textContent = inv.dueDateAuto
       ? 'Due date parsed from quotation payment terms ("' + state.quotation.header.payment + '"). Override above if needed.'
-      : 'Could not parse a day count from the payment terms — set the due date manually.';
+      : 'Could not parse a day count from the payment terms. Set the due date manually.';
 
     const tbody = document.getElementById('invoiceLinesTbody');
     tbody.innerHTML = inv.lines.map(il => `
@@ -984,7 +984,7 @@
     const field = e.target.dataset.field;
     if(!field) return;
     // Only text/number fields are handled here. Selects and checkboxes
-    // are handled on 'change' below — acting on their 'input' event would
+    // are handled on 'change' below, because acting on their 'input' event would
     // rebuild this table mid-interaction and break the native change bubble.
     if(field === 'sequence') rule.sequence = Number(e.target.value)||0;
     else if(field === 'rate') rule.rate = Number(e.target.value)||0;

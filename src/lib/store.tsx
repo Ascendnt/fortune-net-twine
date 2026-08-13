@@ -24,6 +24,7 @@ import type {
   ProductionRun,
   PackingList,
   InspectionRecord,
+  QuotationLineItem,
   Shipment,
 } from "./types";
 import { ORDER_STAGES, isLiveStage } from "./types";
@@ -48,12 +49,19 @@ import type { User } from "./users";
 import { LACING_CATALOG, SPEC_MASTER } from "./specMaster";
 import type { LacingCatalogRow, SpecMasterRow } from "./specMaster";
 import { PERSIST_KEYS, clearPersisted, loadPersisted, persist } from "./persist";
-import { revisionLabel } from "./format";
+import { piRef, revisionLabel } from "./format";
 import { applyApproval, applyDecline, canVerifyPayment } from "./paymentApproval";
-import { migratePackingList, sectionTotals } from "./packing";
+import { coversOrder, lineTotals, linesForOrder, listOrders, migratePackingList, nextPackingListId } from "./packing";
 import { stageReleasedBy } from "./paymentLedger";
-import { buildInspectionLines, settleInspection } from "./inspectionPricing";
-import type { PaymentApproval, PackingLine, ShipmentScope, OrderDocument } from "./types";
+import { buildInspectionLines, settlementByOrder } from "./inspectionPricing";
+import type {
+  PaymentApproval,
+  PackingLine,
+  PackingSection,
+  InspectionLine,
+  ShipmentScope,
+  OrderDocument,
+} from "./types";
 
 interface StoreState {
   /** Derived from the signed-in user. Falls back to the least privileged role when signed out. */
@@ -94,27 +102,49 @@ interface StoreState {
   removeProductionRun: (id: string) => void;
   /** Marks every run on an order finished and moves the order to Packing. */
   completeProduction: (salesOrderId: string) => void;
-  createPackingList: (salesOrderId: string, scope?: ShipmentScope, lines?: Omit<PackingLine, "id">[]) => string;
+  /**
+   * Opens a packing list over one or more orders. A container is filled, not an order shipped, so
+   * the caller passes every order going into this load and the scope each of them goes out under.
+   */
+  createPackingList: (
+    orders: { salesOrderId: string; scope: ShipmentScope }[],
+    lines?: Omit<PackingLine, "id">[]
+  ) => string;
   updatePackingList: (id: string, patch: Partial<PackingList>) => void;
+  /** Adds another order to an open list, so a part-filled container can take more. */
+  addPackingListOrder: (id: string, salesOrderId: string, scope: ShipmentScope) => void;
+  /** Drops an order from a list, along with every row booked against it. */
+  removePackingListOrder: (id: string, salesOrderId: string) => void;
+  /** Changes how one order on the list is going out: in full, as a partial, or as the final load. */
+  setPackingListOrderScope: (id: string, salesOrderId: string, scope: ShipmentScope) => void;
   removePackingList: (id: string) => void;
   /** Files attached to sales orders. */
   orderDocuments: OrderDocument[];
   addOrderDocument: (doc: Omit<OrderDocument, "id" | "uploadedBy" | "uploadedDate">) => void;
   removeOrderDocument: (id: string) => void;
   addPackingSection: (listId: string, title: string) => void;
-  updatePackingSection: (listId: string, sectionId: string, title: string) => void;
+  updatePackingSection: (listId: string, sectionId: string, patch: Partial<Pick<PackingSection, "title" | "containerNo">>) => void;
   removePackingSection: (listId: string, sectionId: string) => void;
   addPackingLine: (listId: string, sectionId: string, line: Omit<PackingLine, "id">) => void;
   updatePackingLine: (listId: string, sectionId: string, lineId: string, patch: Partial<PackingLine>) => void;
   removePackingLine: (listId: string, sectionId: string, lineId: string) => void;
   reopenPackingList: (id: string) => void;
-  /** Closes the list, opens an inspection against it, and moves the order on. */
+  /** Closes the list, opens the inspection report against it, and moves every order on it along. */
   finalizePackingList: (id: string) => void;
   updateInspection: (id: string, patch: Partial<InspectionRecord>) => void;
-  /** Records the weight actually measured against one inspection line. */
-  updateInspectionLine: (inspectionId: string, lineId: string, actualWeightKg: number) => void;
-  /** Records the verdict. A pass releases the order to Shipment; a fail blocks it. */
-  recordInspection: (id: string, result: "pass" | "fail", args: { cartonsChecked: number; defectsFound: number; remarks: string }) => void;
+  /** Records the weights actually measured against one bale on the report. */
+  updateInspectionLine: (
+    inspectionId: string,
+    lineId: string,
+    patch: Partial<Pick<InspectionLine, "netWeightKg" | "grossWeightKg" | "baleNo">>
+  ) => void;
+  /** Marks the report as gone to the customer for counter-checking. */
+  sendInspectionReport: (id: string) => void;
+  /**
+   * Records what the customer came back with. A confirmation settles every order on the load
+   * against its measured weight and releases it to Shipment; a hold blocks them with the query.
+   */
+  recordInspection: (id: string, result: "confirmed" | "held", args: { remarks: string }) => void;
   createShipment: (salesOrderId: string) => string;
   updateShipment: (id: string, patch: Partial<Shipment>) => void;
   /** Departure stamps the B/L and container onto the commercial invoice. */
@@ -182,8 +212,8 @@ interface StoreState {
   /** Wipes persisted state and restores every slice to its seeded demo values. */
   resetDemoData: () => void;
 
-  // Customer master data lives here (not a static import) so contacts — and, later, other
-  // one-time-setup-but-still-editable fields — can be added/edited from the Customers page and
+  // Customer master data lives here (not a static import) so contacts, and later other
+  // one-time-setup-but-still-editable fields, can be added/edited from the Customers page and
   // be reflected everywhere else in the app (New Quotation's Attn picker, PI/CI previews, etc.).
   customers: Customer[];
   addContact: (customerId: string, contact: Omit<Contact, "id">) => void;
@@ -215,12 +245,15 @@ const StoreContext = createContext<StoreState | null>(null);
 const KNOWN_BATCH_TYPES = new Set(["assembled", "normal", "lacing"]);
 
 /**
- * The source client master writes an em dash where a field was never recorded. Carried into the app
- * verbatim, that dash reads as a real value: it pre-fills a quotation's payment terms and then
- * prints "—" on a customer-facing PI. Placeholder dashes are normalised to empty on load, so the
+ * The source client master writes a lone dash where a field was never recorded. Carried into the
+ * app verbatim, that dash reads as a real value: it pre-fills a quotation's payment terms and then
+ * prints a dash on a customer-facing PI. Placeholder dashes are normalised to empty on load, so the
  * field is visibly blank and the UI can say the terms aren't on file.
+ *
+ * Written as escapes rather than literal characters. The three dashes involved are hard to tell
+ * apart on screen, and a reader has to know which is which for the class to mean anything.
  */
-const PLACEHOLDER = /^[—–-]$/;
+const PLACEHOLDER = /^[\u2014\u2013-]$/; // em dash, en dash, hyphen
 function blankIfPlaceholder(value: string | undefined): string {
   return value && !PLACEHOLDER.test(value.trim()) ? value : "";
 }
@@ -384,6 +417,21 @@ function nextId(prefix: string) {
   return `${prefix}-${idCounter}`;
 }
 
+/**
+ * The PI number for an order, exactly as the customer's copy writes it.
+ *
+ * Stamped onto a packing list at the moment it is raised rather than looked up when the document is
+ * printed. A quotation revised after the goods have shipped must not retroactively change the
+ * reference on a list that has already gone out. The customer would be reading a number that never
+ * appeared on anything they received.
+ */
+function resolvePiRef(salesOrderId: string, orders: SalesOrder[], quotations: Quotation[]): string {
+  const order = orders.find((o) => o.id === salesOrderId);
+  const quotation = order?.quotationId ? quotations.find((q) => q.id === order.quotationId) : undefined;
+  if (!quotation) return order?.quotationId ?? salesOrderId;
+  return piRef(quotation.id, quotation.revisionNo);
+}
+
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   /**
    * Who is signed in.
@@ -446,7 +494,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     loadPersisted(PERSIST_KEYS.production, PRODUCTION_RUNS)
   );
   const [packingLists, setPackingLists] = useState<PackingList[]>(() =>
-    loadPersisted(PERSIST_KEYS.packing, PACKING_LISTS).map(migratePackingList)
+    // The PI reference cannot be recovered by `migratePackingList` alone, since it only sees the
+    // list, so a list saved before consolidation gets its placeholder replaced here, where the
+    // quotations are to hand. Done once at load rather than on every render of the document.
+    loadPersisted(PERSIST_KEYS.packing, PACKING_LISTS)
+      .map(migratePackingList)
+      .map((list) => ({
+        ...list,
+        orders: list.orders.map((ref) =>
+          ref.piRef === ref.salesOrderId
+            ? { ...ref, piRef: resolvePiRef(ref.salesOrderId, salesOrders, quotations) }
+            : ref
+        ),
+      }))
   );
   const [inspections, setInspections] = useState<InspectionRecord[]>(() =>
     loadPersisted(PERSIST_KEYS.inspections, INSPECTIONS)
@@ -562,7 +622,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // duplicateQuotation and restoreRevision need `currentUser` and `logActivity`, which are declared
-  // further down. They live alongside createRevision for that reason — see below.
+  // further down. They live alongside createRevision for that reason; see below.
 
   const updateRevisionNote = useCallback((id: string, revisionNo: number, note: string) => {
     setQuotations((prev) =>
@@ -674,7 +734,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Both derived from the signed-in user, so there is one source of truth for who is acting.
-  // Signed out, the role falls back to sales_rep — the least privileged — rather than admin, so a
+  // Signed out, the role falls back to sales_rep, the least privileged, rather than admin, so a
   // broken session can never hand someone more authority than they had.
   const signedInUser = findUser(users, signedInUserId);
   const role: Role = signedInUser?.role ?? "sales_rep";
@@ -807,7 +867,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Sends a declined line back for another look, rather than making the author delete it and start
-   * again — which would lose the fact that it was ever declined.
+   * again, which would lose the fact that it was ever declined.
    */
   const reopenPaymentApproval = useCallback(
     (paymentId: string) => {
@@ -872,7 +932,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           customerId: inquiry.customerId,
           requestedDate: today,
           verdict: "pending",
-          assessedBy: "—",
+          assessedBy: "-",
           plantRemarks: "",
           lines: [],
         },
@@ -890,7 +950,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           folder: "sent",
           from: "sales@fortunenet.com.ph",
           to: "planta@fortunenet.com.ph",
-          subject: `FWD: ${inquiry.subject} — ${id}`,
+          subject: `FWD: ${inquiry.subject} (${id})`,
           body: note || "Forwarding for feasibility and costing.",
           date: new Date().toISOString(),
           read: true,
@@ -1004,7 +1064,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           recomputeSpecLine(
             {
               id: `${assessmentId}-${line.id}`,
-              specCode: line.specCode ?? "—",
+              specCode: line.specCode ?? "-",
               description: line.description,
               meshDepth: "",
               length: "",
@@ -1128,7 +1188,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
        * that: it goes back to being a quotation until the revision is accepted and converted again.
        *
        * Only when nothing real has happened on the order yet. Once money has actually arrived,
-       * deleting the order would delete the payment record of that money along with it — the
+       * deleting the order would delete the payment record of that money along with it, and the
        * revision needs to be reconciled with Finance at that point, not silently erase the order.
        */
       const q = quotations.find((x) => x.id === id);
@@ -1136,7 +1196,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (order && !payments.some((p) => p.salesOrderId === order.id && p.amountReceived > 0)) {
         removeSalesOrder(order.id);
         logActivity({
-          action: `${order.id} reverted to quotation — sent back for revision`,
+          action: `${order.id} reverted to quotation, sent back for revision`,
           recordType: "Sales Order",
           recordId: order.id,
         });
@@ -1292,9 +1352,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // sequence meant nothing on the SO tied it back to the PI it came from.
       const soId = q.id.startsWith("PI-") ? q.id.replace(/^PI-/, "SO-") : nextId("SO");
       // Shared with syncSalesOrderFromQuotation so the value an order is raised with and the value
-      // it is later corrected to come from the same formula. Adding items + freight - discount + tax
-      // by hand here missed that discount can be a percent, not an amount, and ignored batches
-      // entirely — so a percent-discount quotation converted to an order carrying the wrong value,
+      // it is later corrected to come from the same formula. Adding items + freight - discount +
+      // tax by hand here missed that discount can be a percent, not an amount, and ignored batches
+      // entirely, so a percent-discount quotation converted to an order carrying the wrong value,
       // deposit and balance from the moment it was raised.
       const { grandTotal: totalValue } = totalsForQuotation(q);
 
@@ -1303,7 +1363,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         quotationId: q.id,
         customerId: q.customerId,
         consignee: q.consignee,
-        country: "—",
+        country: "-",
         currency: q.currency,
         orderValue: totalValue,
         orderDate: new Date().toISOString().slice(0, 10),
@@ -1383,7 +1443,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         customerPoNo: args.poNo,
         customerId: inquiry.customerId,
         consignee: customer?.consignee ?? customer?.name ?? "",
-        country: customer?.country ?? "—",
+        country: customer?.country ?? "-",
         currency: customer?.defaultCurrency ?? "USD",
         orderValue: args.value,
         orderDate: today,
@@ -1503,7 +1563,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                     return rec.status === "completed" ? rec : { ...rec, status: "completed", completedDate: today };
                   }
                   if (idx === targetIdx) {
-                    // "Completed" is the terminal stage — there is nothing left to do once it is
+                    // "Completed" is the terminal stage. There is nothing left to do once it is
                     // reached, so it is marked done immediately rather than left "in progress"
                     // forever with a pending action the UI never offers a button for.
                     return stage === "completed"
@@ -1562,26 +1622,52 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   /**
-   * Opens a packing list against an order.
+   * How many partials an order has already had, so the next one is numbered correctly.
    *
-   * An order can have several: nets ship in partial loads and each load gets its own list. The id
-   * therefore carries a sequence, and the customer is stamped on so the list can be found from the
-   * customer's statement rather than only from the order.
+   * Counted across every list touching the order, because a partial's ordinal is a fact about the
+   * order, "2nd-Partial Shipment" against P.I. 32930, and not about the list it happens to ride
+   * on. Two consolidated containers can each carry a different PI's second partial.
+   */
+  const partialCountFor = useCallback(
+    (salesOrderId: string, exceptListId?: string) =>
+      packingLists
+        .filter((p) => p.id !== exceptListId)
+        .flatMap(listOrders)
+        .filter((o) => o.salesOrderId === salesOrderId && o.scope === "partial").length,
+    [packingLists]
+  );
+
+  /**
+   * Opens a packing list over one or more orders.
+   *
+   * A container is filled, not an order shipped. Customers consolidate several of their own orders
+   * into one load to make up a full container, so a list takes a set of orders and each of them
+   * carries its own scope, because the same container routinely finishes one PI off in full while
+   * taking the second partial of another.
+   *
+   * The id comes from the packing list's own series rather than from any order's number. Naming a
+   * consolidated list after one of its three orders would say something untrue about the other two,
+   * and there is no principled answer to which one it should be. The PI references are stamped on
+   * instead, which is what the customer recognises anyway.
    */
   const createPackingList = useCallback(
-    (salesOrderId: string, scope: ShipmentScope = "full", lines: Omit<PackingLine, "id">[] = []): string => {
-      const order = salesOrders.find((o) => o.id === salesOrderId);
-      const existing = packingLists.filter((p) => p.salesOrderId === salesOrderId).length;
-      const base = salesOrderId.replace(/^SO-/, "PL-");
-      const id = existing === 0 ? base : `${base}-${existing + 1}`;
+    (orders: { salesOrderId: string; scope: ShipmentScope }[], lines: Omit<PackingLine, "id">[] = []): string => {
+      if (orders.length === 0) return "";
+      const first = salesOrders.find((o) => o.id === orders[0].salesOrderId);
+      const id = nextPackingListId(packingLists.map((p) => p.id));
+      const refs = orders.map((o) => ({
+        salesOrderId: o.salesOrderId,
+        piRef: resolvePiRef(o.salesOrderId, salesOrders, quotations),
+        scope: o.scope,
+        partialNo: o.scope === "partial" ? partialCountFor(o.salesOrderId) + 1 : undefined,
+      }));
       setPackingLists((prev) => [
         {
           id,
-          salesOrderId,
-          customerId: order?.customerId ?? "",
+          orders: refs,
+          customerId: first?.customerId ?? "",
           createdDate: new Date().toISOString().slice(0, 10),
           packedBy: currentUser,
-          scope,
           // Opened with the chosen items already on it. A list that starts empty makes the user
           // re-pick what they just picked, which is where rows get missed.
           sections: [
@@ -1594,19 +1680,95 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         },
         ...prev,
       ]);
-      logActivity({
-        action: `Opened ${scope} packing list ${id}`,
-        recordType: "Sales Order",
-        recordId: salesOrderId,
-      });
+      for (const ref of refs) {
+        logActivity({
+          action: `Opened packing list ${id}: P.I. ${ref.piRef} ${ref.scope}${
+            refs.length > 1 ? `, consolidated with ${refs.length - 1} other order${refs.length === 2 ? "" : "s"}` : ""
+          }`,
+          recordType: "Sales Order",
+          recordId: ref.salesOrderId,
+        });
+      }
       return id;
     },
-    [salesOrders, packingLists, currentUser, logActivity]
+    [salesOrders, quotations, packingLists, partialCountFor, currentUser, logActivity]
   );
 
   const updatePackingList = useCallback((id: string, patch: Partial<PackingList>) => {
     setPackingLists((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   }, []);
+
+  /** Adds another order to an open list, so a part-filled container can take more. */
+  const addPackingListOrder = useCallback(
+    (id: string, salesOrderId: string, scope: ShipmentScope) => {
+      const ref = {
+        salesOrderId,
+        piRef: resolvePiRef(salesOrderId, salesOrders, quotations),
+        scope,
+        partialNo: scope === "partial" ? partialCountFor(salesOrderId, id) + 1 : undefined,
+      };
+      setPackingLists((prev) =>
+        prev.map((p) =>
+          p.id !== id || p.orders.some((o) => o.salesOrderId === salesOrderId)
+            ? p
+            : { ...p, orders: [...p.orders, ref] }
+        )
+      );
+      logActivity({
+        action: `Consolidated P.I. ${ref.piRef} into packing list ${id}`,
+        recordType: "Sales Order",
+        recordId: salesOrderId,
+      });
+    },
+    [salesOrders, quotations, partialCountFor, logActivity]
+  );
+
+  /**
+   * Drops an order from a list, along with every row booked against it.
+   *
+   * The rows have to go with it. Leaving them behind would keep goods in the container that belong
+   * to an order the list no longer claims to cover, and they would reconcile against nothing.
+   */
+  const removePackingListOrder = useCallback((id: string, salesOrderId: string) => {
+    setPackingLists((prev) =>
+      prev.map((p) =>
+        p.id !== id
+          ? p
+          : {
+              ...p,
+              orders: p.orders.filter((o) => o.salesOrderId !== salesOrderId),
+              sections: p.sections.map((s) => ({
+                ...s,
+                lines: s.lines.filter((l) => l.salesOrderId !== salesOrderId),
+              })),
+            }
+      )
+    );
+  }, []);
+
+  const setPackingListOrderScope = useCallback(
+    (id: string, salesOrderId: string, scope: ShipmentScope) => {
+      setPackingLists((prev) =>
+        prev.map((p) =>
+          p.id !== id
+            ? p
+            : {
+                ...p,
+                orders: p.orders.map((o) =>
+                  o.salesOrderId !== salesOrderId
+                    ? o
+                    : {
+                        ...o,
+                        scope,
+                        partialNo: scope === "partial" ? (o.partialNo ?? partialCountFor(salesOrderId, id) + 1) : undefined,
+                      }
+                ),
+              }
+        )
+      );
+    },
+    [partialCountFor]
+  );
 
   const removePackingList = useCallback((id: string) => {
     setPackingLists((prev) => prev.filter((p) => p.id !== id));
@@ -1660,15 +1822,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const updatePackingSection = useCallback((listId: string, sectionId: string, title: string) => {
-    setPackingLists((prev) =>
-      prev.map((p) =>
-        p.id !== listId
-          ? p
-          : { ...p, sections: p.sections.map((s) => (s.id === sectionId ? { ...s, title } : s)) }
-      )
-    );
-  }, []);
+  const updatePackingSection = useCallback(
+    (listId: string, sectionId: string, patch: Partial<Pick<PackingSection, "title" | "containerNo">>) => {
+      setPackingLists((prev) =>
+        prev.map((p) =>
+          p.id !== listId
+            ? p
+            : { ...p, sections: p.sections.map((s) => (s.id === sectionId ? { ...s, ...patch } : s)) }
+        )
+      );
+    },
+    []
+  );
 
   const removePackingSection = useCallback((listId: string, sectionId: string) => {
     setPackingLists((prev) =>
@@ -1735,6 +1900,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [logActivity]
   );
 
+  /** The ordered lines for each order a list covers, keyed by sales order id. */
+  const itemsByOrderFor = useCallback(
+    (list: PackingList): Record<string, QuotationLineItem[]> =>
+      Object.fromEntries(
+        listOrders(list).map((ref) => {
+          const order = salesOrders.find((o) => o.id === ref.salesOrderId);
+          const quotation = order?.quotationId ? quotations.find((q) => q.id === order.quotationId) : undefined;
+          return [ref.salesOrderId, quotation?.items ?? []];
+        })
+      ),
+    [salesOrders, quotations]
+  );
+
   const finalizePackingList = useCallback(
     (id: string) => {
       const today = new Date().toISOString().slice(0, 10);
@@ -1742,51 +1920,95 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!list) return;
       setPackingLists((prev) => prev.map((p) => (p.id === id ? { ...p, finalizedDate: today } : p)));
 
-      // Closing the list opens the inspection it will be checked against, so nothing has to be
-      // created by hand between the two stages. The measurement sheet is seeded from the order's
-      // own lines, pre-filled with the quoted weights, because inspection is where those quoted
-      // figures are replaced by what the goods actually weigh.
-      const inspectionId = list.salesOrderId.replace(/^SO-/, "QC-");
-      const order = salesOrders.find((o) => o.id === list.salesOrderId);
-      const quotation = order?.quotationId ? quotations.find((q) => q.id === order.quotationId) : undefined;
+      // Closing the list opens the inspection report against it, so nothing has to be created by
+      // hand between the two stages. One report per load however many orders are on it, because the
+      // customer confirms a container rather than confirming each of their orders separately.
+      //
+      // The report is built from what was actually packed rather than from what was ordered: a
+      // partial load listing the whole order would be asking the customer to confirm goods that are
+      // not going. The weights come across from the packing list, where the goods were weighed.
+      const refs = listOrders(list);
+      const inspectionId = id.replace(/^PL-/, "IR-");
       setInspections((prev) =>
-        prev.some((i) => i.id === inspectionId)
+        prev.some((i) => i.packingListId === id)
           ? prev
           : [
               {
                 id: inspectionId,
-                salesOrderId: list.salesOrderId,
                 packingListId: id,
-                inspector: "",
+                salesOrderIds: refs.map((r) => r.salesOrderId),
+                preparedBy: currentUser,
                 result: "pending",
-                cartonsChecked: 0,
-                defectsFound: 0,
                 remarks: "",
-                lines: buildInspectionLines(quotation?.items ?? []),
+                lines: buildInspectionLines(list, itemsByOrderFor(list)),
               },
               ...prev,
             ]
       );
-      advanceOrderTo(list.salesOrderId, "inspection", "Weigh the packed goods and settle the order value");
-      logActivity({ action: `Packing list ${id} finalized`, recordType: "Sales Order", recordId: list.salesOrderId });
+      for (const ref of refs) {
+        advanceOrderTo(ref.salesOrderId, "inspection", "Send the inspection report for the customer to confirm");
+        logActivity({
+          action: `Packing list ${id} closed, inspection report ${inspectionId} opened`,
+          recordType: "Sales Order",
+          recordId: ref.salesOrderId,
+        });
+      }
     },
-    [packingLists, salesOrders, quotations, advanceOrderTo, logActivity]
+    [packingLists, itemsByOrderFor, currentUser, advanceOrderTo, logActivity]
   );
 
   const updateInspection = useCallback((id: string, patch: Partial<InspectionRecord>) => {
     setInspections((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   }, []);
 
-  const recordInspection = useCallback(
-    (id: string, result: "pass" | "fail", args: { cartonsChecked: number; defectsFound: number; remarks: string }) => {
+  /** Marks the report as gone to the customer, so it is clear who is being waited on. */
+  const sendInspectionReport = useCallback(
+    (id: string) => {
       const today = new Date().toISOString().slice(0, 10);
       const record = inspections.find((i) => i.id === id);
       if (!record) return;
+      setInspections((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, result: "sent", sentDate: today } : i))
+      );
+      for (const salesOrderId of record.salesOrderIds ?? []) {
+        logActivity({
+          action: `Inspection report ${id} sent to the customer for confirmation`,
+          recordType: "Sales Order",
+          recordId: salesOrderId,
+        });
+      }
+    },
+    [inspections, logActivity]
+  );
 
-      // The settlement is computed here, once, from the weights on the record. Passing inspection
-      // is the moment the order value stops being an estimate.
-      const settlement = settleInspection(record.lines ?? []);
-      const revised = record.lines?.length ? settlement.actualValue : undefined;
+  const recordInspection = useCallback(
+    (id: string, result: "confirmed" | "held", args: { remarks: string }) => {
+      const today = new Date().toISOString().slice(0, 10);
+      const record = inspections.find((i) => i.id === id);
+      if (!record) return;
+      const orderIds = record.salesOrderIds ?? [];
+
+      /**
+       * Each order settles on its own weight variance, not on the report's total.
+       *
+       * The report covers a container, which may hold three customers' orders, or three of one
+       * customer's, and each has its own balance to invoice. Settling them against one pooled
+       * figure would move money between orders that have nothing to do with each other.
+       *
+       * The variance is applied to the order value rather than replacing it. The report lists what
+       * is in *this* container, so on a partial load its lines are only part of the order; taking
+       * their value as the whole order's would write off everything still to ship. Adding the
+       * delta is correct for a full load and for a partial, and it composes when a second container
+       * against the same order is confirmed later.
+       */
+      const byOrder = settlementByOrder(record.lines ?? []);
+      const settledOrderValues: Record<string, number> = {};
+      for (const salesOrderId of orderIds) {
+        const settlement = byOrder[salesOrderId];
+        const order = salesOrders.find((o) => o.id === salesOrderId);
+        if (!settlement || !order) continue;
+        settledOrderValues[salesOrderId] = Math.round((order.orderValue + settlement.difference) * 100) / 100;
+      }
 
       setInspections((prev) =>
         prev.map((i) =>
@@ -1795,73 +2017,88 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                 ...i,
                 ...args,
                 result,
-                inspectedDate: today,
-                inspector: i.inspector || currentUser,
-                revisedOrderValue: result === "pass" ? revised : undefined,
+                confirmedDate: today,
+                preparedBy: i.preparedBy || currentUser,
+                settledOrderValues: result === "confirmed" ? settledOrderValues : undefined,
               }
             : i
         )
       );
 
-      if (result === "pass") {
-        if (revised !== undefined) {
-          // The order carries the settled figure, and the balance still owed is restated against
-          // it. Leaving the balance at the quoted amount would invoice for weight nobody shipped.
-          setSalesOrders((prev) =>
-            prev.map((so) => (so.id === record.salesOrderId ? { ...so, orderValue: revised } : so))
-          );
-          setPayments((prev) => {
-            const mine = prev.filter((p) => p.salesOrderId === record.salesOrderId);
-            const deposit = mine.filter((p) => p.type === "deposit").reduce((s, p) => s + p.expectedAmount, 0);
-            const balanceDue = Math.max(0, revised - deposit);
-            return prev.map((p) =>
-              p.salesOrderId === record.salesOrderId && p.type === "balance" && p.status !== "verified"
-                ? { ...p, expectedAmount: Math.round(balanceDue * 100) / 100 }
-                : p
-            );
-          });
+      if (result === "confirmed") {
+        // Each order carries its settled figure, and the balance still owed is restated against it.
+        // Leaving the balance at the quoted amount would invoice for weight nobody shipped.
+        setSalesOrders((prev) =>
+          prev.map((so) => (settledOrderValues[so.id] !== undefined ? { ...so, orderValue: settledOrderValues[so.id] } : so))
+        );
+        setPayments((prev) =>
+          prev.map((p) => {
+            const settled = settledOrderValues[p.salesOrderId];
+            if (settled === undefined || p.type !== "balance" || p.status === "verified") return p;
+            const deposit = prev
+              .filter((x) => x.salesOrderId === p.salesOrderId && x.type === "deposit")
+              .reduce((s, x) => s + x.expectedAmount, 0);
+            return { ...p, expectedAmount: Math.round(Math.max(0, settled - deposit) * 100) / 100 };
+          })
+        );
+        for (const salesOrderId of orderIds) {
+          advanceOrderTo(salesOrderId, "final_payment", "Collect the balance on the confirmed weights");
         }
-        advanceOrderTo(record.salesOrderId, "final_payment", "Collect the balance on the settled order value");
       } else {
-        // A failure blocks the order rather than silently moving on.
+        // A query from the customer blocks the load rather than silently moving on.
         setSalesOrders((prev) =>
           prev.map((so) =>
-            so.id !== record.salesOrderId
+            !orderIds.includes(so.id)
               ? so
               : {
                   ...so,
                   stages: so.stages.map((rec) =>
                     rec.stage === "inspection"
-                      ? { ...rec, status: "blocked", blocker: args.remarks || "Failed inspection" }
+                      ? { ...rec, status: "blocked", blocker: args.remarks || "Held pending the customer's confirmation" }
                       : rec
                   ),
                 }
           )
         );
       }
-      logActivity({
-        action: `Inspection ${result === "pass" ? "passed" : "failed"}`,
-        recordType: "Sales Order",
-        recordId: record.salesOrderId,
-        comment:
-          result === "pass" && revised !== undefined && Math.abs(settlement.difference) > 0.005
-            ? `${args.remarks ? args.remarks + " · " : ""}Order value settled at ${revised.toFixed(2)} on actual weight (${settlement.difference > 0 ? "+" : ""}${settlement.difference.toFixed(2)})`
-            : args.remarks,
-      });
+
+      for (const salesOrderId of orderIds) {
+        const settlement = byOrder[salesOrderId];
+        const settled = settledOrderValues[salesOrderId];
+        logActivity({
+          action:
+            result === "confirmed"
+              ? `Customer confirmed inspection report ${id} for shipment`
+              : `Inspection report ${id} held by the customer`,
+          recordType: "Sales Order",
+          recordId: salesOrderId,
+          comment:
+            result === "confirmed" && settlement && settled !== undefined && Math.abs(settlement.difference) > 0.005
+              ? `${args.remarks ? args.remarks + " · " : ""}Order value settled at ${settled.toFixed(2)} on actual weight (${settlement.difference > 0 ? "+" : ""}${settlement.difference.toFixed(2)})`
+              : args.remarks,
+        });
+      }
     },
-    [inspections, currentUser, advanceOrderTo, logActivity]
+    [inspections, salesOrders, currentUser, advanceOrderTo, logActivity]
   );
 
-  /** Records a weighed figure against one inspection line. */
-  const updateInspectionLine = useCallback((inspectionId: string, lineId: string, actualWeightKg: number) => {
-    setInspections((prev) =>
-      prev.map((i) =>
-        i.id !== inspectionId
-          ? i
-          : { ...i, lines: (i.lines ?? []).map((l) => (l.id === lineId ? { ...l, actualWeightKg } : l)) }
-      )
-    );
-  }, []);
+  /** Records the weights measured against one bale on the report. */
+  const updateInspectionLine = useCallback(
+    (
+      inspectionId: string,
+      lineId: string,
+      patch: Partial<Pick<InspectionLine, "netWeightKg" | "grossWeightKg" | "baleNo">>
+    ) => {
+      setInspections((prev) =>
+        prev.map((i) =>
+          i.id !== inspectionId
+            ? i
+            : { ...i, lines: (i.lines ?? []).map((l) => (l.id === lineId ? { ...l, ...patch } : l)) }
+        )
+      );
+    },
+    []
+  );
 
   const createShipment = useCallback(
     (salesOrderId: string): string => {
@@ -1879,16 +2116,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
                 // opens the shipment, so asking for it twice invites two different answers. It
                 // stays editable here, because containers do get reallocated.
                 containerNo:
-                  packingLists.find((p) => p.salesOrderId === salesOrderId && p.containerNo)?.containerNo ?? "",
+                  packingLists.find((p) => coversOrder(p, salesOrderId) && p.containerNo)?.containerNo ?? "",
                 billOfLadingNo: "",
                 portOfLoading: "Manila, Philippines",
                 portOfDischarge: "",
                 bookedDate: new Date().toISOString().slice(0, 10),
-                // Gross weight comes from what was actually packed, not what was quoted. Every
-                // closed list on the order counts, because a shipment can cover several loads.
+                // Gross weight comes from what was actually packed, not what was quoted, and counts
+                // only this order's rows, because a consolidated container also holds other orders,
+                // whose weight belongs on their own shipments and not on this one.
                 grossWeightKg: packingLists
-                  .filter((p) => p.salesOrderId === salesOrderId)
-                  .reduce((sum, p) => sum + sectionTotals(p.sections ?? []).grossKg, 0),
+                  .filter((p) => coversOrder(p, salesOrderId))
+                  .reduce((sum, p) => sum + lineTotals(linesForOrder([p], salesOrderId)).grossKg, 0),
               },
               ...prev,
             ]
@@ -1919,7 +2157,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         )
       );
       // Documents is no longer a stage of its own: the paperwork accumulates across the order
-      // rather than at one point in it, so departure closes the order out. Completed is terminal —
+      // rather than at one point in it, so departure closes the order out. Completed is terminal,
       // there is no further action for anyone to take, so none is passed here.
       advanceOrderTo(shipment.salesOrderId, "completed");
       logActivity({
@@ -1964,7 +2202,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
        *
        * The deposit is what lets the factory commit material; the balance is what lets the
        * container be booked. Without this the order sat at Deposit or Final Payment with the money
-       * already in, and the next team never learned it was their turn — the only way forward was
+       * already in, and the next team never learned it was their turn. The only way forward was
        * somebody noticing and pressing Mark Step Complete by hand.
        *
        * The verified state is applied to a local copy first, because the setPayments above has not
@@ -2029,7 +2267,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const id = nextId("CI");
 
       // Snapshot the items (not a shared reference) and recalculate on actual shipped qty per
-      // Part B of the discovery doc — Amount = U/P x Actual Shipped Qty, not the quoted qty.
+      // Part B of the discovery doc: Amount = U/P x Actual Shipped Qty, not the quoted qty.
       // unitPrice stays frozen from the quotation; only qty and the derived totals move.
       const items = quotation.items.map((li) => {
         const shipped = shippedQty?.[li.id] ?? li.qtyPcs;
@@ -2083,7 +2321,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (!deposit || deposit.status !== "verified") {
           pushToast({
             tone: "danger",
-            title: "Cannot proceed — deposit not verified",
+            title: "Cannot proceed: deposit not verified",
             description: "Finance must verify the deposit remittance before production release.",
           });
           return;
@@ -2094,7 +2332,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (!balance || balance.status !== "verified") {
           pushToast({
             tone: "danger",
-            title: "Cannot proceed — remaining balance not verified",
+            title: "Cannot proceed: remaining balance not verified",
             description: "Container loading is blocked until Finance clears the remaining balance.",
           });
           return;
@@ -2112,7 +2350,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               return { ...s, status: "completed" as const, completedDate: today, blocker: undefined, pendingAction: undefined };
             }
             if (s.stage === nextStage.id) {
-              // Completed is terminal — reaching it finishes it on the spot rather than leaving it
+              // Completed is terminal. Reaching it finishes it on the spot rather than leaving it
               // "in progress" with nothing further for anyone to click.
               return nextStage.id === "completed"
                 ? { ...s, status: "completed" as const, completedDate: today, blocker: undefined, pendingAction: undefined }
@@ -2177,6 +2415,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       completeProduction,
       createPackingList,
       updatePackingList,
+      addPackingListOrder,
+      removePackingListOrder,
+      setPackingListOrderScope,
       removePackingList,
       orderDocuments,
       addOrderDocument,
@@ -2191,6 +2432,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateInspectionLine,
       finalizePackingList,
       updateInspection,
+      sendInspectionReport,
       recordInspection,
       createShipment,
       updateShipment,
@@ -2283,6 +2525,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       completeProduction,
       createPackingList,
       updatePackingList,
+      addPackingListOrder,
+      removePackingListOrder,
+      setPackingListOrderScope,
       removePackingList,
       orderDocuments,
       addOrderDocument,
@@ -2297,6 +2542,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       updateInspectionLine,
       finalizePackingList,
       updateInspection,
+      sendInspectionReport,
       recordInspection,
       createShipment,
       updateShipment,

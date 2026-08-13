@@ -113,9 +113,9 @@ export function SpecificationPickerModal({
   function startFrom(row: SpecMasterRow) {
     setDraft({
       twine: row.twine,
-      meshSize: row.meshSize === "—" ? "" : row.meshSize,
-      meshDepth: row.meshDepth === "—" ? "" : row.meshDepth,
-      length: row.length === "—" ? "" : row.length,
+      meshSize: row.meshSize === "-" ? "" : row.meshSize,
+      meshDepth: row.meshDepth === "-" ? "" : row.meshDepth,
+      length: row.length === "-" ? "" : row.length,
       weightPerPc: String(row.weightPerPc),
     });
     setCopiedFrom(row.code);
@@ -140,9 +140,9 @@ export function SpecificationPickerModal({
       material,
       netType,
       twine: draft.twine.trim(),
-      meshSize: draft.meshSize.trim() || "—",
-      meshDepth: draft.meshDepth.trim() || "—",
-      length: draft.length.trim() || "—",
+      meshSize: draft.meshSize.trim() || "-",
+      meshDepth: draft.meshDepth.trim() || "-",
+      length: draft.length.trim() || "-",
       weightPerPc: weight,
     });
     if (twin) {
@@ -166,9 +166,9 @@ export function SpecificationPickerModal({
       material,
       netType,
       twine: draft.twine.trim(),
-      meshSize: draft.meshSize.trim() || "—",
-      meshDepth: draft.meshDepth.trim() || "—",
-      length: draft.length.trim() || "—",
+      meshSize: draft.meshSize.trim() || "-",
+      meshDepth: draft.meshDepth.trim() || "-",
+      length: draft.length.trim() || "-",
       weightPerPc: weight,
     };
     addSpecMasterRow(row);
@@ -208,7 +208,8 @@ export function SpecificationPickerModal({
           width: "w-28",
           render: (r) => {
             // The pick number, shown as you go. Without it the order is invisible until the rows
-            // land on the quotation, which is too late to notice two were ticked the wrong way round.
+            // land on the quotation, which is too late to notice two were ticked the wrong way
+            // round.
             const pickedAt = selected.indexOf(r.code);
             return (
               <span className="flex items-center gap-1.5">
@@ -284,7 +285,7 @@ export function SpecificationPickerModal({
           )}
           {copiedFrom && (
             <p className="mb-2 text-[11px] leading-snug text-manifest-800">
-              Copied from <span className="font-mono font-semibold">{copiedFrom}</span>. Change whatever differs — the
+              Copied from <span className="font-mono font-semibold">{copiedFrom}</span>. Change whatever differs. The
               code is issued for you. {copiedFrom} itself is not altered, and if you change nothing it will simply be
               reused rather than duplicated.
             </p>

@@ -99,13 +99,35 @@ export function buildNotifications(
   }
 
   for (const i of state.inspections) {
+    const orders = i.salesOrderIds ?? (i.salesOrderId ? [i.salesOrderId] : []);
+    const who = orders.length > 1 ? `${orders[0]} and ${orders.length - 1} more` : (orders[0] ?? i.id);
     if (i.result === "pending") {
       out.push({
         id: `inspect-${i.id}`,
-        title: `${i.salesOrderId} is waiting on inspection`,
-        detail: "The goods are packed. Nothing invoices or ships until they pass.",
+        title: `${who}: inspection report still to go out`,
+        detail: "The goods are packed. Confirm the weights and send the listing to the customer.",
         href: "/inspection",
         tone: "info",
+      });
+    }
+    // A report sitting with the customer is not idle work, but it is the thing holding the
+    // container up, and nobody is chasing it unless it says so somewhere.
+    if (i.result === "sent") {
+      out.push({
+        id: `inspect-sent-${i.id}`,
+        title: `${who}: waiting on the customer to confirm the shipment`,
+        detail: "The inspection report has been sent. Nothing loads until they agree the listing.",
+        href: "/inspection",
+        tone: "info",
+      });
+    }
+    if (i.result === "held") {
+      out.push({
+        id: `inspect-held-${i.id}`,
+        title: `${who}: container held by the customer`,
+        detail: i.remarks || "The customer queried the inspection report.",
+        href: "/inspection",
+        tone: "warning",
       });
     }
   }

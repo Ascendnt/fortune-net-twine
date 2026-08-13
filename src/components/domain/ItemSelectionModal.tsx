@@ -71,7 +71,7 @@ export function ItemSelectionModal({
 
   // Doc §3.3: "Selecting Material dynamically populates Net Type (cascading dependency confirmed)."
   // The real dependency table isn't available, so the cascade is derived from the specification
-  // master — a material only offers net types that actually have codes on file, which also
+  // master, so a material only offers net types that actually have codes on file, which also
   // guarantees the Add Specification picker can never open empty. When a material has no codes yet
   // (a newly added one, say), the full list is offered rather than a dead end.
   const netTypeOptions = useMemo(() => {

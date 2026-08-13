@@ -33,16 +33,10 @@ import {
   validateReceipt,
 } from "@/lib/paymentLedger";
 import { actualAmountFor, settleInspection } from "@/lib/inspectionPricing";
+import { coversOrder, orderRef, scopeLabel } from "@/lib/packing";
 import { DOCUMENT_CATEGORIES, fileKind, formatBytes, validateUpload } from "@/lib/documents";
 import { ORDER_STAGES, stageMeta } from "@/lib/types";
 import type { OrderDocumentCategory, OrderStage, PaymentRecord, PaymentType } from "@/lib/types";
-
-/** How a shipment scope reads on the order, where there is no room to explain it. */
-const SCOPE_LABEL: Record<string, string> = {
-  full: "Full shipment",
-  partial: "Partial shipment",
-  final: "Final shipment",
-};
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -148,8 +142,13 @@ export function OrderDetail() {
     role === "admin" ||
     role === "management";
 
-  const orderLists = packingLists.filter((p) => p.salesOrderId === order.id);
-  const orderInspection = inspections.find((i) => i.salesOrderId === order.id);
+  // Every list carrying this order's goods, consolidated or not. A container filled with three of
+  // the customer's orders is on all three of their order pages, because it is one of their
+  // documents.
+  const orderLists = packingLists.filter((p) => coversOrder(p, order.id));
+  const orderInspection = inspections.find((i) =>
+    (i.salesOrderIds ?? (i.salesOrderId ? [i.salesOrderId] : [])).includes(order.id)
+  );
   const orderShipment = shipments.find((s) => s.salesOrderId === order.id);
 
   /**
@@ -255,24 +254,29 @@ export function OrderDetail() {
         ]
       : // One row per list. An order shipped in three partials has three packing lists, and
         // collapsing them into one line hides two of the documents the customer was sent.
-        orderLists.map((p) => ({
-          label: `Packing List · ${SCOPE_LABEL[p.scope] ?? p.scope}`,
-          reference: p.id,
-          date: p.finalizedDate ?? p.createdDate,
-          status: p.finalizedDate ? "Closed" : "Open",
-          href: "/packing" as string | undefined,
-        }))),
+        orderLists.map((p) => {
+          const ref = orderRef(p, order.id);
+          return {
+            label: `Packing List · ${ref ? scopeLabel(ref.scope, ref.partialNo) : "Shipment"}`,
+            reference: p.id,
+            date: p.finalizedDate ?? p.createdDate,
+            status: p.finalizedDate ? "Closed" : "Open",
+            href: "/packing" as string | undefined,
+          };
+        })),
     {
       label: "Inspection Report",
       reference: orderInspection?.id ?? "",
-      date: orderInspection?.inspectedDate,
+      date: orderInspection?.confirmedDate ?? orderInspection?.sentDate,
       status: !orderInspection
         ? "Not started"
         : orderInspection.result === "pending"
-          ? "Awaiting inspection"
-          : orderInspection.result === "pass"
-            ? "Passed"
-            : "Failed",
+          ? "Being prepared"
+          : orderInspection.result === "sent"
+            ? "With the customer"
+            : orderInspection.result === "confirmed"
+              ? "Confirmed for shipment"
+              : "Held by the customer",
       href: orderInspection ? "/inspection" : undefined,
     },
     {
@@ -324,7 +328,7 @@ export function OrderDetail() {
       title: "No line items to invoice",
       description: order!.quotationId
         ? "The linked quotation could not be found."
-        : `${order!.id} was raised on customer PO ${order!.customerPoNo ?? "—"} with no quotation behind it, so there are no lines to invoice yet.`,
+        : `${order!.id} was raised on customer PO ${order!.customerPoNo ?? "-"} with no quotation behind it, so there are no lines to invoice yet.`,
     });
   }
 
@@ -370,7 +374,11 @@ export function OrderDetail() {
                   : "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-400"
               }`}
             >
-              <span className="font-mono">{p.id}</span> · {SCOPE_LABEL[p.scope] ?? p.scope}
+              <span className="font-mono">{p.id}</span> ·{" "}
+              {(() => {
+                const ref = orderRef(p, order.id);
+                return ref ? scopeLabel(ref.scope, ref.partialNo) : "Shipment";
+              })()}
               {!p.finalizedDate && " · open"}
             </Link>
           ))}
@@ -499,8 +507,8 @@ export function OrderDetail() {
                 <CardHeader title="Payment Summary" eyebrow="Finance" />
                 <KeyValue label="Total expected" value={formatMoney(totalExpected, order.currency)} mono />
                 <KeyValue label="Total received" value={formatMoney(totalReceived, order.currency)} mono />
-                <KeyValue label="Deposit" value={depositPayment ? <Badge status={depositPayment.status} /> : "—"} />
-                <KeyValue label="Balance" value={balancePayment ? <Badge status={balancePayment.status} /> : "—"} />
+                <KeyValue label="Deposit" value={depositPayment ? <Badge status={depositPayment.status} /> : "-"} />
+                <KeyValue label="Balance" value={balancePayment ? <Badge status={balancePayment.status} /> : "-"} />
               </Card>
             </div>
           </div>
@@ -513,9 +521,9 @@ export function OrderDetail() {
                 type into something that is not ready. */}
             {showActuals && (
               <p className="text-xs text-paper-500">
-                {orderInspection?.result === "pass"
-                  ? "Weights below were measured at inspection and the order value has been settled against them."
-                  : "Actual weights are entered on the Inspection screen. Until it passes, these are the quoted figures."}
+                {orderInspection?.result === "confirmed"
+                  ? "Weights below were confirmed on the inspection report and the order value has been settled against them."
+                  : "Weights are confirmed on the Inspection Report screen. Until the customer confirms, these are the quoted figures."}
               </p>
             )}
             <Table>
@@ -532,27 +540,34 @@ export function OrderDetail() {
               </THead>
               <tbody>
                 {quotation.items.map((li) => {
-                  const measured = orderInspection?.lines?.find((l) => l.itemId === li.id);
-                  const finalAmount = measured ? actualAmountFor(measured) : li.totalPrice;
+                  // The report is written bale by bale, so one quotation line can have several
+                  // rows against it. They are summed rather than picking the first, which would
+                  // report a five-bale line at the weight of one bale.
+                  const measured = (orderInspection?.lines ?? []).filter((l) => l.itemId === li.id);
+                  const measuredWeight = measured.reduce((s, l) => s + l.netWeightKg, 0);
+                  const finalAmount = measured.length
+                    ? measured.reduce((s, l) => s + actualAmountFor(l), 0)
+                    : li.totalPrice;
                   const moved = Math.abs(finalAmount - li.totalPrice) >= 0.005;
                   return (
                     <TR key={li.id}>
                       <TD className="font-mono text-xs">{li.itemCode}</TD>
-                      {/* Description is what the product IS — "Nylon Braided Net SK". Specification
-                          is how it is built — "NO.120(210/22x16) 122MD x 70FL". They were the
-                          wrong way round, so every row read as though the size were the name. */}
+                      {/* Description is what the product IS, like "Nylon Braided Net SK".
+                          Specification is how it is built, like "NO.120(210/22x16) 122MD x 70FL".
+                          They were the wrong way round, so every row read as though the size were
+                          the name. */}
                       <TD className="font-medium">{li.specification}</TD>
                       <TD className="text-xs text-paper-500">{li.description}</TD>
                       <TD className="font-mono">{li.qtyPcs} {li.unit}</TD>
                       <TD className="font-mono">{li.weightKg.toFixed(1)} kg</TD>
                       {showActuals && (
                         <TD className="font-mono">
-                          {measured ? (
+                          {measured.length ? (
                             <span className={moved ? "font-semibold text-manifest-700" : undefined}>
-                              {measured.actualWeightKg.toFixed(1)} kg
+                              {measuredWeight.toFixed(1)} kg
                             </span>
                           ) : (
-                            <span className="text-paper-300">—</span>
+                            <span className="text-paper-300">-</span>
                           )}
                         </TD>
                       )}
@@ -578,7 +593,7 @@ export function OrderDetail() {
                   Quoted: <span className="font-mono">{formatMoney(settlement.quotedValue, order.currency)}</span>
                 </span>
                 <span className="text-paper-500">
-                  Weight: <span className="font-mono">{settlement.actualWeightKg.toFixed(2)} KG</span>
+                  Weight: <span className="font-mono">{settlement.netWeightKg.toFixed(2)} KG</span>
                 </span>
                 <span>
                   <span className="text-paper-500">Final order value: </span>
@@ -620,7 +635,7 @@ export function OrderDetail() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs text-paper-500">
                 Deposit and balance are raised from the quotation. Record what arrives against them rather than typing a
-                new line — an adjustment is for a genuine extra, like a freight recharge.
+                new line. An adjustment is for a genuine extra, like a freight recharge.
               </p>
               <div className="flex gap-2">
                 {nextToSettle && (
@@ -670,11 +685,11 @@ export function OrderDetail() {
                     <TD className="capitalize">{p.type}</TD>
                     <TD className="font-mono">{formatMoney(p.expectedAmount, order.currency)}</TD>
                     <TD className="font-mono">{formatMoney(p.amountReceived, order.currency)}</TD>
-                    <TD className="text-xs">{p.method ?? "—"}</TD>
+                    <TD className="text-xs">{p.method ?? "-"}</TD>
                     <TD className="text-xs text-paper-500">{approvalSummary(p)}</TD>
                     <TD>
                       <Badge status={p.status} />
-                      {/* An overpaid line reads green, not amber. It is complete — the surplus is
+                      {/* An overpaid line reads green, not amber. It is complete, and the surplus is
                           a note, not a fault, and colouring it as a warning puts a red mark
                           against the account that is furthest ahead. */}
                       <p
@@ -701,7 +716,7 @@ export function OrderDetail() {
                           Verify
                         </Button>
                       ) : (
-                        <span className="text-xs text-paper-300">—</span>
+                        <span className="text-xs text-paper-300">-</span>
                       )}
                     </TD>
                   </TR>
@@ -733,8 +748,8 @@ export function OrderDetail() {
                 {paperTrail.map((d) => (
                   <TR key={d.label + d.reference}>
                     <TD className="font-medium">{d.label}</TD>
-                    <TD className="font-mono text-xs">{d.reference || "—"}</TD>
-                    <TD className="text-xs text-paper-500">{d.date ? formatDate(d.date) : "—"}</TD>
+                    <TD className="font-mono text-xs">{d.reference || "-"}</TD>
+                    <TD className="text-xs text-paper-500">{d.date ? formatDate(d.date) : "-"}</TD>
                     <TD className="text-xs text-paper-600">{d.status}</TD>
                     <TD>
                       {d.href ? (
@@ -758,7 +773,7 @@ export function OrderDetail() {
                 <div>
                   <p className="text-sm font-semibold text-paper-800">Attached files</p>
                   <p className="text-[11px] text-paper-400">
-                    Factory reports, signed POs, bank advices — anything that belongs with this order but is not
+                    Factory reports, signed POs, bank advices: anything that belongs with this order but is not
                     generated by the system.
                   </p>
                 </div>
@@ -916,11 +931,11 @@ export function OrderDetail() {
               </div>
               <div>
                 <p className="text-paper-400">Method</p>
-                <p className="text-paper-700">{verifying.method ?? "—"}</p>
+                <p className="text-paper-700">{verifying.method ?? "-"}</p>
               </div>
               <div>
                 <p className="text-paper-400">Bank reference</p>
-                <p className="font-mono text-paper-700">{verifying.bankRef || "—"}</p>
+                <p className="font-mono text-paper-700">{verifying.bankRef || "-"}</p>
               </div>
             </div>
 
@@ -1056,7 +1071,7 @@ export function OrderDetail() {
                   type="number"
                   min={0}
                   step="0.01"
-                  // The deposit has exactly one correct amount — what is still outstanding on it —
+                  // The deposit has exactly one correct amount, which is what is still outstanding,
                   // and typing anything else would only be rejected on save. Locked rather than
                   // editable-then-corrected, so the field cannot say something the rule already
                   // forbids.
@@ -1067,7 +1082,7 @@ export function OrderDetail() {
                 />
                 {requiresFullPayment(receiptLine.payment.type) && (
                   <span className="mt-1 block text-[11px] leading-snug text-paper-400">
-                    The deposit is settled in full — a part payment would not release production.
+                    The deposit is settled in full, because a part payment would not release production.
                   </span>
                 )}
               </label>

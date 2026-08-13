@@ -43,7 +43,7 @@ describe("recomputeSpecLine", () => {
     expect(line.weightKg).toBeCloseTo(4950, 2);
   });
 
-  it("leaves the price at Given when no rule is applied — doc §5.1 row 1", () => {
+  it("leaves the price at Given when no rule is applied, doc §5.1 row 1", () => {
     const line = recomputeSpecLine(pricedLine(), PRICING_RULES, LOOKUP_TABLES);
     expect(line.pricing.newPriceKg).toBe(5);
     expect(line.unitPrice).toBeCloseTo(2475, 2);
@@ -130,7 +130,7 @@ describe("discount mode", () => {
   });
 });
 
-describe("quotation roll-up — doc §6 end-to-end", () => {
+describe("quotation roll-up, doc §6 end-to-end", () => {
   // Built in the live app: a NORMAL N-1596 line at Given 5.00 with MD Computation, qty 10;
   // a LACING group of LC-001 (100 KGS, 250.00) and LC-006 (50.00); and an empty ASSEMBLED group.
   // Observed: TOTAL WEIGHT 5,050.00 KGS, GRAND TOTAL $25,916.25.

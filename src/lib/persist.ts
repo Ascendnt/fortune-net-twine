@@ -5,10 +5,10 @@
 // audience. Each store slice is written under a versioned key; anything unreadable degrades back
 // to seed data rather than throwing.
 //
-// Bump PREFIX when a slice's shape changes incompatibly — old values then simply miss and the
+// Bump PREFIX when a slice's shape changes incompatibly. Old values then simply miss and the
 // seeds load, which is the desired behaviour for a prototype.
 
-const PREFIX = "fnt.v2.";
+const PREFIX = "fnt.v3.";
 
 export const PERSIST_KEYS = {
   quotations: "quotations",
@@ -34,7 +34,7 @@ export const PERSIST_KEYS = {
   /** Files attached to sales orders. */
   orderDocuments: "orderDocuments",
   users: "users",
-  /** The signed-in user's id. Identity only — there is no credential behind it. */
+  /** The signed-in user's id. Identity only, with no credential behind it. */
   session: "session",
 } as const;
 

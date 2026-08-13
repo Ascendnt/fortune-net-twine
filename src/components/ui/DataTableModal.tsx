@@ -59,7 +59,7 @@ export function DataTableModal<T>({
   /**
    * Takes over what clicking a row does, leaving the checkbox to carry on selecting.
    *
-   * Used when the modal is in a mode where picking a row means something other than choosing it —
+   * Used when the modal is in a mode where picking a row means something other than choosing it,
    * copying it into a form, for instance.
    */
   onRowClick?: (row: T) => void;
@@ -68,7 +68,7 @@ export function DataTableModal<T>({
   headerAction?: React.ReactNode;
   emptyMessage?: string;
   width?: string;
-  /** Rendered between the toolbar and the table — used for inline "create new row" forms. */
+  /** Rendered between the toolbar and the table, for inline "create new row" forms. */
   children?: React.ReactNode;
 }) {
   const [search, setSearch] = useState("");
@@ -200,8 +200,8 @@ export function DataTableModal<T>({
                 <tr
                   key={key}
                   // When a row click has been given another job, the checkbox keeps doing the
-                  // selecting — otherwise there would be no way to select at all while that other
-                  // mode is on.
+                  // selecting, because otherwise there would be no way to select at all while that
+                  // other mode is on.
                   onClick={() => (onRowClick ? onRowClick(row) : onToggle(key))}
                   className={clsx(
                     "cursor-pointer border-b border-paper-100 last:border-0",

@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
 import { formatDate, formatMoney } from "@/lib/format";
 import { ledgerForOrder } from "@/lib/paymentLedger";
+import { coversOrder } from "@/lib/packing";
 import type { ShipmentStatus } from "@/lib/types";
 
 // Shipment closes the loop. Booking pulls the gross weight from what was actually packed, and
@@ -61,7 +62,7 @@ export function ShipmentsPage() {
         (so) =>
           so.currentStage === "shipment" &&
           !shipments.some((s) => s.salesOrderId === so.id) &&
-          inspections.some((i) => i.salesOrderId === so.id && i.result === "pass")
+          inspections.some((i) => (i.salesOrderIds ?? []).includes(so.id) && i.result === "confirmed")
       ),
     [salesOrders, shipments, inspections]
   );
@@ -77,7 +78,7 @@ export function ShipmentsPage() {
 
   const customerName = (soId: string) => {
     const so = salesOrders.find((s) => s.id === soId);
-    return customers.find((c) => c.id === so?.customerId)?.name ?? "—";
+    return customers.find((c) => c.id === so?.customerId)?.name ?? "-";
   };
 
   /**
@@ -85,12 +86,13 @@ export function ShipmentsPage() {
    *
    * Shipping is not blocked on it. A container that misses its sailing costs more than the risk on
    * a customer who has always paid, and that call belongs to the sales team, not to a rule in a
-   * form. What the system owes them is the number, in front of them, at the moment they book —
+   * form. What the system owes them is the number, in front of them, at the moment they book,
    * rather than leaving it to be discovered on a statement weeks later.
    *
-   * Goes through the same ledger the order page reads rather than summing each line's own shortfall:
-   * summed per line, an overpaid deposit and a short balance on the same order would not net against
-   * each other, and this screen would show money owed that the order page already shows as settled.
+   * Goes through the same ledger the order page reads rather than summing each line's own
+   * shortfall: summed per line, an overpaid deposit and a short balance on the same order would not
+   * net against each other, and this screen would show money owed that the order page already shows
+   * as settled.
    */
   const outstandingOn = (soId: string) => {
     const so = salesOrders.find((s) => s.id === soId);
@@ -107,7 +109,7 @@ export function ShipmentsPage() {
   const awaitingPayment = salesOrders.filter(
     (so) =>
       so.currentStage === "final_payment" &&
-      inspections.some((i) => i.salesOrderId === so.id && i.result === "pass")
+      inspections.some((i) => (i.salesOrderIds ?? []).includes(so.id) && i.result === "confirmed")
   );
 
   /** Containers already gone, or booked to go, with money still owed against them. */
@@ -141,7 +143,7 @@ export function ShipmentsPage() {
           "An order appears under Released and awaiting booking once its inspection has passed. Press Book shipment.",
           "Fill in the vessel, container, bill of lading and ports. ETD and ETA can be set now or once the line confirms them.",
           "Press Mark departed when the container sails. That stamps the B/L and container onto the commercial invoice.",
-          "Watch the Outstanding column. Shipping is not blocked on payment, so a container can sail against a balance — but somebody has to be chasing it.",
+          "Watch the Outstanding column. Shipping is not blocked on payment, so a container can sail against a balance, but somebody has to be chasing it.",
           "Use the Unpaid filter to see, in one place, every shipment that has left with money still owed.",
         ]}
         note="Gross weight comes from the closed packing lists on the order, so it is what was actually packed rather than what was quoted."
@@ -307,7 +309,7 @@ export function ShipmentsPage() {
       ) : (
         <div className="space-y-4">
           {visible.map((s) => {
-            const list = packingLists.find((p) => p.salesOrderId === s.salesOrderId);
+            const list = packingLists.find((p) => coversOrder(p, s.salesOrderId));
             const invoice = invoices.find((i) => i.salesOrderId === s.salesOrderId);
             const locked = s.status === "departed" || s.status === "arrived";
             const ready = Boolean(s.vessel.trim() && s.containerNo.trim() && s.billOfLadingNo.trim());

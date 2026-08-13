@@ -5,12 +5,12 @@ import { useState } from "react";
  *
  * The problem this solves: a controlled `<input type="number">` bound straight to a number cannot
  * hold "nothing". Clearing it produces an empty string, which the handler turns into 0, which is
- * immediately written back — so the field refills with a zero the moment you delete the last
+ * immediately written back, so the field refills with a zero the moment you delete the last
  * digit, and you end up typing around it. Worse, that zero is a real value: a price of 0 on a
  * quotation is indistinguishable from a price somebody meant.
  *
  * So the field keeps its own draft string while focused. Empty stays empty on screen and nothing
- * is committed. On blur, an empty field falls back to `fallback` — the value that is safe and
+ * is committed. On blur, an empty field falls back to `fallback`, the value that is safe and
  * obviously provisional for that column, not necessarily zero.
  */
 export function NumberInput({
@@ -36,11 +36,11 @@ export function NumberInput({
    *
    * Some fields have no sensible default at all: a rate or a quantity nobody has typed is not
    * zero and not one, it is simply absent. Without this the field could only look empty while it
-   * had focus, and snapped back to a number the moment you clicked away — which reads as the
+   * had focus, and snapped back to a number the moment you clicked away, which reads as the
    * system refusing to let you clear it.
    */
   blankValue?: number;
-  /** Whole numbers only — quantities and piece counts. Weights and rates keep their decimals. */
+  /** Whole numbers only, for quantities and piece counts. Weights and rates keep their decimals. */
   integer?: boolean;
   min?: number;
   max?: number;
@@ -50,7 +50,7 @@ export function NumberInput({
   title?: string;
   "aria-label"?: string;
 }) {
-  /** null means "not being edited" — show the committed value. */
+  /** null means "not being edited", so show the committed value. */
   const [draft, setDraft] = useState<string | null>(null);
 
   const clamp = (n: number) => {

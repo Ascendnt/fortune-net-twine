@@ -30,7 +30,7 @@ describe("revisionLabel", () => {
 
 describe("revisionTag", () => {
   it("shows a dash for the first issue so a list column stays aligned", () => {
-    expect(revisionTag(0)).toBe("—");
+    expect(revisionTag(0)).toBe("-");
   });
 
   it("shows the short form for later revisions", () => {

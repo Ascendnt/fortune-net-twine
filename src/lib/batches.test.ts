@@ -83,7 +83,7 @@ describe("factories", () => {
   });
 });
 
-describe("lacing arithmetic — doc §5.3", () => {
+describe("lacing arithmetic, doc §5.3", () => {
   it("bills twine by the kilo", () => {
     expect(lacingAmount({ kind: "twine", kgs: 100, rate: 2.5 })).toBe(250);
     expect(lacingWeight({ kind: "twine", kgs: 100 })).toBe(100);

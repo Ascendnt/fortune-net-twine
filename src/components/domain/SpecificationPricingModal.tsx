@@ -9,7 +9,7 @@ import type { LinePricing, SpecLine } from "@/lib/types";
 
 // Specification Pricing (doc §3.5).
 //
-// Price / Piece (§3.6) — the labour, wastage and sewing-twine side of the U/P — is parked. Those
+// Price / Piece (§3.6), the labour, wastage and sewing-twine side of the U/P, is parked. Those
 // costs genuinely belong in the price, but the rates and the way they combine are still being
 // settled with the factory, and a half-right cost is worse than none: it looks authoritative and
 // quietly moves every figure on the quotation. Until then the U/P is the new price per kilo times
@@ -229,7 +229,7 @@ export function SpecificationPricingModal({
                             <span className="font-semibold text-paper-800">{step.after.toFixed(4)}</span>
                           </>
                         ) : (
-                          <span className="text-paper-300">—</span>
+                          <span className="text-paper-300">-</span>
                         )}
                       </td>
                     </tr>
@@ -273,11 +273,11 @@ export function SpecificationPricingModal({
               sewing twine belong in the U/P, but the rates and the way they combine are still
               being worked out with the factory, and a half-right cost would be worse than none:
               it would look authoritative and quietly move every price on the quotation.
-              Shown, disabled, and labelled — so it reads as coming rather than missing. */}
+              Shown, disabled, and labelled, so it reads as coming rather than missing. */}
           <div className="mt-3 rounded-lg border border-dashed border-paper-300 bg-paper-50/60 p-3">
             <div className="mb-2 flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-paper-400" />
-              <span className="text-xs font-medium text-paper-600">Price / Piece — manufacturing costs</span>
+              <span className="text-xs font-medium text-paper-600">Price / Piece: manufacturing costs</span>
               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
                 Coming soon
               </span>

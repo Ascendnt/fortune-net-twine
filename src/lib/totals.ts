@@ -8,7 +8,7 @@
 //   TOTAL WEIGHT       = sum of all line weights + lacing twine KGS
 //
 // One implementation, used by NewQuotation, QuotationDetail and PIDocumentPreview alike. Before
-// this existed each of the three carried its own reduce, and they had already drifted — the
+// this existed each of the three carried its own reduce, and they had already drifted, because the
 // quotation builder's total silently ignored discount and tax.
 
 import { lacingAmount, lacingWeight } from "./batches";
@@ -43,8 +43,8 @@ export function resolveDiscount(itemsTotal: number, discount: number, mode?: Dis
 
 /**
  * Recomputes a specification line end to end: the rule chain, price per piece, the manufacturing
- * additions, then AMOUNT and WEIGHT. Called on every edit — Given Price, Qty, or anything the
- * pricing modal changed.
+ * additions, then AMOUNT and WEIGHT. Called on every edit of the Given Price, the Qty, or anything
+ * the pricing modal changed.
  */
 export function recomputeSpecLine(line: SpecLine, rules: PricingRule[], lookupTables: LookupTable[]): SpecLine {
   const p = line.pricing;

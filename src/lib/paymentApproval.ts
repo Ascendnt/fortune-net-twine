@@ -69,7 +69,7 @@ export function isOverride(approval: PaymentApproval | undefined, actualApprover
  * Checks an approval before it is written. Returns a message to show the user, or null to proceed.
  *
  * The one hard requirement is the override reason. An override is the case an auditor will ask
- * about, and "the named approver was away" has to be on the record at the moment it happens —
+ * about, and "the named approver was away" has to be on the record at the moment it happens,
  * nobody reconstructs it accurately six months later.
  */
 export function validateApproval(args: {
@@ -86,7 +86,7 @@ export function validateApproval(args: {
     // Checked before the reason, because being told to justify something you were never allowed
     // to do is a worse experience than being told plainly that it is not yours to do.
     if (args.role && !canOverrideApproval(args.role)) {
-      return `This payment was routed to ${args.approval?.intendedApprover}. Only Management can approve in someone else's place — ask them, or have it re-routed.`;
+      return `This payment was routed to ${args.approval?.intendedApprover}. Only Management can approve in someone else's place. Ask them, or have it re-routed.`;
     }
     if (!args.overrideReason.trim()) {
       return `This payment was routed to ${args.approval?.intendedApprover}. Give a reason for approving it in their place.`;
@@ -140,7 +140,7 @@ export function approvalSummary(p: PaymentRecord): string {
       : `Awaiting approval, raised by ${a.author}`;
   }
   if (a.state === "declined") {
-    return `Declined by ${a.actualApprover ?? "—"}: ${a.declineReason ?? "no reason given"}`;
+    return `Declined by ${a.actualApprover ?? "-"}: ${a.declineReason ?? "no reason given"}`;
   }
   if (a.overrideReason) {
     return `Approved by ${a.actualApprover} in place of ${a.intendedApprover}: ${a.overrideReason}`;

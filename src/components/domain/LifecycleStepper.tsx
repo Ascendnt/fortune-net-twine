@@ -57,7 +57,7 @@ export function LifecycleStepper({ stages }: { stages: StageRecord[] }) {
                   {meta.label}
                 </p>
                 <p className="mt-0.5 text-[10px] text-paper-400">
-                  {rec?.completedDate ? formatDate(rec.completedDate) : status === "blocked" ? "Blocked" : status === "in_progress" ? "In progress" : "—"}
+                  {rec?.completedDate ? formatDate(rec.completedDate) : status === "blocked" ? "Blocked" : status === "in_progress" ? "In progress" : "-"}
                 </p>
               </div>
             </div>

@@ -27,8 +27,8 @@ describe("formatBytes", () => {
   });
 
   it("does not produce nonsense for a bad number", () => {
-    expect(formatBytes(Number.NaN)).toBe("—");
-    expect(formatBytes(-5)).toBe("—");
+    expect(formatBytes(Number.NaN)).toBe("-");
+    expect(formatBytes(-5)).toBe("-");
   });
 });
 

@@ -1,4 +1,4 @@
-// Domain types for the Fortune Net & Twine Export Sales ERP — Quotation to Invoice module.
+// Domain types for the Fortune Net & Twine Export Sales ERP, Quotation to Invoice module.
 // Modeled on the client SOP (FNT & NMEC) and the Export Sales ERP System Framework.
 
 export type Role =
@@ -21,9 +21,9 @@ export type Currency = "USD" | "KRW" | "EUR";
 
 // ---------- Master data ----------
 
-// A customer may have several named contacts (buyer, accounts, logistics, etc.) — the export
-// client master shows real accounts with 2-3 people on file. `contactPerson` on Customer stays as
-// the primary/default; `contacts` holds the full addressable list a quotation can pick "Attn:" from.
+// A customer may have several named contacts (buyer, accounts, logistics, etc.). The export client
+// master shows real accounts with 2-3 people on file. `contactPerson` on Customer stays as the
+// primary/default; `contacts` holds the full addressable list a quotation can pick "Attn:" from.
 export interface Contact {
   id: string;
   name: string;
@@ -48,7 +48,7 @@ export interface Customer {
   totalValueUSD: number;
   outstandingBalanceUSD: number;
   since: string; // ISO date
-  // Which legal entity issues this customer's documents — the export client list shows PI/CI
+  // Which legal entity issues this customer's documents. The export client list shows PI/CI
   // headers actually alternate between two entities per account, not a single fixed company name.
   letterhead?: "NETTEX MFG. AND EXPORT CORP." | "FORTUNE NET & TWINE MFG. CORP.";
   // Who books/represents this account (e.g. "HOUSE ACCOUNT" vs a regional agent like "INSUPES").
@@ -66,10 +66,10 @@ export interface ItemMaster {
   meshDepth: string;
   color: string;
   uom: "PCS" | "KGS";
-  unitPrice: number; // last quoted / reference sell price — historical PIs keep using this as-is
+  unitPrice: number; // last quoted / reference sell price; historical PIs keep using this as-is
   unitWeightKg: number;
   // ---- Pricing engine inputs (Part A/C of the discovery doc: rules read this as their P0/base) ----
-  givenPriceKg: number; // "Given Price" per kg — base value the pricing rule chain starts from
+  givenPriceKg: number; // "Given Price" per kg, the base value the pricing rule chain starts from
   defaultLaborHours: number;
   defaultLaborRate: number;
   defaultWastageKg: number;
@@ -78,7 +78,7 @@ export interface ItemMaster {
 }
 
 // ---------- Pricing rule engine ----------
-// Rules are data, not hardcoded types (Part C recommendation #1) — each rule declares its own
+// Rules are data, not hardcoded types (Part C recommendation #1). Each rule declares its own
 // "basis" explicitly instead of leaving of-base vs of-result implied by a label, which is what
 // made COMMISSION and PERCENTAGE easy to confuse in the original build.
 
@@ -93,7 +93,7 @@ export interface PricingRule {
   basis: PricingRuleBasis;
   rate: number; // used when basis is percent_of_base / percent_of_result / flat_amount
   lookupTableId?: string; // used when basis is lookup_table
-  sequence: number; // chain order — each rule's output feeds the next rule's input
+  sequence: number; // chain order; each rule's output feeds the next rule's input
   enabled: boolean; // available to be applied to a line; disabling retires a rule without deleting history
 }
 
@@ -108,7 +108,7 @@ export interface LookupTable {
   // How this table's row values are interpreted. MD/DW tables hold currency amounts added to the
   // running price; the insurance table holds a percentage of it (0.66 means 0.66%, per the system
   // simulation doc §7: `ADD INSURANCE : P -> P + P x 0.0066`). Without this the engine treated
-  // 0.66 as $0.66 — roughly 8.6x the intended step on an 11.60 base.
+  // 0.66 as $0.66, roughly 8.6x the intended step on an 11.60 base.
   valueKind: "amount" | "percent";
   rows: LookupTableRow[];
 }
@@ -121,7 +121,7 @@ export interface PricingChainStep {
   after: number;
 }
 
-// Snapshot of how a line's unit price was built — kept alongside the line so margin can be
+// Snapshot of how a line's unit price was built, kept alongside the line so margin can be
 // reviewed later without recomputing, and so the customer-facing PI/CI never needs to show it.
 export interface LinePricing {
   givenPriceKg: number;
@@ -230,8 +230,9 @@ export interface QuotationLineItem {
   unitPrice: number;
   weightKg: number;
   totalPrice: number;
-  // Present when the line was built through the pricing rule engine (Step 2 onward in NewQuotation).
-  // Older/seed lines have no pricing snapshot and keep using unitPrice/totalPrice as authored.
+  // Present when the line was built through the pricing rule engine (Step 2 onward in
+  // NewQuotation). Older/seed lines have no pricing snapshot and keep using unitPrice/totalPrice as
+  // authored.
   pricing?: LinePricing;
   // Set once a Commercial Invoice is generated against actual shipped quantity, which may differ
   // from the quoted qtyPcs on partial shipments (Part B, field mapping: Qty -> Shipped Qty).
@@ -283,7 +284,7 @@ export interface Quotation {
   issueDate: string;
   paymentTerms: string;
   // Cover-letter fields from the reference quotation header (simulation doc §2 step 1 / §3.1).
-  // Shipment is written as a phrase ("30 days from receipt of deposit"), not a date — see
+  // Shipment is written as a phrase ("30 days from receipt of deposit"), not a date. See
   // SHIPMENT_TERM_OPTIONS in mockData. Falls back to the computed estimatedShipmentDate when unset.
   shipmentTerms?: string;
   /** FOB or CIF. Replaced the free-text salutation line on the quotation header. */
@@ -300,7 +301,7 @@ export interface Quotation {
   leadTimeWeeks: number;
   estimatedShipmentDate: string;
   // The authored batch tree (ASSEMBLED / NORMAL / LACING). `items` below is its flattened
-  // projection, produced by flattenBatches() on save — every downstream consumer (sales orders,
+  // projection, produced by flattenBatches() on save. Every downstream consumer (sales orders,
   // commercial invoices, reports) keeps reading `items` and needs no knowledge of batches.
   // Absent on seeded quotations authored before the batch model existed.
   batches?: QuotationBatch[];
@@ -493,7 +494,7 @@ export const ORDER_STAGES: { id: OrderStage; label: string; role: string }[] = [
   { id: "inspection", label: "Inspection", role: "QC" },
   { id: "final_payment", label: "Final Payment", role: "Finance" },
   { id: "shipment", label: "Shipment", role: "Logistics" },
-  { id: "completed", label: "Completed", role: "—" },
+  { id: "completed", label: "Completed", role: "-" },
 ];
 
 /** Labels for stages that have been retired, so old records still read sensibly. */
@@ -513,7 +514,7 @@ const RETIRED_STAGE_LABELS: Partial<Record<OrderStage, string>> = {
 export function stageMeta(stage: OrderStage): { id: OrderStage; label: string; role: string } {
   const live = ORDER_STAGES.find((s) => s.id === stage);
   if (live) return live;
-  return { id: stage, label: RETIRED_STAGE_LABELS[stage] ?? stage, role: "—" };
+  return { id: stage, label: RETIRED_STAGE_LABELS[stage] ?? stage, role: "-" };
 }
 
 /** True when a stage is still part of the lifecycle, as opposed to left over on an older order. */
@@ -614,31 +615,72 @@ export interface PackingCarton {
  *
  * Export nets rarely leave in one go: the plant finishes what it finishes, and the customer takes
  * partial loads against the same order. Marking the scope is what lets the system tell a legitimate
- * partial from a short shipment, and what makes "final" mean something — at final, the cumulative
+ * partial from a short shipment, and what makes "final" mean something: at final, the cumulative
  * packed quantity across every list for the order is expected to reconcile with what was ordered.
  */
 export type ShipmentScope = "full" | "partial" | "final";
 
 /**
+ * One sales order carried on a packing list.
+ *
+ * A container is filled, not an order shipped: customers consolidate several of their own orders
+ * into one load to make up a full container, so a list covers a set of orders rather than one. Each
+ * order keeps its own scope, because the factory's own sheet puts "P.I. No. 32913 - Full Shipment"
+ * and "P.I. No. 32930 - 2nd-Partial Shipment" side by side on the same document. One PI can be
+ * finished off in the same container that takes the second partial of another.
+ */
+export interface PackingListOrderRef {
+  salesOrderId: string;
+  /**
+   * The PI number exactly as the quotation carries it, revision suffix and all ("32972R1").
+   *
+   * Stamped onto the list rather than looked up, because it is what the customer quotes back and it
+   * must not silently change if the quotation is revised after the goods have gone.
+   */
+  piRef: string;
+  scope: ShipmentScope;
+  /** Which partial this load is against that PI. 1-based; meaningless unless scope is "partial". */
+  partialNo?: number;
+}
+
+/**
  * A free-form grouping inside a packing list.
  *
- * The plant sends its packing details in whatever shape the job took — by container, by bundle, by
+ * The plant sends its packing details in whatever shape the job took: by container, by bundle, by
  * production batch. Forcing that into a fixed carton grid meant retyping it into a structure that
  * matched nothing, so sections are named by the user and hold whatever rows belong together.
  */
 export interface PackingSection {
   id: string;
   title: string;
+  /**
+   * The container this group goes into.
+   *
+   * On the factory's sheet the container is a banner above each block, not a property of the whole
+   * list, because a consolidated load runs to several containers and the sections are how they are
+   * told apart. The list-level `containerNo` remains as the default for a single-container load.
+   */
+  containerNo?: string;
   lines: PackingLine[];
 }
 
 export interface PackingLine {
   id: string;
+  /**
+   * Which order on the list this row packs against.
+   *
+   * Required for anything consolidated: with several PIs in one container, a row that does not say
+   * which order it belongs to cannot be reconciled against any of them. Absent on rows typed in by
+   * hand and on lists saved before consolidation existed, where the list's single order is assumed.
+   */
+  salesOrderId?: string;
   /** The quotation line this row packs against, when it was drawn from the order. */
   itemId?: string;
   itemCode: string;
   description: string;
   qtyPcs: number;
+  /** Bale or carton number as marked on the goods, such as "12" or "35-45" for a run of them. */
+  baleNo?: string;
   netWeightKg: number;
   grossWeightKg: number;
   remarks?: string;
@@ -646,23 +688,38 @@ export interface PackingLine {
 
 export interface PackingList {
   id: string;
-  salesOrderId: string;
+  /**
+   * Every order consolidated into this load, in the order they were added.
+   *
+   * Never empty in practice; the first entry is the order the list was opened against.
+   */
+  orders: PackingListOrderRef[];
+  /**
+   * Whose goods these are. A consolidated list is one customer filling one container with several
+   * of their own orders, so this is single even though the orders are not.
+   */
   customerId: string;
   /**
-   * The container this load goes into.
+   * The container this load goes into, when it is a single one.
    *
    * Recorded here because the packer knows it at packing time, long before Logistics opens the
    * shipment. Booking a shipment copies it across rather than asking for it again, and it stays
-   * editable on both — containers get reallocated.
+   * editable on both, because containers get reallocated. Sections may override it.
    */
   containerNo?: string;
   createdDate: string;
   packedBy: string;
-  scope: ShipmentScope;
   sections: PackingSection[];
   /** Set once the list is closed; no further rows may be added. */
   finalizedDate?: string;
   remarks?: string;
+  /**
+   * @deprecated Superseded by `orders`. Kept so lists saved before consolidation still load;
+   * `migratePackingList` folds it into a single-entry `orders` array on first read.
+   */
+  salesOrderId?: string;
+  /** @deprecated Moved onto `orders`, where each PI carries its own scope. */
+  scope?: ShipmentScope;
   /**
    * @deprecated The carton grid this screen used to be. Kept so lists saved by an earlier build
    * still load and can be read; `migratePackingLists` folds them into a section on first load.
@@ -670,46 +727,92 @@ export interface PackingList {
   cartons?: PackingCarton[];
 }
 
-export type InspectionResult = "pass" | "fail" | "pending";
+/**
+ * Where an inspection report has got to.
+ *
+ * Not a quality verdict. The report is the listing of what is about to be shipped, weights and all,
+ * sent to the customer so they can counter-check it and say they are happy for it to go. So the
+ * states are about the customer's answer, not about whether the goods passed a test: `pending`
+ * while it is still being weighed, `sent` once it is with the customer, `confirmed` when they agree
+ * to ship, `held` when they come back with a query.
+ */
+export type InspectionResult = "pending" | "sent" | "confirmed" | "held";
 
 /**
- * One item weighed at inspection.
+ * One bale on the inspection report.
+ *
+ * The report is written bale by bale. The factory's own sheet lists every bale number with its net
+ * and gross weight, then subtotals them per specification. Rows are therefore one-to-one with the
+ * packing list's rows, which is also where the weights come from: they are recorded once, at
+ * packing, and the report is where they are checked and corrected rather than re-entered.
  *
  * Nets are quoted from a standard weight per piece, but what comes off the machine is never exactly
- * that. The customer is billed for the kilos actually shipped, so inspection is where the real
- * weight is captured and the order value is settled. Both the quoted and the actual figures are
- * kept: the difference between them is the thing Finance and the customer will ask about.
+ * that. The customer is billed for the kilos actually shipped, so both figures are kept: the
+ * difference between them is the thing Finance and the customer will ask about.
  */
 export interface InspectionLine {
   id: string;
-  /** The quotation line this measurement belongs to. */
-  itemId: string;
+  /** Which order on the report this bale belongs to. */
+  salesOrderId: string;
+  /** The quotation line this measurement belongs to, when the row was drawn from the order. */
+  itemId?: string;
   itemCode: string;
+  /** The specification as it reads on the document. */
   description: string;
+  /** Bale or carton number as marked on the goods. */
+  baleNo: string;
   qtyPcs: number;
-  quotedWeightKg: number;
-  /** Left at the quoted figure until somebody weighs it. */
-  actualWeightKg: number;
+  /**
+   * What the quotation says these pieces should weigh, which the report calls the "Computed Weight".
+   *
+   * The theoretical figure the order was priced from, kept beside the measured one so the weight
+   * difference at the foot of the report can be stated rather than worked out by hand.
+   */
+  computedWeightKg: number;
+  /** What the bale actually weighs. Seeded from the packing list, corrected here. */
+  netWeightKg: number;
+  grossWeightKg: number;
+  /** The agreed price per kilo implied by the quotation line. Zero for anything not sold by weight. */
+  pricePerKg: number;
+  /** What the quotation billed for these pieces. Falls back on when there is no usable rate. */
   quotedAmount: number;
 }
 
 export interface InspectionRecord {
   id: string;
-  salesOrderId: string;
-  packingListId?: string;
-  inspectedDate?: string;
-  inspector: string;
+  /** The load this report covers. One report per packing list, however many orders are on it. */
+  packingListId: string;
+  /** Every order on the report, mirroring the packing list it was opened from. */
+  salesOrderIds: string[];
+  /** When the report was sent to the customer for counter-checking. */
+  sentDate?: string;
+  /** When the customer came back, either way. */
+  confirmedDate?: string;
+  /** Who put the report together. */
+  preparedBy: string;
   result: InspectionResult;
-  /** Cartons checked against cartons packed. */
-  cartonsChecked: number;
-  defectsFound: number;
+  /** Whatever the customer said, or whatever needs saying about the load. */
   remarks: string;
-  /** Per-item weights. Absent until the inspection is opened against a finalised packing list. */
+  /** Bale-by-bale weights. Absent until the report is opened against a finalised packing list. */
   lines?: InspectionLine[];
   /**
-   * The order value once actual weights are applied. Written when the inspection passes, and is
-   * what the balance payment is then raised against.
+   * Each covered order's value once actual weights are applied, keyed by sales order id. Written
+   * when the customer confirms, and is what each order's balance payment is then raised against.
    */
+  settledOrderValues?: Record<string, number>;
+  /**
+   * @deprecated Superseded by `salesOrderIds`. Kept so records saved before consolidation load.
+   */
+  salesOrderId?: string;
+  /** @deprecated Renamed to `preparedBy`, because the report is not a quality inspection. */
+  inspector?: string;
+  /** @deprecated Renamed to `confirmedDate`. */
+  inspectedDate?: string;
+  /** @deprecated Quality-control fields removed: this report is not a QC check. */
+  cartonsChecked?: number;
+  /** @deprecated Quality-control fields removed: this report is not a QC check. */
+  defectsFound?: number;
+  /** @deprecated Superseded by `settledOrderValues`, which is per order. */
   revisedOrderValue?: number;
 }
 
@@ -844,7 +947,7 @@ export interface OrderDocument {
    * The file itself, as a data URL.
    *
    * There is no file server behind this build, so the bytes ride along in browser storage. That
-   * caps what can realistically be kept — see MAX_UPLOAD_BYTES in lib/documents.ts — and a file
+   * caps what can realistically be kept (see MAX_UPLOAD_BYTES in lib/documents.ts), and a file
    * too large to store is refused with an explanation rather than silently recorded as an entry
    * that opens nothing.
    */

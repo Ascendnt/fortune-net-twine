@@ -48,12 +48,12 @@ function Picker({
         <SearchableSelect
           value={value}
           onChange={onChange}
-          placeholder="— none —"
+          placeholder="none"
           options={options.map((o) => ({ value: o, label: o }))}
         />
       ) : (
         <select value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
-          <option value="">— none —</option>
+          <option value="">none</option>
           {options.map((o) => (
             <option key={o} value={o}>
               {o}
@@ -65,10 +65,10 @@ function Picker({
   );
 }
 
-// Composes a specification string from the export description-flow option set (Material -> Net
-// Type -> Knots -> Selvages -> Stretching -> Reinforcement -> Others -> Color -> Weight unit), per
-// the discovery doc's item-building concept. Only Material is required — real items on the source
-// list rarely use every category.
+// Composes a specification string from the export description-flow option set (Material -> Net Type
+// -> Knots -> Selvages -> Stretching -> Reinforcement -> Others -> Color -> Weight unit), per the
+// discovery doc's item-building concept. Only Material is required, because real items on the
+// source list rarely use every category.
 export function SpecBuilderModal({
   open,
   onClose,

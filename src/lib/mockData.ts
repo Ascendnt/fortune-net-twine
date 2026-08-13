@@ -200,9 +200,9 @@ export const CUSTOMERS: Customer[] = [
   { id: "CUST-028", name: "Trident Nets Pty Ltd.", consignee: "Trident Nets Pty Ltd.", country: "Australia", address: "25 Humphreys St, New Norfolk, Tasmania 7140, Australia", contactPerson: "Mr. Danny Farrow", email: "tridentnetsptyltd@bigpond.com", phone: "+00 613 6261 3400", defaultPaymentTerms: "30% deposit, 70% before shipment", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "HOUSE ACCOUNT" },
   { id: "CUST-029", name: "The Deckstore Pty Ltd.", consignee: "The Deckstore Pty Ltd.", country: "Australia", address: "39 Tingira Street, Portsmith, Cairns, Queensland 4870, Australia", contactPerson: "Ms. Theresa Lowe", email: "theresa@thedeckstore.com.au", phone: "+00 617 4035 1951", defaultPaymentTerms: "30% deposit, 70% before shipment", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "HOUSE ACCOUNT" },
   { id: "CUST-030", name: "Wakamatsu Trading Co., Ltd.", consignee: "Wakamatsu Trading Co., Ltd.", country: "Japan", address: "#501, 1-10, 3-Chome Hirano-machi, 541-0046 Chuoku, Osaka, Japan", contactPerson: "Mr. Shinobu Hirose", email: "hiroses@kcn.ne.jp", phone: "+81 6 6229 2151", defaultPaymentTerms: "LC at sight, irrevocable & transferable", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "HOUSE ACCOUNT" },
-  { id: "CUST-031", name: "White Fisheries Enterprise", consignee: "White Fisheries Enterprise", country: "Australia", address: "Port Lincoln, South Australia 5606", contactPerson: "Mr. Paul Giblin", email: "whitefisheries1@bigpond.com", phone: "—", defaultPaymentTerms: "30% deposit, 70% before shipment", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "HOUSE ACCOUNT", contacts: [{ id: "c1", name: "Mr. Paul Giblin", email: "whitefisheries1@bigpond.com", isPrimary: true }, { id: "c2", name: "Mr. Verne Lindsay", email: "vklindsay1@bigpond.com" }] },
+  { id: "CUST-031", name: "White Fisheries Enterprise", consignee: "White Fisheries Enterprise", country: "Australia", address: "Port Lincoln, South Australia 5606", contactPerson: "Mr. Paul Giblin", email: "whitefisheries1@bigpond.com", phone: "-", defaultPaymentTerms: "30% deposit, 70% before shipment", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "HOUSE ACCOUNT", contacts: [{ id: "c1", name: "Mr. Paul Giblin", email: "whitefisheries1@bigpond.com", isPrimary: true }, { id: "c2", name: "Mr. Verne Lindsay", email: "vklindsay1@bigpond.com" }] },
   { id: "CUST-032", name: "Fortune Net Group - Div. South America", consignee: "Fortune Net Group - Div. South America", country: "Chile", address: "Coronel 2317, Dpto. 501, Providencia, Santiago, Chile", contactPerson: "Mr. Luis Alberto Luengo M.", email: "lluengo@fnetgroup.com", phone: "+56 9 9225 0105", defaultPaymentTerms: "", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "HOUSE ACCOUNT" },
-  // ---- INSUPES sub-accounts (FORTUNE NET GROUP - DIV. SOUTH AMERICA), Chile — shared agent contact ----
+  // ---- INSUPES sub-accounts (FORTUNE NET GROUP - DIV. SOUTH AMERICA), Chile, shared agent contact ----
   { id: "CUST-033", name: "AL8 Trading Ltda.", consignee: "AL8 Trading Ltda.", country: "Chile", address: "Coronel 2317, Dpto. 501, Providencia, Santiago, Chile", contactPerson: "Mr. Luis Alberto Luengo M.", email: "lluengo@fnetgroup.com", phone: "+56 9 9225 0105", defaultPaymentTerms: "50% deposit, 50% before shipment", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "INSUPES" },
   { id: "CUST-034", name: "Blumar S.A.", consignee: "Blumar S.A.", country: "Chile", address: "Coronel 2317, Dpto. 501, Providencia, Santiago, Chile", contactPerson: "Mr. Luis Alberto Luengo M.", email: "lluengo@fnetgroup.com", phone: "+56 9 9225 0105", defaultPaymentTerms: "30% deposit, 70% against copy of shipping documents", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "INSUPES" },
   { id: "CUST-035", name: "Bruening S.A.", consignee: "Bruening S.A.", country: "Chile", address: "Coronel 2317, Dpto. 501, Providencia, Santiago, Chile", contactPerson: "Mr. Luis Alberto Luengo M.", email: "lluengo@fnetgroup.com", phone: "+56 9 9225 0105", defaultPaymentTerms: "30% deposit, 70% against copy of shipping documents", defaultCurrency: "USD", totalOrders: 0, totalValueUSD: 0, outstandingBalanceUSD: 0, since: "2026-08-03", letterhead: "NETTEX MFG. AND EXPORT CORP.", agent: "INSUPES" },
@@ -231,7 +231,7 @@ export const CUSTOMERS: Customer[] = [
 
 // -------------------------------------------------------------------------
 // Standard Shipment / Validity phrasing pulled from the export client master
-// (real terms currently written by hand on every quotation) — kept as plain
+// (real terms currently written by hand on every quotation), kept as plain
 // reference lists for now; wiring them into NewQuotation as suggestions is a
 // follow-up once we confirm the phrasing should replace the numeric
 // leadTimeWeeks/validityDays fields or sit alongside them.
@@ -275,11 +275,11 @@ export const ITEM_MASTER: ItemMaster[] = [
   { code: "NET-72-210-14-350", description: "No.72(210/14x16) 3-1/2\" Nylon Braided Net", material: "Nylon (PA)", plySize: "210D/14x16", meshSize: "3-1/2\"", meshDepth: "122md x 50fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 2080.78, unitWeightKg: 143.7, givenPriceKg: 10.80, defaultLaborHours: 1.0, defaultLaborRate: 2.75, defaultWastageKg: 2.9, defaultTwineKg: 0.6, defaultTwineRate: 6.64 },
   { code: "NET-42-250-08-8IN", description: "No.42(250/08x16) 8\" Hi-Ex Braided Net", material: "Hi-Ex", plySize: "250D/08x16", meshSize: "8\"", meshDepth: "50md x 120fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 936.33, unitWeightKg: 33.9, givenPriceKg: 14.50, defaultLaborHours: 0.6, defaultLaborRate: 2.75, defaultWastageKg: 0.7, defaultTwineKg: 0.3, defaultTwineRate: 6.64 },
   { code: "NET-96-250-20-5IN", description: "No.96(250/20x16) 5\" Hi-Ex Braided Net", material: "Hi-Ex", plySize: "250D/20x16", meshSize: "5\"", meshDepth: "15md x 120fl", color: "Predyed Black, Tarred", uom: "PCS", unitPrice: 1063.98, unitWeightKg: 38.55, givenPriceKg: 14.00, defaultLaborHours: 0.65, defaultLaborRate: 2.75, defaultWastageKg: 0.8, defaultTwineKg: 0.32, defaultTwineRate: 6.64 },
-  { code: "TWINE-HEX-TARRED", description: "H-Ex Lacing Twine, Tarred", material: "Hi-Ex", plySize: "—", meshSize: "—", meshDepth: "—", color: "Tarred", uom: "KGS", unitPrice: 6.64, unitWeightKg: 1, givenPriceKg: 5.10, defaultLaborHours: 0, defaultLaborRate: 0, defaultWastageKg: 0, defaultTwineKg: 0, defaultTwineRate: 0 },
+  { code: "TWINE-HEX-TARRED", description: "H-Ex Lacing Twine, Tarred", material: "Hi-Ex", plySize: "-", meshSize: "-", meshDepth: "-", color: "Tarred", uom: "KGS", unitPrice: 6.64, unitWeightKg: 1, givenPriceKg: 5.10, defaultLaborHours: 0, defaultLaborRate: 0, defaultWastageKg: 0, defaultTwineKg: 0, defaultTwineRate: 0 },
 ];
 
 // -------------------------------------------------------------------------
-// Pricing rule engine — lookup tables and rule chain (Part A/C of the
+// Pricing rule engine: lookup tables and rule chain (Part A/C of the
 // discovery doc). MD/DW/Insurance rows use the simulation doc's own observed
 // figures so the engine is traceable back to the original run: §5.2 recorded
 // 122MD -> +0.1750, DW (50FL) -> +0.5000, and insurance at 0.66% of the
@@ -317,7 +317,7 @@ export const LOOKUP_TABLES: LookupTable[] = [
   {
     id: "lt_ins",
     name: "Insurance rate (by category)",
-    // Percent, not currency — 0.66 means 0.66% of the running price per kg.
+    // Percent, not currency: 0.66 means 0.66% of the running price per kg.
     valueKind: "percent",
     rows: [
       { key: "net", value: 0.66 },
@@ -440,7 +440,7 @@ export const QUOTATIONS: Quotation[] = [
     depositPercent: 40,
     assignedSalesperson: "Grace Tan",
     salesOrderId: "SO-2204",
-    remarks: "Pending Sales Manager approval was already cleared at PI stage — first order for this customer, credit terms confirmed.",
+    remarks: "Pending Sales Manager approval was already cleared at PI stage. First order for this customer, credit terms confirmed.",
     approver: "Ma. Teresa Villanueva",
     approvedDate: "2026-07-06",
   },
@@ -501,7 +501,7 @@ export const QUOTATIONS: Quotation[] = [
     revisionNo: 0,
     revisions: [{ revisionNo: 0, date: "2026-06-20", changedBy: "Grace Tan", note: "Initial issue, per repeat account reference PI-34101" }],
     customerId: "CUST-006",
-    consignee: "West Coast Marine Supply Inc. — Order 2",
+    consignee: "West Coast Marine Supply Inc. (Order 2)",
     status: "accepted",
     currency: "USD",
     validityDays: 7,
@@ -557,7 +557,7 @@ export const QUOTATIONS: Quotation[] = [
       { revisionNo: 1, date: "2026-06-15", changedBy: "Marcus Reyes", note: "Added lacing twine line per customer's follow-up request" },
     ],
     customerId: "CUST-003",
-    consignee: "PT Samudra Jaring Nusantara — repeat order",
+    consignee: "PT Samudra Jaring Nusantara (repeat order)",
     status: "accepted",
     currency: "USD",
     validityDays: 7,
@@ -585,7 +585,7 @@ export const QUOTATIONS: Quotation[] = [
     revisionNo: 0,
     revisions: [{ revisionNo: 0, date: "2026-05-01", changedBy: "Marcus Reyes", note: "Initial issue" }],
     customerId: "CUST-002",
-    consignee: "Nordfisk Trading AS — Order 2",
+    consignee: "Nordfisk Trading AS (Order 2)",
     status: "accepted",
     currency: "USD",
     validityDays: 10,
@@ -653,7 +653,7 @@ export const QUOTATIONS: Quotation[] = [
     tax: 0,
     depositPercent: 40,
     assignedSalesperson: "Grace Tan",
-    remarks: "Pending Sales Manager approval — second order from a first-year customer, discount needs sign-off.",
+    remarks: "Pending Sales Manager approval. Second order from a first-year customer, so the discount needs sign-off.",
   },
   {
     id: "PI-34112",
@@ -661,7 +661,7 @@ export const QUOTATIONS: Quotation[] = [
     revisions: [{ revisionNo: 0, date: "2026-07-29", changedBy: "Marcus Reyes", note: "Initial issue" }],
     customerId: "CUST-002",
     consignee: "Nordfisk Trading AS",
-    status: "sent",
+    status: "accepted",
     currency: "USD",
     validityDays: 10,
     issueDate: "2026-07-29",
@@ -676,7 +676,13 @@ export const QUOTATIONS: Quotation[] = [
     tax: 0,
     depositPercent: 30,
     assignedSalesperson: "Marcus Reyes",
-    remarks: "Awaiting customer response. Follow-up scheduled.",
+    salesOrderId: "SO-2211",
+    // Taken quickly, and deliberately so in the fixtures: this is the second Nordfisk order that
+    // shares a container with SO-2205, which is what makes a consolidated packing list worth
+    // looking at on the packing screen from a standing start.
+    remarks: "Accepted on the same terms as PI-34104. Customer asked to ship with SO-2205 in one container.",
+    approver: "Grace Tan",
+    approvedDate: "2026-07-31",
   },
   {
     id: "PI-34113",
@@ -727,12 +733,12 @@ export const QUOTATIONS: Quotation[] = [
     depositPercent: 50,
     assignedSalesperson: "Miguel Santos",
     remarks: "Lost to a local supplier on lead time.",
-    customerResponseNote: "Awarded to a local supplier — our 8 weeks against their 3.",
+    customerResponseNote: "Awarded to a local supplier on lead time: our 8 weeks against their 3.",
   },
 ];
 
 // -------------------------------------------------------------------------
-// Sales Orders — covering every stage of the lifecycle
+// Sales Orders, covering every stage of the lifecycle
 // -------------------------------------------------------------------------
 export const SALES_ORDERS: SalesOrder[] = [
   // Raised straight from INQ-3102 on the customer's own PO. No quotation exists behind it: the PO
@@ -868,7 +874,7 @@ export const SALES_ORDERS: SalesOrder[] = [
       packing: {
         status: "in_progress",
         responsibleRole: "Logistics",
-        pendingAction: "Raise the packing list — 5 of 8 pcs off the line so far",
+        pendingAction: "Raise the packing list: 5 of 8 pcs off the line so far",
       },
     }),
   },
@@ -899,7 +905,7 @@ export const SALES_ORDERS: SalesOrder[] = [
         status: "blocked",
         responsibleRole: "Logistics",
         pendingAction: "Raise the packing list once the raw material restock is confirmed",
-        blocker: "Delayed — raw material shortage on nylon 210D/14x16",
+        blocker: "Delayed by a raw material shortage on nylon 210D/14x16",
       },
     }),
   },
@@ -907,7 +913,7 @@ export const SALES_ORDERS: SalesOrder[] = [
     id: "SO-2207",
     quotationId: "PI-34106",
     customerId: "CUST-006",
-    consignee: "West Coast Marine Supply Inc. — Order 2",
+    consignee: "West Coast Marine Supply Inc. (Order 2)",
     country: "United States",
     currency: "USD",
     orderValue: 20395.08,
@@ -928,7 +934,7 @@ export const SALES_ORDERS: SalesOrder[] = [
       packing: {
         status: "in_progress",
         responsibleRole: "Logistics",
-        pendingAction: "Packing list open — one of two items fully packed",
+        pendingAction: "Packing list open, one of two items fully packed",
       },
     }),
   },
@@ -966,7 +972,7 @@ export const SALES_ORDERS: SalesOrder[] = [
     id: "SO-2209",
     quotationId: "PI-34108",
     customerId: "CUST-003",
-    consignee: "PT Samudra Jaring Nusantara — repeat order",
+    consignee: "PT Samudra Jaring Nusantara (repeat order)",
     country: "Indonesia",
     currency: "USD",
     orderValue: 17856.25,
@@ -990,7 +996,7 @@ export const SALES_ORDERS: SalesOrder[] = [
         status: "blocked",
         responsibleRole: "Finance",
         pendingAction: "Verify the balance against submitted remittance copy",
-        blocker: "Container ready — loading blocked pending balance verification",
+        blocker: "Container ready, loading blocked pending balance verification",
       },
     }),
   },
@@ -998,7 +1004,7 @@ export const SALES_ORDERS: SalesOrder[] = [
     id: "SO-2210",
     quotationId: "PI-34109",
     customerId: "CUST-002",
-    consignee: "Nordfisk Trading AS — Order 2",
+    consignee: "Nordfisk Trading AS (Order 2)",
     country: "Norway",
     currency: "USD",
     orderValue: 21190.60,
@@ -1022,7 +1028,39 @@ export const SALES_ORDERS: SalesOrder[] = [
       shipment: {
         status: "in_progress",
         responsibleRole: "Logistics",
-        pendingAction: "Container en route — raise documents on arrival",
+        pendingAction: "Container en route, raise documents on arrival",
+      },
+    }),
+  },
+  {
+    // Nordfisk's second live order, and the reason the packing screen opens with a consolidated
+    // list on it. It is small at six pieces, which is exactly when a customer asks to put it in the
+    // same container as an order already being packed rather than pay for half a box of air.
+    id: "SO-2211",
+    quotationId: "PI-34112",
+    customerId: "CUST-002",
+    consignee: "Nordfisk Trading AS (Order 3)",
+    country: "Norway",
+    currency: "USD",
+    orderValue: 6763.88,
+    orderDate: "2026-07-31",
+    requestedDeliveryDate: "2026-10-05",
+    currentStage: "packing",
+    priority: "standard",
+    assignedSalesperson: "Marcus Reyes",
+    productionStatus: "completed",
+    productionQtyOrdered: 6,
+    productionQtyCompleted: 6,
+    productionQtyRejected: 0,
+    actualCompletionDate: "2026-08-08",
+    stages: buildStages("packing", {
+      quotation: { status: "completed", completedDate: "2026-07-31" },
+      customer_confirmation: { status: "completed", completedDate: "2026-07-31" },
+      deposit: { status: "completed", completedDate: "2026-08-04" },
+      packing: {
+        status: "in_progress",
+        responsibleRole: "Logistics",
+        pendingAction: "Consolidated with SO-2205 on one packing list",
       },
     }),
   },
@@ -1034,7 +1072,7 @@ export const SALES_ORDERS: SalesOrder[] = [
 export const PAYMENTS: PaymentRecord[] = [
   { id: "PMT-6001", salesOrderId: "SO-2201", type: "deposit", expectedAmount: 14838.50, amountReceived: 14838.50, dateReceived: "2026-04-24", bankRef: "TT-CITI-77410", method: "Wire Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-04-24", status: "verified" },
   { id: "PMT-6002", salesOrderId: "SO-2201", type: "balance", expectedAmount: 14838.50, amountReceived: 14853.50, dateReceived: "2026-06-20", bankRef: "TT-CITI-78120", method: "Wire Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-06-20", status: "verified", remarks: "Customer rounded the transfer up; $15.00 recorded as overpayment." },
-  { id: "PMT-6003", salesOrderId: "SO-2201", type: "adjustment", expectedAmount: 180.00, amountReceived: 0, status: "rejected", dueDate: "2026-06-25", remarks: "Customer's freight discrepancy claim — declined; freight was correctly charged per FOB Manila terms." },
+  { id: "PMT-6003", salesOrderId: "SO-2201", type: "adjustment", expectedAmount: 180.00, amountReceived: 0, status: "rejected", dueDate: "2026-06-25", remarks: "Customer's freight discrepancy claim, declined. Freight was correctly charged per FOB Manila terms." },
 
   { id: "PMT-6004", salesOrderId: "SO-2202", type: "deposit", expectedAmount: 6720.00, amountReceived: 0, status: "expected", dueDate: "2026-08-16", remarks: "Against customer PO PO-88231, 30% deposit." },
   { id: "PMT-6005", salesOrderId: "SO-2202", type: "balance", expectedAmount: 15680.00, amountReceived: 0, status: "expected", dueDate: "2026-10-01" },
@@ -1042,7 +1080,7 @@ export const PAYMENTS: PaymentRecord[] = [
   { id: "PMT-6006", salesOrderId: "SO-2203", type: "deposit", expectedAmount: 6140.16, amountReceived: 0, status: "expected", dueDate: "2026-08-20" },
   { id: "PMT-6007", salesOrderId: "SO-2203", type: "balance", expectedAmount: 14327.04, amountReceived: 0, status: "expected", dueDate: "2026-09-15" },
 
-  { id: "PMT-6008", salesOrderId: "SO-2204", type: "deposit", expectedAmount: 6525.67, amountReceived: 6525.67, dateReceived: "2026-07-29", bankRef: "TT-SCB-40021", method: "Wire Transfer", remittanceAttached: true, status: "submitted_for_verification", remarks: "First-time customer — Finance verification pending against bank statement." },
+  { id: "PMT-6008", salesOrderId: "SO-2204", type: "deposit", expectedAmount: 6525.67, amountReceived: 6525.67, dateReceived: "2026-07-29", bankRef: "TT-SCB-40021", method: "Wire Transfer", remittanceAttached: true, status: "submitted_for_verification", remarks: "First-time customer, so Finance verification is pending against the bank statement." },
   { id: "PMT-6009", salesOrderId: "SO-2204", type: "balance", expectedAmount: 9788.51, amountReceived: 0, status: "expected", dueDate: "2026-09-10" },
 
   { id: "PMT-6010", salesOrderId: "SO-2205", type: "deposit", expectedAmount: 2634.55, amountReceived: 2634.55, dateReceived: "2026-05-30", bankRef: "TT-DNB-90210", method: "Telegraphic Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-05-30", status: "verified" },
@@ -1065,13 +1103,16 @@ export const PAYMENTS: PaymentRecord[] = [
   { id: "PMT-6016", salesOrderId: "SO-2207", type: "balance", expectedAmount: 10197.54, amountReceived: 4000.00, status: "partially_paid", dueDate: "2026-08-20", remarks: "Partial remittance received ahead of shipment; balance short by $6,197.54." },
 
   { id: "PMT-6017", salesOrderId: "SO-2208", type: "deposit", expectedAmount: 1459.78, amountReceived: 1459.78, dateReceived: "2026-06-10", bankRef: "TT-SANT-13010", method: "Telegraphic Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-06-10", status: "verified" },
-  { id: "PMT-6018", salesOrderId: "SO-2208", type: "balance", expectedAmount: 3406.14, amountReceived: 0, status: "overdue", dueDate: "2026-08-01", remarks: "Balance now overdue — inspection still pending, hold discussed with Sales Manager." },
+  { id: "PMT-6018", salesOrderId: "SO-2208", type: "balance", expectedAmount: 3406.14, amountReceived: 0, status: "overdue", dueDate: "2026-08-01", remarks: "Balance now overdue. Inspection still pending, hold discussed with Sales Manager." },
 
   { id: "PMT-6019", salesOrderId: "SO-2209", type: "deposit", expectedAmount: 5367.26, amountReceived: 5367.26, dateReceived: "2026-06-25", bankRef: "TT-BCA-44810", method: "Telegraphic Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-06-25", status: "verified" },
   { id: "PMT-6020", salesOrderId: "SO-2209", type: "balance", expectedAmount: 12488.99, amountReceived: 12488.99, dateReceived: "2026-08-06", bankRef: "TT-BCA-45390", method: "Telegraphic Transfer", remittanceAttached: true, status: "submitted_for_verification", remarks: "Remittance copy uploaded by customer, awaiting bank confirmation. Amount restated after inspection settled the order value." },
 
   { id: "PMT-6021", salesOrderId: "SO-2210", type: "deposit", expectedAmount: 6357.18, amountReceived: 6357.18, dateReceived: "2026-05-12", bankRef: "TT-DNB-90055", method: "Wire Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-05-12", status: "verified" },
   { id: "PMT-6022", salesOrderId: "SO-2210", type: "balance", expectedAmount: 14833.42, amountReceived: 14833.42, dateReceived: "2026-08-04", bankRef: "TT-DNB-91820", method: "Wire Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-08-04", status: "verified" },
+
+  { id: "PMT-6023", salesOrderId: "SO-2211", type: "deposit", expectedAmount: 2029.16, amountReceived: 2029.16, dateReceived: "2026-08-04", bankRef: "TT-DNB-92440", method: "Wire Transfer", remittanceAttached: true, verifiedBy: "Lourdes Ibarra", verificationDate: "2026-08-04", status: "verified" },
+  { id: "PMT-6024", salesOrderId: "SO-2211", type: "balance", expectedAmount: 4734.72, amountReceived: 0, status: "expected", dueDate: "2026-10-05" },
 ];
 
 // -------------------------------------------------------------------------
@@ -1101,14 +1142,14 @@ export const INVOICES: CommercialInvoice[] = [
 // -------------------------------------------------------------------------
 export const DOCUMENTS: DocRecord[] = [
   { id: "DOC-101", name: "PI-34101 Rev.0", type: "Proforma Invoice", relatedOrderId: "SO-2201", version: 1, uploadedBy: "Grace Tan", uploadDate: "2026-04-14", approvalStatus: "approved", isCurrent: true },
-  { id: "DOC-102", name: "Customer Confirmation Email — SO-2201", type: "Customer Confirmation", relatedOrderId: "SO-2201", version: 1, uploadedBy: "West Coast Marine Supply Inc.", uploadDate: "2026-04-18", approvalStatus: "approved", isCurrent: true },
+  { id: "DOC-102", name: "Customer Confirmation Email, SO-2201", type: "Customer Confirmation", relatedOrderId: "SO-2201", version: 1, uploadedBy: "West Coast Marine Supply Inc.", uploadDate: "2026-04-18", approvalStatus: "approved", isCurrent: true },
   { id: "DOC-103", name: "CI-2201", type: "Commercial Invoice", relatedOrderId: "SO-2201", version: 1, uploadedBy: "Lourdes Ibarra", uploadDate: "2026-06-24", approvalStatus: "approved", isCurrent: true },
   { id: "DOC-104", name: "PO-88231-KTI.pdf", type: "Purchase Order", relatedOrderId: "SO-2202", version: 1, uploadedBy: "Grace Tan", uploadDate: "2026-08-02", approvalStatus: "n/a", isCurrent: true },
   { id: "DOC-105", name: "PI-34108 Rev.0", type: "Proforma Invoice", relatedOrderId: "SO-2209", version: 1, uploadedBy: "Marcus Reyes", uploadDate: "2026-06-10", approvalStatus: "approved", isCurrent: false },
   { id: "DOC-106", name: "PI-34108 Rev.1", type: "Proforma Invoice", relatedOrderId: "SO-2209", version: 2, uploadedBy: "Marcus Reyes", uploadDate: "2026-06-15", approvalStatus: "approved", isCurrent: true },
-  { id: "DOC-107", name: "Tentative Packing List — SO-2207", type: "Packing List", relatedOrderId: "SO-2207", version: 1, uploadedBy: "Ronaldo Cruz", uploadDate: "2026-08-01", approvalStatus: "pending", isCurrent: true },
-  { id: "DOC-108", name: "Remittance Copy — Deposit SO-2204", type: "Remittance Copy", relatedOrderId: "SO-2204", version: 1, uploadedBy: "Golden Reef Fisheries Ltd.", uploadDate: "2026-07-30", approvalStatus: "pending", isCurrent: true },
-  { id: "DOC-109", name: "Net Plan — Golden Reef 08-02-26", type: "Net Plan", relatedOrderId: undefined, version: 1, uploadedBy: "Golden Reef Fisheries Ltd.", uploadDate: "2026-08-02", approvalStatus: "n/a", isCurrent: true },
+  { id: "DOC-107", name: "Tentative Packing List, SO-2207", type: "Packing List", relatedOrderId: "SO-2207", version: 1, uploadedBy: "Ronaldo Cruz", uploadDate: "2026-08-01", approvalStatus: "pending", isCurrent: true },
+  { id: "DOC-108", name: "Remittance Copy, Deposit SO-2204", type: "Remittance Copy", relatedOrderId: "SO-2204", version: 1, uploadedBy: "Golden Reef Fisheries Ltd.", uploadDate: "2026-07-30", approvalStatus: "pending", isCurrent: true },
+  { id: "DOC-109", name: "Net Plan, Golden Reef 08-02-26", type: "Net Plan", relatedOrderId: undefined, version: 1, uploadedBy: "Golden Reef Fisheries Ltd.", uploadDate: "2026-08-02", approvalStatus: "n/a", isCurrent: true },
   { id: "DOC-110", name: "PI-34112 Draft", type: "Proforma Invoice", relatedOrderId: undefined, version: 1, uploadedBy: "Marcus Reyes", uploadDate: "2026-07-29", approvalStatus: "pending", isCurrent: true },
 ];
 
@@ -1126,7 +1167,7 @@ export const APPROVALS: ApprovalRequest[] = [
     dueDate: "2026-08-14",
     level: "L2 Manager",
     status: "pending",
-    reason: "Second order from a first-year customer — discount needs Sales Manager sign-off.",
+    reason: "Second order from a first-year customer, so the discount needs Sales Manager sign-off.",
   },
   {
     id: "APR-102",
@@ -1138,7 +1179,7 @@ export const APPROVALS: ApprovalRequest[] = [
     dueDate: "2026-08-06",
     level: "L1 Supervisor",
     status: "pending",
-    reason: "Verify 40% deposit remittance before releasing production — first-time customer.",
+    reason: "Verify the 40% deposit remittance before releasing production. First-time customer.",
   },
   {
     id: "APR-103",
@@ -1150,7 +1191,7 @@ export const APPROVALS: ApprovalRequest[] = [
     dueDate: "2026-08-09",
     level: "L2 Manager",
     status: "pending",
-    reason: "Container ready — blocked pending final balance verification.",
+    reason: "Container ready, blocked pending final balance verification.",
   },
   {
     id: "APR-104",
@@ -1192,8 +1233,8 @@ export const ACTIVITY: ActivityEntry[] = [
   { id: "ACT-108", timestamp: "2026-08-01T13:15:00+08:00", user: "Ronaldo Cruz", department: "Logistics", action: "Packing list opened, partially packed", recordType: "Sales Order", recordId: "SO-2207" },
   { id: "ACT-109", timestamp: "2026-07-31T10:00:00+08:00", user: "Elena Vasquez", department: "QC", action: "Inspection passed", recordType: "Sales Order", recordId: "SO-2210", comment: "No defects. Released for balance invoicing." },
   { id: "ACT-110", timestamp: "2026-07-30T14:20:00+08:00", user: "Golden Reef Fisheries Ltd.", department: "Customer", action: "Remittance copy submitted for deposit", recordType: "Payment", recordId: "PMT-6008", comment: "40% deposit, TT reference TT-SCB-40021." },
-  { id: "ACT-111", timestamp: "2026-07-26T11:00:00+08:00", user: "Elena Vasquez", department: "QC", action: "Inspection passed — order value settled", recordType: "Sales Order", recordId: "SO-2209", comment: "Actual weights applied; order value restated to $17,856.25." },
-  { id: "ACT-112", timestamp: "2026-07-20T09:30:00+08:00", user: "System", department: "System", action: "Production delayed — raw material shortage flagged", previousStatus: "In Production", newStatus: "On Hold", recordType: "Sales Order", recordId: "SO-2206" },
+  { id: "ACT-111", timestamp: "2026-07-26T11:00:00+08:00", user: "Elena Vasquez", department: "QC", action: "Inspection passed, order value settled", recordType: "Sales Order", recordId: "SO-2209", comment: "Actual weights applied; order value restated to $17,856.25." },
+  { id: "ACT-112", timestamp: "2026-07-20T09:30:00+08:00", user: "System", department: "System", action: "Production delayed, raw material shortage flagged", previousStatus: "In Production", newStatus: "On Hold", recordType: "Sales Order", recordId: "SO-2206" },
 ];
 
 export const CURRENT_USER_BY_ROLE: Record<string, string> = {

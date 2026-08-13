@@ -178,7 +178,7 @@ export function QuotationsList() {
                         {expired && <span className="ml-1 font-sans text-[10px] uppercase">expired</span>}
                       </span>
                     ) : (
-                      <span className="text-paper-300">—</span>
+                      <span className="text-paper-300">-</span>
                     )}
                   </TD>
                   <TD className="font-mono font-medium">{formatMoney(value, q.currency)}</TD>
@@ -196,7 +196,7 @@ export function QuotationsList() {
                         {q.salesOrderId}
                       </Link>
                     ) : (
-                      <span className="text-xs text-paper-300">—</span>
+                      <span className="text-xs text-paper-300">-</span>
                     )}
                   </TD>
                 </TR>

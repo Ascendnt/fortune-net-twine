@@ -67,12 +67,11 @@ function quotation(patch: Partial<Quotation> = {}): Quotation {
 
 function inspection(patch: Partial<InspectionRecord> = {}): InspectionRecord {
   return {
-    id: "QC-0001",
-    salesOrderId: "SO-0001",
-    inspector: "",
+    id: "IR-2026-0001",
+    packingListId: "PL-2026-0001",
+    salesOrderIds: ["SO-0001"],
+    preparedBy: "",
     result: "pending",
-    cartonsChecked: 0,
-    defectsFound: 0,
     remarks: "",
     ...patch,
   };
@@ -187,14 +186,37 @@ describe("buildNotifications", () => {
     expect(n).toEqual([]);
   });
 
-  it("mentions inspections still to be done", () => {
+  it("mentions inspection reports still to go out", () => {
     const n = buildNotifications({ ...empty, inspections: [inspection()] }, TODAY);
     expect(n[0].tone).toBe("info");
     expect(n[0].href).toBe("/inspection");
+    expect(n[0].title).toContain("SO-0001");
   });
 
-  it("says nothing about an inspection that already has a result", () => {
-    expect(buildNotifications({ ...empty, inspections: [inspection({ result: "pass" })] }, TODAY)).toEqual([]);
+  it("chases a report sitting with the customer, because that is what holds the container up", () => {
+    const n = buildNotifications({ ...empty, inspections: [inspection({ result: "sent" })] }, TODAY);
+    expect(n[0].title).toContain("waiting on the customer");
+  });
+
+  it("names the load rather than one order when a container carries several", () => {
+    const n = buildNotifications(
+      { ...empty, inspections: [inspection({ salesOrderIds: ["SO-0001", "SO-0002", "SO-0003"] })] },
+      TODAY
+    );
+    expect(n[0].title).toContain("SO-0001 and 2 more");
+  });
+
+  it("warns when the customer has held the container", () => {
+    const n = buildNotifications(
+      { ...empty, inspections: [inspection({ result: "held", remarks: "Short by 3 pcs" })] },
+      TODAY
+    );
+    expect(n[0].tone).toBe("warning");
+    expect(n[0].detail).toBe("Short by 3 pcs");
+  });
+
+  it("says nothing about a report the customer has already confirmed", () => {
+    expect(buildNotifications({ ...empty, inspections: [inspection({ result: "confirmed" })] }, TODAY)).toEqual([]);
   });
 
   it("orders alerts before warnings before information", () => {

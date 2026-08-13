@@ -1,9 +1,13 @@
 // Operations records for orders already moving through the factory.
 //
 // Seeded against the sales orders that are far enough along to have them, so each screen opens with
-// something real to look at rather than an empty state: SO-2210 is on the water, SO-2205 and SO-2206
-// are in production, SO-2207 has an open packing list, and SO-2208/SO-2209/SO-2201 have all passed
-// inspection at various points down the line.
+// something real to look at rather than an empty state: SO-2210 is on the water, SO-2206 is in
+// production, SO-2207 has an open packing list, and SO-2208/SO-2209/SO-2201 have been through the
+// inspection report at various points down the line.
+//
+// SO-2205 and SO-2211 share PL-2026-0001, which is the consolidated case: one customer, one
+// container, two PIs going out under different scopes. That one exists so the packing screen shows
+// what a consolidated load looks like without anybody having to build it first.
 
 import type { InspectionRecord, PackingList, ProductionRun, Shipment } from "./types";
 
@@ -28,7 +32,7 @@ export const PRODUCTION_RUNS: ProductionRun[] = [
     qtyCompleted: 1,
     qtyRejected: 0,
     startedDate: "2026-07-08",
-    note: "Blocked — awaiting nylon 210D/14x16 restock.",
+    note: "Blocked, awaiting nylon 210D/14x16 restock.",
   },
   {
     id: "PR-5003",
@@ -57,189 +61,240 @@ export const PRODUCTION_RUNS: ProductionRun[] = [
 
 export const PACKING_LISTS: PackingList[] = [
   {
-    id: "PL-2207",
-    salesOrderId: "SO-2207",
-    customerId: "CUST-006",
-    createdDate: "2026-08-01",
+    // The consolidated load, and the reason the packing screen is worth opening cold. Nordfisk has
+    // two live orders and asked for both in one container: SO-2205 is only part-made so it goes as
+    // a first partial, while SO-2211 is finished and goes in full. One container, two PIs, two
+    // different scopes, which is exactly what a single list-level scope could not express.
+    id: "PL-2026-0001",
+    orders: [
+      { salesOrderId: "SO-2205", piRef: "PI-34104", scope: "partial", partialNo: 1 },
+      { salesOrderId: "SO-2211", piRef: "PI-34112", scope: "full" },
+    ],
+    customerId: "CUST-002",
+    containerNo: "DNBU-2280115",
+    createdDate: "2026-08-11",
     packedBy: "Ronaldo Cruz",
-    scope: "full",
-    remarks: "Second bale (No.96) still to be packed.",
+    remarks: "Consolidated at the customer's request. Marked NFT/ALESUND. Balance of SO-2205 to follow.",
     sections: [
       {
-        id: "PL-2207-S1",
-        title: "Bales — packed so far",
+        id: "PL-2026-0001-S1",
+        title: "SO-2205 bales 1-5",
+        containerNo: "DNBU-2280115",
         lines: [
-          // From PI-34106, the quotation behind SO-2207. No.120 is fully packed; No.96 has one of
-          // three pieces on the floor.
-          { id: "l1", itemId: "L1", itemCode: "NET-120-210-22-350", description: "Bale 1", qtyPcs: 3, netWeightKg: 724.5, grossWeightKg: 743.0 },
-          { id: "l2", itemId: "L2", itemCode: "NET-96-210-20-350", description: "Bale 1", qtyPcs: 1, netWeightKg: 227.9, grossWeightKg: 234.0 },
+          // Five of the eight pieces on PI-34104 are off the line. Quoted weight is 308.4 KG for
+          // eight, so a piece runs 38.55 KG and each bale lands a shade under it.
+          { id: "pl1-l1", salesOrderId: "SO-2205", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/1", baleNo: "1", qtyPcs: 1, netWeightKg: 38.2, grossWeightKg: 39.6 },
+          { id: "pl1-l2", salesOrderId: "SO-2205", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/2", baleNo: "2", qtyPcs: 1, netWeightKg: 38.6, grossWeightKg: 40.0 },
+          { id: "pl1-l3", salesOrderId: "SO-2205", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/3", baleNo: "3", qtyPcs: 1, netWeightKg: 38.4, grossWeightKg: 39.8 },
+          { id: "pl1-l4", salesOrderId: "SO-2205", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/4", baleNo: "4", qtyPcs: 1, netWeightKg: 38.5, grossWeightKg: 39.9 },
+          { id: "pl1-l5", salesOrderId: "SO-2205", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/5", baleNo: "5", qtyPcs: 1, netWeightKg: 38.3, grossWeightKg: 39.7 },
+        ],
+      },
+      {
+        id: "PL-2026-0001-S2",
+        title: "SO-2211 bales 6-11",
+        containerNo: "DNBU-2280115",
+        lines: [
+          // PI-34112 in full: six pieces at a quoted 231.3 KG, so 38.55 KG apiece again.
+          { id: "pl1-l6", salesOrderId: "SO-2211", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/6", baleNo: "6", qtyPcs: 1, netWeightKg: 38.7, grossWeightKg: 40.1 },
+          { id: "pl1-l7", salesOrderId: "SO-2211", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/7", baleNo: "7", qtyPcs: 1, netWeightKg: 38.4, grossWeightKg: 39.8 },
+          { id: "pl1-l8", salesOrderId: "SO-2211", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/8", baleNo: "8", qtyPcs: 1, netWeightKg: 38.5, grossWeightKg: 39.9 },
+          { id: "pl1-l9", salesOrderId: "SO-2211", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/9", baleNo: "9", qtyPcs: 1, netWeightKg: 38.6, grossWeightKg: 40.0 },
+          { id: "pl1-l10", salesOrderId: "SO-2211", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/10", baleNo: "10", qtyPcs: 1, netWeightKg: 38.4, grossWeightKg: 39.8 },
+          { id: "pl1-l11", salesOrderId: "SO-2211", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "NFT/11", baleNo: "11", qtyPcs: 1, netWeightKg: 38.5, grossWeightKg: 39.9 },
         ],
       },
     ],
   },
   {
-    id: "PL-2208",
-    salesOrderId: "SO-2208",
+    id: "PL-2026-0002",
+    // A partial, and marked as one: the No.96 line has a single piece of three on the floor. Left
+    // as a full shipment it could never be closed, which is what the scope is for.
+    orders: [{ salesOrderId: "SO-2207", piRef: "PI-34106", scope: "partial", partialNo: 1 }],
+    customerId: "CUST-006",
+    createdDate: "2026-08-01",
+    packedBy: "Ronaldo Cruz",
+    remarks: "Second bale (No.96) still to be packed.",
+    sections: [
+      {
+        id: "PL-2026-0002-S1",
+        title: "Bales packed so far",
+        lines: [
+          // From PI-34106, the quotation behind SO-2207. No.120 is fully packed; No.96 has one of
+          // three pieces on the floor.
+          { id: "l1", salesOrderId: "SO-2207", itemId: "L1", itemCode: "NET-120-210-22-350", description: "Bale 1", baleNo: "1", qtyPcs: 3, netWeightKg: 724.5, grossWeightKg: 743.0 },
+          { id: "l2", salesOrderId: "SO-2207", itemId: "L2", itemCode: "NET-96-210-20-350", description: "Bale 2", baleNo: "2", qtyPcs: 1, netWeightKg: 227.9, grossWeightKg: 234.0 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "PL-2026-0003",
+    orders: [{ salesOrderId: "SO-2208", piRef: "PI-34107", scope: "full" }],
     customerId: "CUST-007",
     createdDate: "2026-07-18",
     packedBy: "Ronaldo Cruz",
-    scope: "full",
     finalizedDate: "2026-07-20",
     remarks: "Two bales, marked SPA/1 and SPA/2.",
     sections: [
       {
-        id: "PL-2208-S1",
-        title: "Bales 1–2",
+        id: "PL-2026-0003-S1",
+        title: "Bales 1-2",
         lines: [
           // From PI-34107, the quotation behind SO-2208.
-          { id: "l1", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "SPA/1", qtyPcs: 2, netWeightKg: 77.1, grossWeightKg: 79.0 },
-          { id: "l2", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "SPA/2", qtyPcs: 2, netWeightKg: 77.1, grossWeightKg: 79.0 },
+          { id: "l1", salesOrderId: "SO-2208", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "SPA/1", baleNo: "1", qtyPcs: 2, netWeightKg: 77.1, grossWeightKg: 79.0 },
+          { id: "l2", salesOrderId: "SO-2208", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: "SPA/2", baleNo: "2", qtyPcs: 2, netWeightKg: 77.1, grossWeightKg: 79.0 },
         ],
       },
     ],
   },
   {
-    id: "PL-2209",
-    salesOrderId: "SO-2209",
+    id: "PL-2026-0004",
+    orders: [{ salesOrderId: "SO-2209", piRef: "PI-34108-R1", scope: "full" }],
     customerId: "CUST-003",
     createdDate: "2026-07-21",
     packedBy: "Ronaldo Cruz",
-    scope: "full",
     finalizedDate: "2026-07-23",
     remarks: "Twine shipped as one coil, marked PTS/T1.",
     sections: [
       {
-        id: "PL-2209-S1",
-        title: "Bales — net items",
+        id: "PL-2026-0004-S1",
+        title: "Bales, net items",
         lines: [
-          // From PI-34108, the quotation behind SO-2209. Weights carried through to inspection.
-          { id: "l1", itemId: "L1", itemCode: "NET-120-210-22-350", description: "PTS/1", qtyPcs: 2, netWeightKg: 495.0, grossWeightKg: 507.0 },
-          { id: "l2", itemId: "L2", itemCode: "NET-84-210-16-350", description: "PTS/2", qtyPcs: 4, netWeightKg: 645.0, grossWeightKg: 660.0 },
+          // From PI-34108, the quotation behind SO-2209. Weights carried through to the report.
+          { id: "l1", salesOrderId: "SO-2209", itemId: "L1", itemCode: "NET-120-210-22-350", description: "PTS/1", baleNo: "1", qtyPcs: 2, netWeightKg: 495.0, grossWeightKg: 507.0 },
+          { id: "l2", salesOrderId: "SO-2209", itemId: "L2", itemCode: "NET-84-210-16-350", description: "PTS/2", baleNo: "2", qtyPcs: 4, netWeightKg: 645.0, grossWeightKg: 660.0 },
         ],
       },
       {
-        id: "PL-2209-S2",
+        id: "PL-2026-0004-S2",
         title: "Twine",
         lines: [
-          { id: "l3", itemId: "L3", itemCode: "TWINE-HEX-TARRED", description: "PTS/T1", qtyPcs: 150, netWeightKg: 150.0, grossWeightKg: 153.0 },
+          { id: "l3", salesOrderId: "SO-2209", itemId: "L3", itemCode: "TWINE-HEX-TARRED", description: "PTS/T1", baleNo: "T1", qtyPcs: 150, netWeightKg: 150.0, grossWeightKg: 153.0 },
         ],
       },
     ],
   },
   {
-    id: "PL-2210",
-    salesOrderId: "SO-2210",
+    id: "PL-2026-0005",
+    orders: [{ salesOrderId: "SO-2210", piRef: "PI-34109", scope: "full" }],
     customerId: "CUST-002",
+    containerNo: "MSKU-5512040",
     createdDate: "2026-07-27",
     packedBy: "Ronaldo Cruz",
-    scope: "full",
     finalizedDate: "2026-07-29",
-    remarks: "Marked for Ålesund. Four bales, two per item.",
+    remarks: "Marked for Alesund. Four bales, two per item.",
     sections: [
       {
-        id: "PL-2210-S1",
-        title: "Bales 1–4",
+        id: "PL-2026-0005-S1",
+        title: "Bales 1-4",
+        containerNo: "MSKU-5512040",
         lines: [
           // From PI-34109, the quotation behind SO-2210.
-          { id: "l1", itemId: "L1", itemCode: "NET-96-210-20-350", description: "NF/1", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 467.0 },
-          { id: "l2", itemId: "L1", itemCode: "NET-96-210-20-350", description: "NF/2", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 467.0 },
-          { id: "l3", itemId: "L2", itemCode: "NET-42-250-08-8IN", description: "NF/3", qtyPcs: 4, netWeightKg: 135.6, grossWeightKg: 139.0 },
-          { id: "l4", itemId: "L2", itemCode: "NET-42-250-08-8IN", description: "NF/4", qtyPcs: 4, netWeightKg: 135.6, grossWeightKg: 139.0 },
+          { id: "l1", salesOrderId: "SO-2210", itemId: "L1", itemCode: "NET-96-210-20-350", description: "NF/1", baleNo: "1", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 467.0 },
+          { id: "l2", salesOrderId: "SO-2210", itemId: "L1", itemCode: "NET-96-210-20-350", description: "NF/2", baleNo: "2", qtyPcs: 2, netWeightKg: 455.8, grossWeightKg: 467.0 },
+          { id: "l3", salesOrderId: "SO-2210", itemId: "L2", itemCode: "NET-42-250-08-8IN", description: "NF/3", baleNo: "3", qtyPcs: 4, netWeightKg: 135.6, grossWeightKg: 139.0 },
+          { id: "l4", salesOrderId: "SO-2210", itemId: "L2", itemCode: "NET-42-250-08-8IN", description: "NF/4", baleNo: "4", qtyPcs: 4, netWeightKg: 135.6, grossWeightKg: 139.0 },
         ],
       },
     ],
   },
   {
-    id: "PL-2201",
-    salesOrderId: "SO-2201",
+    id: "PL-2026-0006",
+    orders: [{ salesOrderId: "SO-2201", piRef: "PI-34101", scope: "full" }],
     customerId: "CUST-006",
+    containerNo: "MSKU-4498210",
     createdDate: "2026-06-12",
     packedBy: "Ronaldo Cruz",
-    scope: "full",
     finalizedDate: "2026-06-14",
     remarks: "Marked for San Pedro. Six bales, strapped in pairs where possible.",
     sections: [
       {
-        id: "PL-2201-S1",
-        title: "Bales 1–6",
+        id: "PL-2026-0006-S1",
+        title: "Bales 1-6",
+        containerNo: "MSKU-4498210",
         lines: [
           // From PI-34101, the quotation behind SO-2201.
-          { id: "l1", itemId: "L1", itemCode: "NET-120-210-22-350", description: "WCM/1", qtyPcs: 2, netWeightKg: 483.0, grossWeightKg: 495.0 },
-          { id: "l2", itemId: "L1", itemCode: "NET-120-210-22-350", description: "WCM/2", qtyPcs: 2, netWeightKg: 483.0, grossWeightKg: 495.0 },
-          { id: "l3", itemId: "L1", itemCode: "NET-120-210-22-350", description: "WCM/3", qtyPcs: 1, netWeightKg: 241.5, grossWeightKg: 248.0 },
-          { id: "l4", itemId: "L2", itemCode: "NET-84-210-16-350", description: "WCM/4", qtyPcs: 2, netWeightKg: 329.7, grossWeightKg: 338.0 },
-          { id: "l5", itemId: "L2", itemCode: "NET-84-210-16-350", description: "WCM/5", qtyPcs: 2, netWeightKg: 329.7, grossWeightKg: 338.0 },
-          { id: "l6", itemId: "L2", itemCode: "NET-84-210-16-350", description: "WCM/6", qtyPcs: 1, netWeightKg: 164.85, grossWeightKg: 169.0 },
+          { id: "l1", salesOrderId: "SO-2201", itemId: "L1", itemCode: "NET-120-210-22-350", description: "WCM/1", baleNo: "1", qtyPcs: 2, netWeightKg: 483.0, grossWeightKg: 495.0 },
+          { id: "l2", salesOrderId: "SO-2201", itemId: "L1", itemCode: "NET-120-210-22-350", description: "WCM/2", baleNo: "2", qtyPcs: 2, netWeightKg: 483.0, grossWeightKg: 495.0 },
+          { id: "l3", salesOrderId: "SO-2201", itemId: "L1", itemCode: "NET-120-210-22-350", description: "WCM/3", baleNo: "3", qtyPcs: 1, netWeightKg: 241.5, grossWeightKg: 248.0 },
+          { id: "l4", salesOrderId: "SO-2201", itemId: "L2", itemCode: "NET-84-210-16-350", description: "WCM/4", baleNo: "4", qtyPcs: 2, netWeightKg: 329.7, grossWeightKg: 338.0 },
+          { id: "l5", salesOrderId: "SO-2201", itemId: "L2", itemCode: "NET-84-210-16-350", description: "WCM/5", baleNo: "5", qtyPcs: 2, netWeightKg: 329.7, grossWeightKg: 338.0 },
+          { id: "l6", salesOrderId: "SO-2201", itemId: "L2", itemCode: "NET-84-210-16-350", description: "WCM/6", baleNo: "6", qtyPcs: 1, netWeightKg: 164.85, grossWeightKg: 169.0 },
         ],
       },
     ],
   },
 ];
 
+// Inspection reports. Not quality checks despite the name: each one is the listing of a container's
+// contents, weights and all, sent to the customer to counter-check before the goods leave. The
+// weights on them are what the balance is invoiced against, which is why they carry the computed
+// figure alongside the measured one.
 export const INSPECTIONS: InspectionRecord[] = [
   {
-    id: "QC-2208",
-    salesOrderId: "SO-2208",
-    packingListId: "PL-2208",
-    inspector: "",
+    id: "IR-2026-0003",
+    packingListId: "PL-2026-0003",
+    salesOrderIds: ["SO-2208"],
+    preparedBy: "Elena Vasquez",
     result: "pending",
-    cartonsChecked: 0,
-    defectsFound: 0,
     remarks: "",
     lines: [
-      { id: "INSL-L1", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: 'No.96(250/20x16) 5" Hi-Ex Braided Net', qtyPcs: 4, quotedWeightKg: 154.2, actualWeightKg: 154.2, quotedAmount: 4255.92 },
+      { id: "INSL-l1", salesOrderId: "SO-2208", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: 'No.96(250/20x16) 5" Hi-Ex Braided Net', baleNo: "1", qtyPcs: 2, computedWeightKg: 77.10, netWeightKg: 77.10, grossWeightKg: 79.00, pricePerKg: 27.6, quotedAmount: 2127.96 },
+      { id: "INSL-l2", salesOrderId: "SO-2208", itemId: "L1", itemCode: "NET-96-250-20-5IN", description: 'No.96(250/20x16) 5" Hi-Ex Braided Net', baleNo: "2", qtyPcs: 2, computedWeightKg: 77.10, netWeightKg: 77.10, grossWeightKg: 79.00, pricePerKg: 27.6, quotedAmount: 2127.96 },
     ],
   },
   {
-    id: "QC-2209",
-    salesOrderId: "SO-2209",
-    packingListId: "PL-2209",
-    inspectedDate: "2026-07-26",
-    inspector: "Elena Vasquez",
-    result: "pass",
-    cartonsChecked: 3,
-    defectsFound: 0,
-    remarks: "Mesh depth and selvage checked against PI. Twine coil weight confirmed. Released for balance invoicing.",
+    id: "IR-2026-0004",
+    packingListId: "PL-2026-0004",
+    salesOrderIds: ["SO-2209"],
+    sentDate: "2026-07-24",
+    confirmedDate: "2026-07-26",
+    preparedBy: "Elena Vasquez",
+    result: "confirmed",
+    remarks: "Customer confirmed the listing and the twine coil weight. Released for balance invoicing.",
     lines: [
-      { id: "INSL-L1", itemId: "L1", itemCode: "NET-120-210-22-350", description: 'No.120(210/22x16) 3-1/2" Nylon Braided Net', qtyPcs: 2, quotedWeightKg: 483.0, actualWeightKg: 495.0, quotedAmount: 6996.74 },
-      { id: "INSL-L2", itemId: "L2", itemCode: "NET-84-210-16-350", description: 'No.84(210/16x16) 3-1/2" Nylon Braided Net', qtyPcs: 4, quotedWeightKg: 659.4, actualWeightKg: 645.0, quotedAmount: 9548.12 },
-      { id: "INSL-L3", itemId: "L3", itemCode: "TWINE-HEX-TARRED", description: "H-Ex Lacing Twine, Tarred", qtyPcs: 150, quotedWeightKg: 150, actualWeightKg: 150, quotedAmount: 996.00 },
+      { id: "INSL-l1", salesOrderId: "SO-2209", itemId: "L1", itemCode: "NET-120-210-22-350", description: 'No.120(210/22x16) 3-1/2" Nylon Braided Net', baleNo: "1", qtyPcs: 2, computedWeightKg: 483.00, netWeightKg: 495.00, grossWeightKg: 507.00, pricePerKg: 14.4859, quotedAmount: 6996.74 },
+      { id: "INSL-l2", salesOrderId: "SO-2209", itemId: "L2", itemCode: "NET-84-210-16-350", description: 'No.84(210/16x16) 3-1/2" Nylon Braided Net', baleNo: "2", qtyPcs: 4, computedWeightKg: 659.40, netWeightKg: 645.00, grossWeightKg: 660.00, pricePerKg: 14.4808, quotedAmount: 9548.12 },
+      { id: "INSL-l3", salesOrderId: "SO-2209", itemId: "L3", itemCode: "TWINE-HEX-TARRED", description: "H-Ex Lacing Twine, Tarred", baleNo: "T1", qtyPcs: 150, computedWeightKg: 150.00, netWeightKg: 150.00, grossWeightKg: 153.00, pricePerKg: 6.64, quotedAmount: 996.00 },
     ],
-    // Items actual value ($17,506.25) plus freight ($350) — the order's full settled value, which is
-    // what the balance is raised against, not the item lines alone.
-    revisedOrderValue: 17856.25,
+    settledOrderValues: { "SO-2209": 17856.25 },
   },
   {
-    id: "QC-2210",
-    salesOrderId: "SO-2210",
-    packingListId: "PL-2210",
-    inspectedDate: "2026-07-31",
-    inspector: "Elena Vasquez",
-    result: "pass",
-    cartonsChecked: 4,
-    defectsFound: 0,
-    remarks: "All four bales checked against PI. Net weights within tolerance. Released for balance invoicing.",
+    id: "IR-2026-0005",
+    packingListId: "PL-2026-0005",
+    salesOrderIds: ["SO-2210"],
+    sentDate: "2026-07-30",
+    confirmedDate: "2026-07-31",
+    preparedBy: "Elena Vasquez",
+    result: "confirmed",
+    remarks: "All four bales checked off against the PI. Net weights within tolerance.",
     lines: [
-      { id: "INSL-L1", itemId: "L1", itemCode: "NET-96-210-20-350", description: 'No.96(210/20x16) 3-1/2" Nylon Braided Net', qtyPcs: 4, quotedWeightKg: 911.6, actualWeightKg: 911.6, quotedAmount: 13199.96 },
-      { id: "INSL-L2", itemId: "L2", itemCode: "NET-42-250-08-8IN", description: 'No.42(250/08x16) 8" Hi-Ex Braided Net', qtyPcs: 8, quotedWeightKg: 271.2, actualWeightKg: 271.2, quotedAmount: 7490.64 },
+      { id: "INSL-l1", salesOrderId: "SO-2210", itemId: "L1", itemCode: "NET-96-210-20-350", description: 'No.96(210/20x16) 3-1/2" Nylon Braided Net', baleNo: "1", qtyPcs: 2, computedWeightKg: 455.80, netWeightKg: 455.80, grossWeightKg: 467.00, pricePerKg: 14.4823, quotedAmount: 6599.98 },
+      { id: "INSL-l2", salesOrderId: "SO-2210", itemId: "L1", itemCode: "NET-96-210-20-350", description: 'No.96(210/20x16) 3-1/2" Nylon Braided Net', baleNo: "2", qtyPcs: 2, computedWeightKg: 455.80, netWeightKg: 455.80, grossWeightKg: 467.00, pricePerKg: 14.4823, quotedAmount: 6599.98 },
+      { id: "INSL-l3", salesOrderId: "SO-2210", itemId: "L2", itemCode: "NET-42-250-08-8IN", description: 'No.42(250/08x16) 8" Hi-Ex Braided Net', baleNo: "3", qtyPcs: 4, computedWeightKg: 135.60, netWeightKg: 135.60, grossWeightKg: 139.00, pricePerKg: 27.6205, quotedAmount: 3745.32 },
+      { id: "INSL-l4", salesOrderId: "SO-2210", itemId: "L2", itemCode: "NET-42-250-08-8IN", description: 'No.42(250/08x16) 8" Hi-Ex Braided Net', baleNo: "4", qtyPcs: 4, computedWeightKg: 135.60, netWeightKg: 135.60, grossWeightKg: 139.00, pricePerKg: 27.6205, quotedAmount: 3745.32 },
     ],
-    revisedOrderValue: 21190.60,
+    settledOrderValues: { "SO-2210": 21190.60 },
   },
   {
-    id: "QC-2201",
-    salesOrderId: "SO-2201",
-    packingListId: "PL-2201",
-    inspectedDate: "2026-06-16",
-    inspector: "Elena Vasquez",
-    result: "pass",
-    cartonsChecked: 6,
-    defectsFound: 0,
-    remarks: "Standard release inspection. No defects.",
+    id: "IR-2026-0006",
+    packingListId: "PL-2026-0006",
+    salesOrderIds: ["SO-2201"],
+    sentDate: "2026-06-15",
+    confirmedDate: "2026-06-16",
+    preparedBy: "Elena Vasquez",
+    result: "confirmed",
+    remarks: "Confirmed by the customer without amendment.",
     lines: [
-      { id: "INSL-L1", itemId: "L1", itemCode: "NET-120-210-22-350", description: 'No.120(210/22x16) 3-1/2" Nylon Braided Net', qtyPcs: 5, quotedWeightKg: 1207.5, actualWeightKg: 1207.5, quotedAmount: 17491.85 },
-      { id: "INSL-L2", itemId: "L2", itemCode: "NET-84-210-16-350", description: 'No.84(210/16x16) 3-1/2" Nylon Braided Net', qtyPcs: 5, quotedWeightKg: 824.25, actualWeightKg: 824.25, quotedAmount: 11935.15 },
+      { id: "INSL-l1", salesOrderId: "SO-2201", itemId: "L1", itemCode: "NET-120-210-22-350", description: 'No.120(210/22x16) 3-1/2" Nylon Braided Net', baleNo: "1", qtyPcs: 2, computedWeightKg: 483.00, netWeightKg: 483.00, grossWeightKg: 495.00, pricePerKg: 14.4859, quotedAmount: 6996.74 },
+      { id: "INSL-l2", salesOrderId: "SO-2201", itemId: "L1", itemCode: "NET-120-210-22-350", description: 'No.120(210/22x16) 3-1/2" Nylon Braided Net', baleNo: "2", qtyPcs: 2, computedWeightKg: 483.00, netWeightKg: 483.00, grossWeightKg: 495.00, pricePerKg: 14.4859, quotedAmount: 6996.74 },
+      { id: "INSL-l3", salesOrderId: "SO-2201", itemId: "L1", itemCode: "NET-120-210-22-350", description: 'No.120(210/22x16) 3-1/2" Nylon Braided Net', baleNo: "3", qtyPcs: 1, computedWeightKg: 241.50, netWeightKg: 241.50, grossWeightKg: 248.00, pricePerKg: 14.4859, quotedAmount: 3498.37 },
+      { id: "INSL-l4", salesOrderId: "SO-2201", itemId: "L2", itemCode: "NET-84-210-16-350", description: 'No.84(210/16x16) 3-1/2" Nylon Braided Net', baleNo: "4", qtyPcs: 2, computedWeightKg: 329.70, netWeightKg: 329.70, grossWeightKg: 338.00, pricePerKg: 14.4808, quotedAmount: 4774.06 },
+      { id: "INSL-l5", salesOrderId: "SO-2201", itemId: "L2", itemCode: "NET-84-210-16-350", description: 'No.84(210/16x16) 3-1/2" Nylon Braided Net', baleNo: "5", qtyPcs: 2, computedWeightKg: 329.70, netWeightKg: 329.70, grossWeightKg: 338.00, pricePerKg: 14.4808, quotedAmount: 4774.06 },
+      { id: "INSL-l6", salesOrderId: "SO-2201", itemId: "L2", itemCode: "NET-84-210-16-350", description: 'No.84(210/16x16) 3-1/2" Nylon Braided Net', baleNo: "6", qtyPcs: 1, computedWeightKg: 164.85, netWeightKg: 164.85, grossWeightKg: 169.00, pricePerKg: 14.4808, quotedAmount: 2387.03 },
     ],
-    revisedOrderValue: 29677.00,
+    settledOrderValues: { "SO-2201": 29677.00 },
   },
 ];
 

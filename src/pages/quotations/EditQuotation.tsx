@@ -22,6 +22,6 @@ export function EditQuotation() {
     );
   }
 
-  // Remounting on id change keeps the builder's initial state honest — it reads `existing` once.
+  // Remounting on id change keeps the builder's initial state honest, since it reads `existing` once.
   return <QuotationBuilder key={quotation.id} existing={quotation} />;
 }

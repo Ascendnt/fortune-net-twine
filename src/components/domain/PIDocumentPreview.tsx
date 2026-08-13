@@ -7,7 +7,7 @@ import fntLogo from "@/assets/fnt-logo.png";
 // Item numbering used to be a mutable counter closed over by child components. React renders
 // children after the parent, and StrictMode renders them twice, so the counter drifted and the
 // printed numbers skipped (3, 4, then 8, 9, 10 on a five-line quotation). The document is now built
-// as pure data first — numbering is assigned while walking the tree, before anything renders — so
+// as pure data first, with numbering assigned while walking the tree before anything renders, so
 // it cannot depend on render order or render count.
 
 type PrintRow =
@@ -41,7 +41,7 @@ function buildRows(q: Quotation): PrintRow[] {
             no: (no += 1),
             label: `${line.code} ${line.description}`,
             weightKg: lacingWeight(line),
-            qty: line.kind === "twine" ? line.kgs : "—",
+            qty: line.kind === "twine" ? line.kgs : "-",
             unitPrice: line.kind === "twine" ? line.rate : null,
             amount: lacingAmount(line),
           });
@@ -104,7 +104,7 @@ function buildRows(q: Quotation): PrintRow[] {
 }
 
 // A line item is forced onto a single row (no wrap) so every catalog item stays one row, matching
-// the factory's real PI layout — but a long description at a fixed font size would overflow the
+// the factory's real PI layout, but a long description at a fixed font size would overflow the
 // column instead of wrapping. Stepping the size down by length keeps it on one line at any
 // reasonable length while staying legible (never below 9px).
 function descFontClass(text: string): string {
@@ -140,7 +140,7 @@ export function PIDocumentPreview({
   domId?: string;
 }) {
   // The export client master shows PIs actually go out under one of two legal entities depending
-  // on the account, not a single fixed name — falls back to the historical default when a customer
+  // on the account, not a single fixed name. Falls back to the historical default when a customer
   // record has no letterhead set (e.g. seed customers predating this field).
   // Set on the quotation when the sales team has chosen an entity for this document; otherwise it
   // falls back to whichever entity the customer is normally billed from.
@@ -274,7 +274,7 @@ export function PIDocumentPreview({
                     <td className="py-1 px-2 text-right font-mono">{row.weightKg.toFixed(2)}</td>
                     <td className="py-1 px-2 text-right font-mono">{row.qty}</td>
                     <td className="py-1 px-2 text-right font-mono">
-                      {row.unitPrice === null ? "—" : formatMoney(row.unitPrice, q.currency)}
+                      {row.unitPrice === null ? "-" : formatMoney(row.unitPrice, q.currency)}
                     </td>
                     <td className="py-1 px-2 text-right font-mono font-semibold">{formatMoney(row.amount, q.currency)}</td>
                   </tr>
@@ -317,7 +317,7 @@ export function PIDocumentPreview({
             </div>
             <div className="text-right">
               <p className="mb-6">{q.approver ? "Approved by:" : "Pending approval"}</p>
-              <p className="border-t border-paper-300 pt-1">{q.approver ?? "—"}</p>
+              <p className="border-t border-paper-300 pt-1">{q.approver ?? "-"}</p>
             </div>
           </div>
         </div>

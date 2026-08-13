@@ -48,7 +48,7 @@ function price(appliedRuleIds: string[], overrides: Partial<Parameters<typeof co
   );
 }
 
-describe("pricing chain — doc §5.2 unit vectors (base 5.0000)", () => {
+describe("pricing chain, doc §5.2 unit vectors (base 5.0000)", () => {
   it("ADD COMMISSION 3% grosses up margin-inclusive", () => {
     expect(price(["comm3"]).newPriceKg).toBeCloseTo(5.1546, 4);
   });
@@ -81,12 +81,12 @@ describe("pricing chain — doc §5.2 unit vectors (base 5.0000)", () => {
 
   it("ADD INSURANCE applies 0.66 as a PERCENT, not a flat amount", () => {
     // Regression guard for the original defect: treating the 0.66 lookup value as currency gave
-    // 5.66 here — roughly 8.6x the intended step once scaled to a real 11.60 base price.
+    // 5.66 here, roughly 8.6x the intended step once scaled to a real 11.60 base price.
     expect(price(["ins"]).newPriceKg).toBeCloseTo(5.033, 4);
   });
 });
 
-describe("price per piece — doc §4.2", () => {
+describe("price per piece, doc §4.2", () => {
   it("multiplies new price/kg by weight/pc", () => {
     expect(price(["md"]).unitPrice).toBeCloseTo(2561.625, 4);
   });
@@ -101,7 +101,7 @@ describe("price per piece — doc §4.2", () => {
   });
 });
 
-describe("line totals — doc §4.3 and §5.1", () => {
+describe("line totals, doc §4.3 and §5.1", () => {
   it("computes AMOUNT from the unrounded unit price", () => {
     // 2561.625 x 10 = 25,616.25. Rounding U/P to 2dp first would give 25,616.30.
     const r = price(["md"], { qtyPcs: 10 });
@@ -120,7 +120,7 @@ describe("rules default to off", () => {
     expect(price([]).newPriceKg).toBe(5);
   });
 
-  it("doc §5.1 row 1 — base case still produces a full U/P without any rule applied", () => {
+  it("doc §5.1 row 1, the base case still produces a full U/P without any rule applied", () => {
     // Guards spec §6.2.1: U/P must never be gated on the pricing modal having been opened.
     const r = price([], { qtyPcs: 10 });
     expect(r.unitPrice).toBeCloseTo(2475, 2);
@@ -197,7 +197,7 @@ describe("chain ordering", () => {
     const reverse = price(["comm3", "ins"]).newPriceKg;
     expect(ticked).toBeCloseTo(reverse, 10);
     // Commission (seq 1) then insurance (seq 8): 5 / 0.97 = 5.1546392, x 1.0066 = 5.1886598.
-    // Rounded to 4dp that is 5.1887 — 5.1886 sits 0.00006 away, outside toBeCloseTo(_, 4)'s
+    // Rounded to 4dp that is 5.1887, and 5.1886 sits 0.00006 away, outside toBeCloseTo(_, 4)'s
     // 0.00005 tolerance.
     expect(ticked).toBeCloseTo(5.1887, 4);
   });

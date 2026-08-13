@@ -26,8 +26,8 @@ import type { SpecSelection } from "@/lib/specOptions";
 import type { LacingCatalogRow, SpecMasterRow } from "@/lib/specMaster";
 
 // The quotation authoring screen, shared by "New Quotation" and "Edit Quotation". Editing a saved
-// quotation is the same job as creating one — the only differences are where the initial state comes
-// from and what Save does — so both routes render this rather than maintaining two copies.
+// quotation is the same job as creating one. The only differences are where the initial state comes
+// from and what Save does, so both routes render this rather than maintaining two copies.
 
 const CURRENCIES: Currency[] = ["USD", "KRW", "EUR"];
 const INCOTERMS = ["FOB", "CIF"];
@@ -98,8 +98,9 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
   const customer = customers.find((c) => c.id === customerId);
 
   // Currency, payment terms, consignee, and Attn contact all pre-fill from the customer's master
-  // data when a customer is picked but stay fully editable per quotation — real accounts sometimes
-  // ship to a different consignee, quote in a different currency, or negotiate different terms.
+  // data when a customer is picked but stay fully editable per quotation, because real accounts
+  // sometimes ship to a different consignee, quote in a different currency, or negotiate different
+  // terms.
   const [currency, setCurrency] = useState<Currency>(existing?.currency ?? customer?.defaultCurrency ?? "USD");
   const [paymentTerms, setPaymentTerms] = useState(existing?.paymentTerms ?? customer?.defaultPaymentTerms ?? "");
   const [consignee, setConsignee] = useState(existing?.consignee ?? customer?.consignee ?? "");

@@ -30,7 +30,7 @@ describe("findEquivalentSpec", () => {
     expect(findEquivalentSpec(master, { ...row(), code: "SOMETHING-ELSE" } as SpecMasterRow)?.code).toBe("N-1598");
   });
 
-  it("finds nothing when the length differs — that is a different net", () => {
+  it("finds nothing when the length differs, because that is a different net", () => {
     expect(findEquivalentSpec(master, row({ length: "50FL" }))).toBeUndefined();
   });
 

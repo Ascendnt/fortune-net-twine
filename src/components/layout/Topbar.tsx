@@ -15,7 +15,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const navigate = useNavigate();
 
-  const activeRole = ROLES.find((r) => r.id === role) ?? { label: "—", description: "" };
+  const activeRole = ROLES.find((r) => r.id === role) ?? { label: "-", description: "" };
 
   // Derived from live state, not a fixed list. An item disappears the moment the thing it is
   // chasing is dealt with, which is the only way a feed like this stays worth reading.

@@ -1,9 +1,9 @@
-// Item Specification master — the priced catalog behind the "Add Specification" picker
+// Item Specification master, the priced catalog behind the "Add Specification" picker
 // (FORTUNE_NET_TWINE_System_Simulation.md §3.4).
 //
 // This is a different thing from ITEM_MASTER. ITEM_MASTER is a small set of finished catalog
 // products with their own reference sell price. SPEC_MASTER is the factory's specification
-// database: a code, its physical dimensions, and a WEIGHT/PC — no price at all. Given Price is
+// database: a code, its physical dimensions, and a WEIGHT/PC, with no price at all. Given Price is
 // typed per quotation line, which is why a freshly added specification row reads GIVEN 0.00.
 //
 // Rows N-1595 through N-1603 are transcribed verbatim from the live system. The remaining families
@@ -13,7 +13,7 @@
 
 export interface SpecMasterRow {
   code: string;
-  /** Drives the Add Specification filter — must match "{material} {netType}" upper-cased. */
+  /** Drives the Add Specification filter, so it must match "{material} {netType}" upper-cased. */
   description: string;
   material: string; // must match a value in SPEC_MATERIALS
   netType: string; // must match a value in SPEC_NET_TYPES
@@ -60,7 +60,7 @@ export function findEquivalentSpec(rows: SpecMasterRow[], candidate: SpecShape):
  *
  * Codes are issued by the system, not typed. Letting people invent them produces duplicates, gaps
  * and typos in the one field the whole quotation is keyed on, and a code is an identifier rather
- * than a decision — there is nothing to think about, only something to get wrong.
+ * than a decision, because there is nothing to think about, only something to get wrong.
  *
  * The series is inherited from the specifications already on file for the same material and net
  * type, so a new nylon braided net joins the N-15xx run rather than starting a series of its own.
@@ -89,8 +89,8 @@ export function nextSpecCode(rows: SpecMasterRow[], material: string, netType: s
 
 /** The line label shown under a specification row, e.g. `NO.120(210/22x16) 3-1/2"STR 122MD x 50FL`. */
 export function specRowLabel(row: SpecMasterRow): string {
-  const dims = [row.meshSize, row.meshDepth].filter((v) => v && v !== "—").join(" ");
-  const tail = row.length && row.length !== "—" ? ` x ${row.length}` : "";
+  const dims = [row.meshSize, row.meshDepth].filter((v) => v && v !== "-").join(" ");
+  const tail = row.length && row.length !== "-" ? ` x ${row.length}` : "";
   return `${row.twine}${dims ? ` ${dims}` : ""}${tail}`;
 }
 
@@ -117,7 +117,7 @@ function netRows(
 }
 
 export const SPEC_MASTER: SpecMasterRow[] = [
-  // ---- Nylon Braided Net · NO.120(210/22x16) · 3-1/2"STR · 122MD — transcribed from the live app
+  // ---- Nylon Braided Net · NO.120(210/22x16) · 3-1/2"STR · 122MD, transcribed from the live app
   ...netRows("N", 1595, "Nylon", "NO.120(210/22x16)", '3-1/2"STR', "122MD", [
     ["50FL(1180ML)", 483.2],
     ["50FL", 495],
@@ -130,7 +130,7 @@ export const SPEC_MASTER: SpecMasterRow[] = [
     ["60FL(1414ML)", 579],
   ]),
 
-  // ---- Nylon Braided Net · NO.96(210/20x16) — scaled from ITEM_MASTER 227.9 / 241.5
+  // ---- Nylon Braided Net · NO.96(210/20x16), scaled from ITEM_MASTER 227.9 / 241.5
   ...netRows("N", 1610, "Nylon", "NO.96(210/20x16)", '3-1/2"STR', "122MD", [
     ["35FL", 325.1],
     ["50FL", 467.1],
@@ -142,7 +142,7 @@ export const SPEC_MASTER: SpecMasterRow[] = [
     ["1180ML", 477.5],
   ]),
 
-  // ---- Nylon Braided Net · NO.84(210/16x16) — scaled from 164.85 / 241.5
+  // ---- Nylon Braided Net · NO.84(210/16x16), scaled from 164.85 / 241.5
   ...netRows("N", 1620, "Nylon", "NO.84(210/16x16)", '3-1/2"STR', "122MD", [
     ["35FL", 235.2],
     ["50FL", 337.9],
@@ -154,7 +154,7 @@ export const SPEC_MASTER: SpecMasterRow[] = [
     ["1180ML", 345.4],
   ]),
 
-  // ---- Nylon Braided Net · NO.72(210/14x16) — scaled from 143.7 / 241.5
+  // ---- Nylon Braided Net · NO.72(210/14x16), scaled from 143.7 / 241.5
   ...netRows("N", 1630, "Nylon", "NO.72(210/14x16)", '3-1/2"STR', "122MD", [
     ["35FL", 205.0],
     ["50FL", 294.5],
@@ -166,7 +166,7 @@ export const SPEC_MASTER: SpecMasterRow[] = [
     ["1180ML", 301.1],
   ]),
 
-  // ---- Hi-Ex Braided Net · NO.42(250/08x16) · 8"STR · 50MD — 120FL anchors ITEM_MASTER's 33.9
+  // ---- Hi-Ex Braided Net · NO.42(250/08x16) · 8"STR · 50MD; 120FL anchors ITEM_MASTER's 33.9
   ...netRows("H", 1640, "Hi-Ex", "NO.42(250/08x16)", '8"STR', "50MD", [
     ["60FL", 17.0],
     ["90FL", 25.4],
@@ -176,7 +176,7 @@ export const SPEC_MASTER: SpecMasterRow[] = [
     ["180FL", 50.9],
   ]),
 
-  // ---- Hi-Ex Braided Net · NO.96(250/20x16) · 5"STR · 15MD — 120FL anchors ITEM_MASTER's 38.55
+  // ---- Hi-Ex Braided Net · NO.96(250/20x16) · 5"STR · 15MD; 120FL anchors ITEM_MASTER's 38.55
   ...netRows("H", 1650, "Hi-Ex", "NO.96(250/20x16)", '5"STR', "15MD", [
     ["60FL", 19.3],
     ["90FL", 28.9],
@@ -186,7 +186,7 @@ export const SPEC_MASTER: SpecMasterRow[] = [
     ["180FL", 57.8],
   ]),
 
-  // ---- Nylon Braided Twine — sold by the kg, so WEIGHT/PC is 1. Codes start with "T" so the
+  // ---- Nylon Braided Twine, sold by the kg, so WEIGHT/PC is 1. Codes start with "T" so the
   // insurance lookup resolves to the twine rate rather than the net rate.
   ...["210/30x16", "210/36x16", "210/48x16", "210/60x16"].map((twine, i) => ({
     code: `T-${1660 + i}`,
@@ -194,8 +194,8 @@ export const SPEC_MASTER: SpecMasterRow[] = [
     material: "Nylon",
     netType: "Braided Twine",
     twine,
-    meshSize: "—",
-    meshDepth: "—",
+    meshSize: "-",
+    meshDepth: "-",
     length: "1KG CONE",
     weightPerPc: 1,
   })),

@@ -36,7 +36,7 @@ button:disabled {
 @theme {
   /* ---- Brand: pulled from the FORTUNE NET & TWINE mark ----
      "pine" keeps its name (it touches every primary button, active tab,
-     filter chip, ID and money emphasis, plus the "success" status tone —
+     filter chip, ID and money emphasis, plus the "success" status tone:
      brand color doubling as "good/complete" is intentional, same coupling
      as the original design) but is now the mark's navy, not forest green. */
   --color-pine-950: #081527;
@@ -65,7 +65,7 @@ button:disabled {
   --color-vermillion-100: #f9dcd9;
   --color-vermillion-50: #fcedec;
 
-  /* ---- Working teal: "in progress" status — shifted off blue now that pine
+  /* ---- Working teal: "in progress" status, shifted off blue now that pine
      (brand + success) is navy, so the two states can't be confused ---- */
   --color-manifest-950: #062723;
   --color-manifest-900: #0b3733;
@@ -148,10 +148,10 @@ body {
   background: transparent;
 }
 
-/* Net-mesh lattice: the one signature motif, drawn from the actual product —
+/* Net-mesh lattice: the one signature motif, drawn from the actual product.
    Fortune Net & Twine manufactures fishing net. Used sparingly on document
    watermarks, empty states, and the sidebar header. */
-/* Written as plain rgba() rather than color-mix() — mathematically identical to the theme's
+/* Written as plain rgba() rather than color-mix(). Mathematically identical to the theme's
    resolved values (pine-900 #081527 at 7%, paper-0 #ffffff at 10%), but color-mix() is what was
    crashing html2canvas's CSS parser ("unsupported color function") during PDF export, since it
    can't parse color-mix()/oklab at all. Plain rgba() is universally supported. */

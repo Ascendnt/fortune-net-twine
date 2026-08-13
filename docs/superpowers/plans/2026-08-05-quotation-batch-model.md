@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the flat quotation line-item model with the documented batch → item → specification tree, correct three pricing-engine defects, and give every pickable list search/filter/pagination — frontend only.
+**Goal:** Replace the flat quotation line-item model with the documented batch → item → specification tree, correct three pricing-engine defects, and give every pickable list search/filter/pagination, frontend only.
 
 **Architecture:** `Quotation.batches[]` becomes the authoring tree; `Quotation.items[]` becomes a flat projection derived by `flattenBatches()` on save, so every existing downstream consumer keeps working unchanged. Pure computation lives in `src/lib/` (`pricing.ts`, `totals.ts`, `batches.ts`) and is unit-tested; React components stay presentational.
 
@@ -59,7 +59,7 @@
 
 - [ ] **Step 1: Add Vitest**
 
-`package.json` — add `"test": "vitest run"` and `"test:watch": "vitest"` to scripts, and `"vitest": "^3.2.4"` to devDependencies.
+`package.json`: add `"test": "vitest run"` and `"test:watch": "vitest"` to scripts, and `"vitest": "^3.2.4"` to devDependencies.
 
 `vitest.config.ts`:
 
@@ -96,7 +96,7 @@ const tables: LookupTable[] = [
 ];
 ```
 
-Assertions, each to 4dp: commission 3% → `5.1546`; compounded 3%+5% → `5.4259`; markup 5% → `5.2500`; amount → `5.1000`; subtract 5% → `4.7619`; MD → `5.1750`; DW → `5.5000`; **insurance → `5.0330`** (the regression guard — a flat add would give `5.66`).
+Assertions, each to 4dp: commission 3% → `5.1546`; compounded 3%+5% → `5.4259`; markup 5% → `5.2500`; amount → `5.1000`; subtract 5% → `4.7619`; MD → `5.1750`; DW → `5.5000`; **insurance → `5.0330`** (the regression guard, since a flat add would give `5.66`).
 
 Price/piece: `5.175 × 495 = 2561.6250`; with labor 2×3, wastage 1.5, sewing 0.5×4 → `2577.3875`.
 
@@ -107,11 +107,11 @@ Base case (§5.1 row 1): no rules applied → `newPriceKg === 5`, `unitPrice ===
 - [ ] **Step 3: Run to verify failure**
 
 Run: `npm install && npm test`
-Expected: FAIL — `valueKind` is not a property of `LookupTable`; insurance assertion returns `5.66`.
+Expected: FAIL, because `valueKind` is not a property of `LookupTable`; insurance assertion returns `5.66`.
 
 - [ ] **Step 4: Add `valueKind` to the type**
 
-`src/lib/types.ts` — add to `LookupTable`:
+`src/lib/types.ts`: add to `LookupTable`:
 
 ```ts
 /** How this table's row values are interpreted: currency amount, or percent of the running total. */
@@ -120,7 +120,7 @@ valueKind: "amount" | "percent";
 
 - [ ] **Step 5: Teach the engine percent lookups**
 
-`src/lib/pricing.ts` — `getLookupValue` gains a sibling returning the table so the kind is available, and the lookup branch splits:
+`src/lib/pricing.ts`: `getLookupValue` gains a sibling returning the table so the kind is available, and the lookup branch splits:
 
 ```ts
 const table = lookupTables.find((t) => t.id === rule.lookupTableId);
@@ -136,7 +136,7 @@ Replace the stale `P0 = 100` header comment with the doc's verified `P0 = 5.00` 
 
 - [ ] **Step 6: Set the seed kinds**
 
-`src/lib/mockData.ts` — `lt_md` and `lt_dw` get `valueKind: "amount"`; `lt_ins` gets `valueKind: "percent"`.
+`src/lib/mockData.ts`: `lt_md` and `lt_dw` get `valueKind: "amount"`; `lt_ins` gets `valueKind: "percent"`.
 
 - [ ] **Step 7: Run to verify pass**
 
@@ -165,7 +165,7 @@ export function specRowLabel(r: SpecMasterRow): string {
 }
 ```
 
-Seed N-1595 … N-1603 verbatim from the reference screenshots — all `NYLON BRAIDED NET`, twine `NO.120(210/22x16)`, mesh size `3-1/2"STR`, mesh depth `122MD`:
+Seed N-1595 … N-1603 verbatim from the reference screenshots, all `NYLON BRAIDED NET`, twine `NO.120(210/22x16)`, mesh size `3-1/2"STR`, mesh depth `122MD`:
 
 | Code | Length | Weight/PC |
 |---|---|---|
@@ -180,11 +180,11 @@ Seed N-1595 … N-1603 verbatim from the reference screenshots — all `NYLON BR
 | N-1603 | 60FL(1414ML) | 579 |
 
 Then extend to ~50 rows across the families already in `ITEM_MASTER`, keeping weight roughly proportional to length within each family:
-- `NO.96(210/20x16) 3-1/2"STR 122MD` (N-1610…) — Nylon / Braided Net
-- `NO.84(210/16x16) 3-1/2"STR 122MD` (N-1620…) — Nylon / Braided Net
-- `NO.72(210/14x16) 3-1/2"STR 122MD` (N-1630…) — Nylon / Braided Net
-- `NO.42(250/08x16) 8"STR 50MD` (H-1640…) — Hi-Ex / Braided Net
-- `NO.96(250/20x16) 5"STR 15MD` (H-1650…) — Hi-Ex / Braided Net
+- `NO.96(210/20x16) 3-1/2"STR 122MD` (N-1610…): Nylon / Braided Net
+- `NO.84(210/16x16) 3-1/2"STR 122MD` (N-1620…): Nylon / Braided Net
+- `NO.72(210/14x16) 3-1/2"STR 122MD` (N-1630…): Nylon / Braided Net
+- `NO.42(250/08x16) 8"STR 50MD` (H-1640…): Hi-Ex / Braided Net
+- `NO.96(250/20x16) 5"STR 15MD` (H-1650…): Hi-Ex / Braided Net
 
 `material` and `netType` must use the exact strings from `specOptions.ts` (`"Nylon"`, `"Hi-Ex"`, `"Braided Net"`) so the Task 8 filter matches.
 
@@ -238,17 +238,17 @@ it("flattens spec lines and lacing, skips notes, tags ids", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm test` → FAIL, module not found.
+- [ ] **Step 2: Run to verify failure**. `npm test` → FAIL, module not found.
 
 - [ ] **Step 3: Implement**
 
 Types exactly as spec §5.2. `flattenBatches` walks batches in order, emits one `QuotationLineItem` per `SpecLine` (`itemCode = specCode`, `unit = qtyUom`, `specification = parent item's specification`, `description = specRowLabel`-derived text stored on the line) and one per `LacingLine` (`unit = "KGS"`, `weightKg = kind === "twine" ? kgs : 0`, `qtyPcs = kind === "twine" ? kgs : 1`), skips `note` batches entirely.
 
-Factories: `newBatch(type)` seeds `items: []` for normal/assembled, `lacing: []` for lacing, `note: ""` for note, and `title: ""` for assembled only. `newSpecLine(row)` seeds `givenPriceKg: 0`, `qtyPcs: 1`, empty `appliedRuleIds`, zero labor/wastage/twine — per spec §6.2.1.
+Factories: `newBatch(type)` seeds `items: []` for normal/assembled, `lacing: []` for lacing, `note: ""` for note, and `title: ""` for assembled only. `newSpecLine(row)` seeds `givenPriceKg: 0`, `qtyPcs: 1`, empty `appliedRuleIds`, zero labor/wastage/twine, per spec §6.2.1.
 
-`src/lib/types.ts` — add `batchId?: string` and `itemId?: string` to `QuotationLineItem`, and `batches?: QuotationBatch[]` to `Quotation`.
+`src/lib/types.ts`: add `batchId?: string` and `itemId?: string` to `QuotationLineItem`, and `batches?: QuotationBatch[]` to `Quotation`.
 
-- [ ] **Step 4: Run to verify pass** — `npm test` → PASS
+- [ ] **Step 4: Run to verify pass**. `npm test` → PASS
 - [ ] **Step 5: Commit**
 
 ---
@@ -261,7 +261,7 @@ Factories: `newBatch(type)` seeds `items: []` for normal/assembled, `lacing: []`
 **Interfaces:**
 - Produces: `recomputeSpecLine(line, weightPerPc, rules, tables, lookupKey): SpecLine`, `batchTotal(batch): number`, `quotationTotals(batches, freight, discount, tax): { itemsTotal, totalWeightKg, grandTotal }`
 
-- [ ] **Step 1: Write the failing test** — doc §6 end-to-end:
+- [ ] **Step 1: Write the failing test**. doc §6 end-to-end:
 
 ```ts
 it("matches the doc's end-to-end roll-up", () => {
@@ -272,7 +272,7 @@ it("matches the doc's end-to-end roll-up", () => {
 it("excludes notes and flat lacing charges from weight", () => { /* … */ });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `npm test` → FAIL
+- [ ] **Step 2: Run to verify failure**. `npm test` → FAIL
 - [ ] **Step 3: Implement** per spec §6.3. NOTE batches return 0 from `batchTotal` and contribute no weight; flat lacing charges contribute amount but zero weight.
 - [ ] **Step 4: Run to verify pass**
 - [ ] **Step 5: Commit**
@@ -298,7 +298,7 @@ Each `useState` seeded from `loadPersisted(key, SEED)`; a `useEffect` per slice 
 
 `createQuotation` accepts `batches` and stores both `batches` and `flattenBatches(batches)` as `items`.
 
-- [ ] **Step 3: Verify** — `npm run build` type-checks clean.
+- [ ] **Step 3: Verify**. `npm run build` type-checks clean.
 - [ ] **Step 4: Commit**
 
 ---
@@ -326,8 +326,8 @@ interface DataTableModalProps<T> {
 }
 ```
 
-- [ ] **Step 1: Implement** — search box filtering on `searchText`, one `<select>` per entry in `filters` (each with an "All" option), checkbox column, pagination footer (`« ‹ 1 2 3 › »`), and a footer showing `{n} selected`. Resets to page 1 whenever search or any filter changes. Uses the existing `Modal`, `Table`, `Button` primitives.
-- [ ] **Step 2: Verify** — `npm run build` clean.
+- [ ] **Step 1: Implement**. search box filtering on `searchText`, one `<select>` per entry in `filters` (each with an "All" option), checkbox column, pagination footer (`« ‹ 1 2 3 › »`), and a footer showing `{n} selected`. Resets to page 1 whenever search or any filter changes. Uses the existing `Modal`, `Table`, `Button` primitives.
+- [ ] **Step 2: Verify**. `npm run build` clean.
 - [ ] **Step 3: Commit**
 
 ---
@@ -352,7 +352,7 @@ Add `category` and `qtyUnit` to `SpecSelection` and `EMPTY_SPEC_SELECTION`.
 
 Eleven `SearchableSelect` fields in doc §3.3 order: Category, Material, Net Type, Knots, Selvages, Stretching, Reinforcement, Others, Color, Weight UOM, Quantity UOM. Confirm calls `onConfirm(selection, buildSpecString(selection))`. Only Material is required; Confirm is disabled until it is set.
 
-- [ ] **Step 3: Verify** — `npm run build` clean; no remaining imports of `SpecBuilderModal`.
+- [ ] **Step 3: Verify**. `npm run build` clean; no remaining imports of `SpecBuilderModal`.
 - [ ] **Step 4: Commit**
 
 ---
@@ -370,7 +370,7 @@ A **Create New Specs** button in the header reveals an inline row of inputs; sav
 
 Confirm emits the selected `SpecMasterRow[]`; the caller maps them through `newSpecLine`.
 
-- [ ] **Step 2: Verify** — `npm run build` clean.
+- [ ] **Step 2: Verify**. `npm run build` clean.
 - [ ] **Step 3: Commit**
 
 ---
@@ -380,7 +380,7 @@ Confirm emits the selected `SpecMasterRow[]`; the caller maps them through `newS
 **Files:**
 - Create: `src/components/domain/LacingSelectionModal.tsx`
 
-- [ ] **Step 1: Implement** — `DataTableModal` over `LACING_CATALOG`, columns CODE + DESCRIPTION, search on both, multi-select, confirm emits `LacingCatalogRow[]`.
+- [ ] **Step 1: Implement**. `DataTableModal` over `LACING_CATALOG`, columns CODE + DESCRIPTION, search on both, multi-select, confirm emits `LacingCatalogRow[]`.
 - [ ] **Step 2: Verify + commit**
 
 ---
@@ -411,7 +411,7 @@ function rateLabel(rule: PricingRule, tables: LookupTable[], key: string): strin
 }
 ```
 
-**Local draft state initialises from the line's current `appliedRuleIds`, which for a new line is empty — every checkbox unticked.** Footer: `New Price/KG = Given + Σ Additional Values`.
+**Local draft state initialises from the line's current `appliedRuleIds`, which for a new line is empty, so every checkbox is unticked.** Footer: `New Price/KG = Given + Σ Additional Values`.
 
 - [ ] **Step 2: Implement stage 2**
 
@@ -426,20 +426,20 @@ function rateLabel(rule: PricingRule, tables: LookupTable[], key: string): strin
 **Files:**
 - Create: `src/components/domain/BatchSelectionModal.tsx`, `src/pages/quotations/BatchEditor.tsx`
 
-- [ ] **Step 1: BatchSelectionModal** — four full-width buttons (ASSEMBLED, NORMAL, LACING, NOTE); clicking one calls `onPick(type)` and closes. One batch per click.
+- [ ] **Step 1: BatchSelectionModal**. four full-width buttons (ASSEMBLED, NORMAL, LACING, NOTE); clicking one calls `onPick(type)` and closes. One batch per click.
 
 - [ ] **Step 2: BatchEditor**
 
 Renders a single batch with a type banner header and a Delete control:
 
-- **assembled** — editable title textarea, then the item list, then `Add Item`, then `ASSEMBLED TOTAL`
-- **normal** — item list, `Add Item`, `TOTAL`
-- **lacing** — entry rows (description · KGS input · rate/amount input · amount), `Add Lacing`, `LACING TOTAL`
-- **note** — one textarea, no totals
+- **assembled**. editable title textarea, then the item list, then `Add Item`, then `ASSEMBLED TOTAL`
+- **normal**. item list, `Add Item`, `TOTAL`
+- **lacing**. entry rows (description · KGS input · rate/amount input · amount), `Add Lacing`, `LACING TOTAL`
+- **note**. one textarea, no totals
 
 Each item renders its composed specification with an edit affordance, its spec rows (CODE · description · WEIGHT/PC readonly · GIVEN input · QTY input · PRICING cell · U/P · AMOUNT · remove), and `+ Add Specification`.
 
-The PRICING cell shows `Add Pricing` when the line is at defaults, otherwise the compact read-out `COMM +3% · MD +3.50 → 12.43/kg` with Edit — spec §6.4.
+The PRICING cell shows `Add Pricing` when the line is at defaults, otherwise the compact read-out `COMM +3% · MD +3.50 → 12.43/kg` with Edit, per spec §6.4.
 
 - [ ] **Step 3: Verify + commit**
 
@@ -456,7 +456,7 @@ Delete the flat Line Items card, `DraftLine`, `defaultsFor`, `toggleRule`, `pric
 
 Keep Step 1 (Customer & Terms) and Step 3 (Remarks) as they are.
 
-- [ ] **Step 2: Save** — `handleCreate` passes `batches` to `createQuotation`; validation requires a customer and at least one batch that produces a line.
+- [ ] **Step 2: Save**. `handleCreate` passes `batches` to `createQuotation`; validation requires a customer and at least one batch that produces a line.
 - [ ] **Step 3: Prune** the process-discovery note of bullets this work resolves.
 - [ ] **Step 4: Verify + commit**
 
@@ -473,12 +473,12 @@ When `q.batches` is present, render by batch: ASSEMBLED title as a banner row, e
 
 Retain `descFontClass` so long text shrinks rather than wraps. Footer keeps Total Weight and Grand Total from `quotationTotals`.
 
-- [ ] **Step 2: Verify** — build clean; open a seeded quotation and confirm its PDF is unchanged.
+- [ ] **Step 2: Verify**. build clean; open a seeded quotation and confirm its PDF is unchanged.
 - [ ] **Step 3: Commit**
 
 ---
 
-## Task 14: Settings — units and reset
+## Task 14: Settings: units and reset
 
 **Files:**
 - Modify: `src/pages/settings/SettingsPage.tsx`
@@ -492,10 +492,10 @@ Retain `descFontClass` so long text shrinks rather than wraps. Footer keeps Tota
 
 ## Task 15: Final verification
 
-- [ ] **Step 1:** `npm test` — all suites pass
-- [ ] **Step 2:** `npm run build` — type-checks and builds clean
-- [ ] **Step 3:** `npm run lint` — oxlint clean
-- [ ] **Step 4:** Manual walkthrough — Generate Batch Item → ASSEMBLED → title → Add Item → Item Selection → Add Specification (multi-select 3) → Add Pricing (confirm all rules start unticked) → totals update → add NORMAL, LACING, NOTE batches → Save as Draft → Download PDF → refresh the browser and confirm the quotation survived.
+- [ ] **Step 1:** `npm test`, all suites pass
+- [ ] **Step 2:** `npm run build`, type-checks and builds clean
+- [ ] **Step 3:** `npm run lint`, oxlint clean
+- [ ] **Step 4:** Manual walkthrough. Generate Batch Item → ASSEMBLED → title → Add Item → Item Selection → Add Specification (multi-select 3) → Add Pricing (confirm all rules start unticked) → totals update → add NORMAL, LACING, NOTE batches → Save as Draft → Download PDF → refresh the browser and confirm the quotation survived.
 - [ ] **Step 5: Commit**
 
 ---
@@ -506,4 +506,4 @@ Retain `descFontClass` so long text shrinks rather than wraps. Footer keeps Tota
 
 **Type consistency.** `SpecLine`/`BatchItem`/`LacingLine`/`QuotationBatch` are defined once in Task 3 and consumed unchanged in 4, 10, 11, 12, 13. `valueKind` is introduced in Task 1 and read in 10 and 14. `flattenBatches` is defined in Task 3 and called in Task 5.
 
-**Known gap.** Spec §11 — the Export Sales ERP scoping document is still unread. Tasks 1–4 are pure computation pinned to the simulation doc and carry no risk from it. Tasks 11–14 are the ones most likely to need revision once it lands.
+**Known gap.** Per spec §11, the Export Sales ERP scoping document is still unread. Tasks 1–4 are pure computation pinned to the simulation doc and carry no risk from it. Tasks 11–14 are the ones most likely to need revision once it lands.

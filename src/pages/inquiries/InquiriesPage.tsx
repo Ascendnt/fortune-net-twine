@@ -210,7 +210,7 @@ export function InquiriesPage() {
                       </Link>
                     )}
                     {!i.quotationId && !i.salesOrderId && (
-                      <span className="text-paper-400">{i.closeReason ? "Closed" : "—"}</span>
+                      <span className="text-paper-400">{i.closeReason ? "Closed" : "-"}</span>
                     )}
                     {assessment && !i.quotationId && (
                       <Link

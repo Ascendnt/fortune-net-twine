@@ -47,7 +47,7 @@ export function ProductionPage() {
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [shortfallOrder, setShortfallOrder] = useState<SalesOrder | null>(null);
 
-  const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? "—";
+  const customerName = (id: string) => customers.find((c) => c.id === id)?.name ?? "-";
 
   /** Orders on the floor now, or that have run records from earlier. */
   const orders = useMemo(() => {

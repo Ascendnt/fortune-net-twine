@@ -12,14 +12,14 @@ export function formatWeight(kg: number): string {
 }
 
 export function formatDate(iso?: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" });
 }
 
 export function formatDateTime(iso?: string): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("en-US", {
@@ -53,9 +53,9 @@ export function revisionLabel(revisionNo: number): string {
   return revisionNo > 0 ? `Revision ${revisionNo}` : "Initial issue";
 }
 
-/** The short form used in badges and filter chips: "—" for the first issue, else "R2". */
+/** The short form used in badges and filter chips: a dash for the first issue, else "R2". */
 export function revisionTag(revisionNo: number): string {
-  return revisionNo > 0 ? `R${revisionNo}` : "—";
+  return revisionNo > 0 ? `R${revisionNo}` : "-";
 }
 
 export function initials(name: string): string {

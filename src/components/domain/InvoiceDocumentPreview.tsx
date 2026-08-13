@@ -5,7 +5,7 @@ import fntLogo from "@/assets/fnt-logo.png";
 export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoice; customer?: Customer }) {
   const subtotal = inv.items.reduce((s, li) => s + li.totalPrice, 0);
   const total = subtotal + inv.freight - inv.discount + inv.tax;
-  // Same per-customer issuing-entity logic as the PI preview — see PIDocumentPreview.tsx.
+  // Same per-customer issuing-entity logic as the PI preview. See PIDocumentPreview.tsx.
   const issuingEntity = customer?.letterhead ?? "FORTUNE NET & TWINE MFG. CORP.";
 
   return (

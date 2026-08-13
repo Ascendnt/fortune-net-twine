@@ -161,7 +161,7 @@ export function SettingsPage() {
                   <TD>
                     {r.basis === "lookup_table" ? (
                       <span className="text-xs text-paper-500">
-                        {lookupTables.find((t) => t.id === r.lookupTableId)?.name ?? "—"}
+                        {lookupTables.find((t) => t.id === r.lookupTableId)?.name ?? "-"}
                         <span className="ml-1 text-[10px] uppercase text-paper-400">
                           ({lookupTables.find((t) => t.id === r.lookupTableId)?.valueKind === "percent" ? "%" : "USD"})
                         </span>

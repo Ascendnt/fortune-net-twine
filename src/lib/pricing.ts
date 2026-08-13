@@ -1,10 +1,11 @@
-// Flexible pricing rule engine — Part A/C of the quotation-to-invoice discovery doc.
+// Flexible pricing rule engine, from Part A/C of the quotation-to-invoice discovery doc.
 //
-// The original build hardcoded eight adjustment types (COMMISSION, PERCENTAGE add/subtract,
-// AMOUNT add/subtract, MD/DW/INSURANCE computation) directly into the pricing screen, with the
+// The original build hardcoded eight adjustment types (COMMISSION, PERCENTAGE add/subtract, AMOUNT
+// add/subtract, MD/DW/INSURANCE computation) directly into the pricing screen, with the
 // of-base-vs-of-result distinction implied by the label rather than stated anywhere. Here every
 // rule is a plain data record (see PricingRule in lib/types.ts) with an explicit `basis`, so new
-// adjustment types — or a correction to an existing one — are a data change, not a code change.
+// adjustment types, or a correction to an existing one, are a data change rather than a code
+// change.
 //
 // Formulas are verified against FORTUNE_NET_TWINE_System_Simulation.md §5.2, which observed each
 // operation live against a base Given Price of 5.0000:
@@ -20,7 +21,7 @@
 //
 // The key distinction the original build lost: COMMISSION and SUBTRACT-PERCENTAGE use
 // division-based (margin-inclusive) math, whereas ADD-PERCENTAGE uses simple math. And INSURANCE
-// is a *percentage* pulled from a lookup table, not a flat amount — see LookupTable.valueKind.
+// is a *percentage* pulled from a lookup table, not a flat amount. See LookupTable.valueKind.
 
 import type { ItemMaster, LookupTable, PricingChainStep, PricingRule } from "./types";
 
@@ -56,9 +57,9 @@ export interface PricingLineResult {
   laborCost: number;
   wastageCost: number;
   twineCost: number;
-  unitPrice: number; // U/P — price per piece, all-in
-  totalPrice: number; // Amount — U/P x Qty
-  weightKg: number; // weight subtotal — Weight/PC x Qty
+  unitPrice: number; // U/P, the all-in price per piece
+  totalPrice: number; // Amount, U/P x Qty
+  weightKg: number; // weight subtotal, Weight/PC x Qty
 }
 
 export function getLookupTable(lookupTables: LookupTable[], lookupTableId: string | undefined): LookupTable | undefined {
@@ -69,7 +70,7 @@ export function getLookupValue(lookupTables: LookupTable[], lookupTableId: strin
   const table = getLookupTable(lookupTables, lookupTableId);
   if (!table) return 0;
   // Unmatched keys fall through to the table's explicit "default" row rather than to whichever row
-  // happens to sit first — an unlisted float length should contribute nothing, not silently borrow
+  // happens to sit first. An unlisted float length should contribute nothing, not silently borrow
   // the first bucket's rate.
   const row = table.rows.find((r) => r.key === key) ?? table.rows.find((r) => r.key === "default");
   return row ? row.value : 0;
@@ -111,7 +112,7 @@ export function computeLinePricing(
   }
 
   // U/P is always derived, never gated on the pricing modal having been opened. With no rules
-  // applied the chain is a no-op and newPriceKg collapses to the Given Price — doc §5.1 row 1:
+  // applied the chain is a no-op and newPriceKg collapses to the Given Price, per doc §5.1 row 1:
   // base 5.0000, no operation, Weight/PC 495 -> U/P 2,475.00.
   // A typed price wins over the chain. Zero and negative values are ignored rather than honoured,
   // since an empty or half-typed box should not silently price a line at nothing.
@@ -159,8 +160,8 @@ export function formatRuleRate(rule: PricingRule, lookupTables: LookupTable[], l
 
 // ---------------------------------------------------------------------------------------------
 // Lookup-key derivation for MD / DW / Insurance rules. These read the item's own catalog fields
-// rather than a manual entry — Part A's doc noted these were "internal rate tables, not
-// user-entered" — but the tables themselves are fully editable data (see mockData.ts).
+// rather than a manual entry, since Part A's doc noted these were "internal rate tables, not
+// user-entered". The tables themselves are still fully editable data (see mockData.ts).
 // ---------------------------------------------------------------------------------------------
 
 /** Pulls the leading "NNNmd" figure out of a meshDepth string like '122md x 50fl (1180ml)'. */

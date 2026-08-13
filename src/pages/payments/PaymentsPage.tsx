@@ -326,7 +326,7 @@ export function PaymentsPage() {
                     {p.salesOrderId}
                   </Link>
                 </TD>
-                <TD className="text-xs">{customer?.name ?? "—"}</TD>
+                <TD className="text-xs">{customer?.name ?? "-"}</TD>
                 <TD className="text-xs capitalize">{p.type}</TD>
                 <TD className="font-mono">{formatMoney(p.expectedAmount, order?.currency)}</TD>
                 <TD className="font-mono">{formatMoney(p.amountReceived, order?.currency)}</TD>
@@ -342,7 +342,7 @@ export function PaymentsPage() {
                     }}
                   />
                 </TD>
-                <TD className="font-mono text-xs">{p.bankRef ?? "—"}</TD>
+                <TD className="font-mono text-xs">{p.bankRef ?? "-"}</TD>
                 <TD>
                   <Badge status={p.status} />
                 </TD>
@@ -358,7 +358,7 @@ export function PaymentsPage() {
                           // Verify confirms an amount before it acts, and the status dropdown that
                           // used to sit beside it has moved into the edit dialog. Two controls a
                           // few pixels apart, one of which quietly rewrites a verification, is a
-                          // misclick waiting to happen — and the one that fires by accident was
+                          // misclick waiting to happen, and the one that fires by accident was
                           // the one with no confirmation.
                           <Button variant="success" size="sm" onClick={() => setVerifying(p)}>
                             Verify
@@ -650,11 +650,11 @@ export function PaymentsPage() {
               </div>
               <div>
                 <p className="text-paper-400">Method</p>
-                <p className="text-paper-700">{verifying.method ?? "—"}</p>
+                <p className="text-paper-700">{verifying.method ?? "-"}</p>
               </div>
               <div>
                 <p className="text-paper-400">Bank reference</p>
-                <p className="font-mono text-paper-700">{verifying.bankRef || "—"}</p>
+                <p className="font-mono text-paper-700">{verifying.bankRef || "-"}</p>
               </div>
             </div>
             {verifying.amountReceived === 0 && (
@@ -728,7 +728,7 @@ export function PaymentsPage() {
         {approving && (
           <div className="space-y-3">
             <div className="rounded-lg bg-paper-50 px-3 py-2 text-xs text-paper-600">
-              Raised by <span className="font-medium text-paper-800">{approving.payment.approval?.author ?? "—"}</span>
+              Raised by <span className="font-medium text-paper-800">{approving.payment.approval?.author ?? "-"}</span>
               {approving.payment.approval?.authoredDate
                 ? ` on ${formatDate(approving.payment.approval.authoredDate)}`
                 : ""}
@@ -773,7 +773,7 @@ export function PaymentsPage() {
                 // something you were never allowed to do is worse than being told it is not yours.
                 <div className="rounded-lg border border-alert-200 bg-alert-50 p-3 text-xs text-alert-700">
                   This payment is routed to {approving.payment.approval?.intendedApprover}. Only Management can approve
-                  in someone else's place — ask them to sign it, or have it re-routed to you.
+                  in someone else's place. Ask them to sign it, or have it re-routed to you.
                 </div>
               ))}
 

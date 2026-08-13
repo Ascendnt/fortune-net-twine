@@ -13,7 +13,7 @@ import { NON_NEGATIVE, toNonNegative } from "@/lib/num";
 
 // Master data maintenance. The specification catalog and the lacing catalog drive every price and
 // weight on a quotation, so the client needs to add, correct and retire rows themselves rather than
-// waiting on a developer — that is the whole point of the self-service brief.
+// waiting on a developer, which is the whole point of the self-service brief.
 
 const input =
   "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";

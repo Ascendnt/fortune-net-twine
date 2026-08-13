@@ -1,4 +1,4 @@
-// Item-specification option lists — sourced from the export description-flow reference sheet
+// Item-specification option lists, sourced from the export description-flow reference sheet
 // ("1st selection" through "8th selection"). The original discovery doc frames item building as
 // Category -> Material -> Net Type -> Knots -> Selvages -> Stretching -> Reinforcement -> Others ->
 // Color -> UOM, auto-generating a descriptive spec string, rather than picking from a fixed catalog
@@ -6,8 +6,8 @@
 // the specification sentence that heads a batch item, and the item's Material + Net Type then
 // filter which specification codes the Add Specification picker offers.
 //
-// Each category is an independent, deduplicated pick-list (not a nested per-material tree) — the
-// source sheet's "Nth selection" header names a sequence of choices, not a hierarchy.
+// Each category is an independent, deduplicated pick-list rather than a nested per-material tree.
+// The source sheet's "Nth selection" header names a sequence of choices, not a hierarchy.
 
 /**
  * Explicit "nothing here" choice, offered on every optional specification field.
@@ -19,7 +19,7 @@
  */
 export const SPEC_NONE = "-";
 
-// First selection in the Item Selection flow (doc §3.3) — narrows what the rest of the sheet is
+// First selection in the Item Selection flow (doc §3.3). Narrows what the rest of the sheet is
 // describing before any material is chosen.
 export const SPEC_CATEGORIES = ["NET", "SPORTS NET", "TWINE"];
 
@@ -37,9 +37,9 @@ export const SPEC_NET_TYPES = [
   "Mono Twine",
   "Mono Knotted Net",
   "Finished Sport Netting",
-  "Finished Sport Netting — Volleyball Net",
-  "Finished Sport Netting — Football Cages",
-  "Finished Sport Netting — Tennis Net",
+  "Finished Sport Netting: Volleyball Net",
+  "Finished Sport Netting: Football Cages",
+  "Finished Sport Netting: Tennis Net",
   "Braided Rope",
   "Braided Net, DM Nets w/ Core (4x1500D Twisted)",
   "Braided DM Twine w/ Core (4x1500D Twisted)",
@@ -283,13 +283,13 @@ export const EMPTY_SPEC_SELECTION: SpecSelection = {
 };
 
 // Joins whichever categories are actually picked, in the sheet's own "1st..8th selection" order.
-// Every category is optional except Material — a spec with just a material and color is valid,
+// Every category is optional except Material. A spec with just a material and color is valid,
 // matching how not every real item needs a knot/reinforcement/etc. called out.
 //
-// The reference app renders the result as one upper-cased sentence with no separators
-// ("NYLON BRAIDED NET SK DSTB DOUBLE SELVAGE ON TOP ONLY DWS REINFORCED BY THICKER TWINE …"),
-// so that is what this produces. The weight/quantity UOMs are deliberately excluded — they are
-// column headers on the item row, not part of the specification sentence.
+// The reference app renders the result as one upper-cased sentence with no separators ("NYLON
+// BRAIDED NET SK DSTB DOUBLE SELVAGE ON TOP ONLY DWS REINFORCED BY THICKER TWINE …"), so that is
+// what this produces. The weight/quantity UOMs are deliberately excluded, because they are column
+// headers on the item row, not part of the specification sentence.
 export function buildSpecString(sel: SpecSelection): string {
   return [
     sel.material,

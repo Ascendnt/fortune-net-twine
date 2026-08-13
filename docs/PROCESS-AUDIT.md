@@ -1,7 +1,7 @@
 # Process conformance audit
 
 **Date:** 2026-08-05
-**Method:** Static audit — implementation read back against `FORTUNE_NET_TWINE_System_Simulation.md`
+**Method:** Static audit, with the implementation read back against `FORTUNE_NET_TWINE_System_Simulation.md`
 section by section, with every test expectation recomputed by hand.
 
 **This is not a test run.** The sandbox shell has been unavailable for the whole session (every
@@ -9,7 +9,7 @@ command fails with `UNC paths are not supported: \\wsl.localhost\...`), so `npm 
 build` and `npm run lint` have not been executed. Anything below marked ✅ is verified by reading
 code and doing the arithmetic, not by running it.
 
-## §2 — Process flow
+## §2: Process flow
 
 | Doc step | Status | Notes |
 |---|---|---|
@@ -24,20 +24,20 @@ code and doing the arithmetic, not by running it.
 | 4. Totals roll up | ✅ | Batch total, total weight, grand total. |
 | 5. Export as PDF | ✅ | Customer letter, grouped by batch. |
 
-## §3 — Modal inventory
+## §3: Modal inventory
 
 | Doc | Status | Notes |
 |---|---|---|
 | 3.2 Batch Selection | ✅ | ASSEMBLED / NORMAL / LACING. NOTE dropped by decision, see above. |
 | 3.3 Item Selection | ✅ | Category, Material, Net Type, Knots, Selvages, Stretching, Reinforcement, Others, Color, Weight UOM, Quantity UOM. |
-| 3.3 "Material dynamically populates Net Type" | ⚠️ inferred | Now cascades, but derived from the specification master rather than a real dependency table — a material offers only net types that have codes on file. Guarantees Add Specification never opens empty. |
+| 3.3 "Material dynamically populates Net Type" | ⚠️ inferred | Now cascades, but derived from the specification master rather than a real dependency table, so a material offers only net types that have codes on file. Guarantees Add Specification never opens empty. |
 | 3.4 Item Specification | ✅ | CODE, DESCRIPTION, TWINE, MESH SIZE, MESH DEPTH, LENGTH, WEIGHT/PC, search, Create New Specs, pagination. |
 | 3.5 Specification Pricing | ✅ | Rules are data, not the fixed DST-001…016 list. All eight types map to documented operations. |
 | 3.6 Price / Piece | ✅ | Labor, wastage, sewing twine. |
 | 3.7 Lacing Selection | ✅ | Six codes, searchable. |
 | 3.8 Export as PDF | ✅ | |
 
-## §4 / §7 — Formulas
+## §4 / §7: Formulas
 
 Every vector recomputed by hand against the code path in `pricing.ts`:
 
@@ -59,7 +59,7 @@ Every vector recomputed by hand against the code path in `pricing.ts`:
 Two test expectations were **wrong** and have been corrected:
 
 1. `toBeCloseTo(5.1886, 4)` for commission-then-insurance. The true value is 5.1886598, which is
-   0.00006 from 5.1886 — outside the 0.00005 tolerance `toBeCloseTo(_, 4)` uses. It would have
+   0.00006 from 5.1886, outside the 0.00005 tolerance `toBeCloseTo(_, 4)` uses. It would have
    failed. Now 5.1887.
 2. `formatRuleRate` asserted `"+0.18"` for the 0.175 mesh-depth rate. As a double, 0.175 sits just
    *below* its decimal value, so `(0.175).toFixed(2)` is `"0.17"`. The assertion now uses the
@@ -71,7 +71,7 @@ Two test expectations were **wrong** and have been corrected:
    was added as currency. `LookupTable.valueKind` now distinguishes amount from percent.
 2. **All pricing rules auto-applied to every new line.** Enabled was conflated with applied.
 3. **Rates invisible on the rule pills.**
-4. **Seeded MD/DW rates contradicted the doc** — 3.50 and 10.00 against the observed 0.1750 and
+4. **Seeded MD/DW rates contradicted the doc**. 3.50 and 10.00 against the observed 0.1750 and
    0.5000, roughly 20× too large, with a comment falsely claiming they came from the doc.
 5. **`getLookupValue` fell back to `rows[0]`**, so an unlisted float length silently borrowed
    another bucket's rate. Now falls back to the explicit `default` row.
@@ -82,15 +82,15 @@ Two test expectations were **wrong** and have been corrected:
 
 ## Not verified
 
-- `npm test`, `npm run build`, `npm run lint` — shell unavailable all session.
+- `npm test`, `npm run build`, `npm run lint`: shell unavailable all session.
 - Runtime behaviour of any screen. All UI review was by reading code.
-- `Export Sales ERP Project Scoping WITH ANSWER.docx` — still unread. It's a binary Office file; the
+- `Export Sales ERP Project Scoping WITH ANSWER.docx`: still unread. It's a binary Office file; the
   file tools reject binaries and there's no shell to unzip it. Nothing from it is reflected anywhere
   in this build.
 
 ## Outstanding
 
-- Delete `src/components/domain/SpecBuilderModal.tsx` — orphaned, no tool available to remove files.
+- Delete `src/components/domain/SpecBuilderModal.tsx`: orphaned, no tool available to remove files.
 - Specification codes beyond N-1595…N-1603 are extrapolated, not real.
 - MD/DW intermediate buckets are interpolated from the doc's two observed anchors.
 - Lacing rates default to 2.50/kg from the LC-001 sample.

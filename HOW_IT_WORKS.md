@@ -1,4 +1,4 @@
-# Fortune Net & Twine — Export Sales ERP (Prototype)
+# Fortune Net & Twine Export Sales ERP (Prototype)
 
 A single-page web app that demonstrates the **Quotation → Sales Order → Payment → Commercial Invoice** flow for Fortune Net & Twine, a manufacturer/exporter of fishing nets and twine. It is a **frontend-only prototype**: there is no backend or database. All data starts from seeded demo fixtures held in memory, and the slices a user can meaningfully change are saved to the browser's `localStorage` so a refresh mid-demo doesn't lose work.
 
@@ -23,7 +23,7 @@ npm test         # run the vitest unit tests
 
 ```
 main.tsx
-  └─ StoreProvider   (src/lib/store.tsx — the single source of truth)
+  └─ StoreProvider   (src/lib/store.tsx, the single source of truth)
        └─ App.tsx    (BrowserRouter + all routes)
             └─ AppShell  (Sidebar + Topbar + <Outlet/> + toast stack)
                  └─ the page for the current route
@@ -33,13 +33,13 @@ main.tsx
 
 ### State management (`src/lib/store.tsx`)
 
-There is **no Redux or external state library** — the entire application state lives in one React Context provider, `StoreProvider`. It holds the data slices (quotations, sales orders, payments, invoices, approvals, activity log, pricing rules, lookup tables, the specification master, the lacing catalog and customers) plus the current user *role*, and exposes action functions that mutate them. Components call `useStore()` to read state and invoke actions.
+There is **no Redux or external state library**. The entire application state lives in one React Context provider, `StoreProvider`. It holds the data slices (quotations, sales orders, payments, invoices, approvals, activity log, pricing rules, lookup tables, the specification master, the lacing catalog and customers) plus the current user *role*, and exposes action functions that mutate them. Components call `useStore()` to read state and invoke actions.
 
-Persistence is deliberately partial (`src/lib/persist.ts`): only the slices a user edits — quotations, pricing rules, lookup tables, the spec master, the lacing catalog and customers — are written to `localStorage` under versioned keys (prefix `fnt.v1.`). Everything else stays as seeded fixtures each load. Reads degrade safely: unreadable or suspiciously-empty values fall back to the seed data instead of throwing or showing a blank app. Bumping the `PREFIX` invalidates old data when a slice's shape changes. **Settings → Reset demo data** wipes persisted state and restores all seeds via `resetDemoData()`.
+Persistence is deliberately partial (`src/lib/persist.ts`): only the slices a user edits are written to `localStorage`, meaning quotations, pricing rules, lookup tables, the spec master, the lacing catalog and customers, under versioned keys (prefix `fnt.v1.`). Everything else stays as seeded fixtures each load. Reads degrade safely: unreadable or suspiciously-empty values fall back to the seed data instead of throwing or showing a blank app. Bumping the `PREFIX` invalidates old data when a slice's shape changes. **Settings → Reset demo data** wipes persisted state and restores all seeds via `resetDemoData()`.
 
 ### Role switching
 
-There is no real authentication. The top bar has a "Preview interface as…" menu (`src/components/layout/Topbar.tsx`) that switches the active *role* — sales rep, sales manager, factory technical, finance, logistics, management, or admin. The role drives which user name is attributed to activity-log entries and tailors the dashboard/work queue. It is a demo device for showing the app from each department's perspective, not a permission system.
+There is no real authentication. The top bar has a "Preview interface as…" menu (`src/components/layout/Topbar.tsx`) that switches the active *role* between sales rep, sales manager, factory technical, finance, logistics, management and admin. The role drives which user name is attributed to activity-log entries and tailors the dashboard/work queue. It is a demo device for showing the app from each department's perspective, not a permission system.
 
 ## The seed data
 
@@ -51,19 +51,19 @@ The prototype implements the **Sales module** end to end. Everything downstream 
 
 ### 1. Quotation / Proforma Invoice (PI)
 
-Created through the multi-step builder at `/quotations/new` (`NewQuotation.tsx`). You pick a customer — which pre-fills currency, payment terms, consignee and the "Attn:" contact from that customer's master data, all still editable per quotation — then author the line items as a **batch tree** and set commercial terms (deposit %, lead time, validity, freight, remarks).
+Created through the multi-step builder at `/quotations/new` (`NewQuotation.tsx`). You pick a customer, which pre-fills currency, payment terms, consignee and the "Attn:" contact from that customer's master data, all still editable per quotation. You then author the line items as a **batch tree** and set commercial terms (deposit %, lead time, validity, freight, remarks).
 
 The **batch tree** is the distinctive modeling choice (`src/lib/batches.ts` and the types in `types.ts`):
 
 ```
 batch  (ASSEMBLED | NORMAL | LACING | NOTE)
-  └─ item   — a composed specification string, chosen in the Item Selection modal
-       └─ spec — an N-code from the specification master; THIS is the priced row
+  └─ item     a composed specification string, chosen in the Item Selection modal
+       └─ spec  an N-code from the specification master; THIS is the priced row
 ```
 
 - **ASSEMBLED / NORMAL** batches hold items, each item holding one or more priced specification rows.
 - **LACING** batches hold twine lines (billed KGS × rate) or flat charges.
-- **NOTE** batches are text only — they contribute nothing to totals or weight.
+- **NOTE** batches are text only, so they contribute nothing to totals or weight.
 
 You edit the tree, but **nothing downstream understands batches**. On save, `flattenBatches()` projects the tree into a flat `QuotationLineItem[]` (`items`), preserving order and stamping each line with its `batchId`/`itemId` provenance. Sales orders, invoices, reports and the PI document all read that flat list; the PI preview can regroup by `batchId` to redisplay the batches without duplicating the tree.
 
@@ -71,14 +71,14 @@ A quotation moves through statuses: `draft → for_approval → approved → sen
 
 ### 2. The pricing rule engine (`src/lib/pricing.ts`)
 
-Line prices aren't hardcoded — they're built by a **data-driven rule chain**. Each `PricingRule` is a plain record with an explicit `operation` (add/subtract), a `basis` (`percent_of_base`, `percent_of_result`, `flat_amount`, or `lookup_table`), a rate, and a `sequence`. `computeLinePricing()` starts from the item's **Given Price per kg**, applies each enabled, selected rule in sequence order (each rule's output feeds the next), and produces the New Price/kg.
+Line prices aren't hardcoded. They're built by a **data-driven rule chain**. Each `PricingRule` is a plain record with an explicit `operation` (add/subtract), a `basis` (`percent_of_base`, `percent_of_result`, `flat_amount`, or `lookup_table`), a rate, and a `sequence`. `computeLinePricing()` starts from the item's **Given Price per kg**, applies each enabled, selected rule in sequence order (each rule's output feeds the next), and produces the New Price/kg.
 
 The key distinctions the engine encodes (verified against the client's system-simulation doc):
-- **Commission** and **subtract-percentage** use division-based (margin-inclusive) math — e.g. add 3% commission is `p / (1 − 0.03)`.
-- **Add-percentage** uses simple math — `p × (1 + rate)`.
-- **Lookup tables** (MD, DW, Insurance) can hold either currency *amounts* added to the running price or a *percentage* of it — governed by `LookupTable.valueKind`. Lookup keys are derived automatically from an item's mesh depth, float length or code (net vs. twine), not typed by hand.
+- **Commission** and **subtract-percentage** use division-based (margin-inclusive) math, so adding 3% commission is `p / (1 − 0.03)`.
+- **Add-percentage** uses simple math: `p × (1 + rate)`.
+- **Lookup tables** (MD, DW, Insurance) can hold either currency *amounts* added to the running price or a *percentage* of it, governed by `LookupTable.valueKind`. Lookup keys are derived automatically from an item's mesh depth, float length or code (net vs. twine), not typed by hand.
 
-From New Price/kg the engine derives price-per-piece (× weight/pc), then adds labor, wastage and sewing-twine costs to get the all-in **U/P** (unit price). Line **Amount** = U/P × qty, computed from the unrounded unit price. A full pricing snapshot (`LinePricing` — the rule chain, inputs and cost breakdown) is stored on each line so margin can be reviewed later and the customer-facing PI/CI never has to show it.
+From New Price/kg the engine derives price-per-piece (× weight/pc), then adds labor, wastage and sewing-twine costs to get the all-in **U/P** (unit price). Line **Amount** = U/P × qty, computed from the unrounded unit price. A full pricing snapshot (`LinePricing`, holding the rule chain, inputs and cost breakdown) is stored on each line so margin can be reviewed later and the customer-facing PI/CI never has to show it.
 
 ### 3. Roll-up totals (`src/lib/totals.ts`)
 
@@ -109,17 +109,17 @@ Payment records track deposit, balance and adjustment amounts through statuses (
 
 Routing is defined in `App.tsx`. Live pages:
 
-- `/` — **Dashboard** (`pages/Dashboard.tsx`): role-aware overview and work queue.
-- `/quotations`, `/quotations/new`, `/quotations/:id` — quotation list, the builder, and detail (with PI document preview + PDF export).
-- `/orders`, `/orders/:id` — sales order list and the lifecycle detail with the stage stepper.
-- `/payments` — the finance payments page.
-- `/invoices/:id` — commercial invoice detail (with CI document preview + PDF export).
-- `/customers` — customer master; contacts are editable here and reflected app-wide.
-- `/documents` — document center (PI, CI, POs, packing lists, remittances, etc.).
-- `/approvals` — approvals inbox (PI approval, discount approval, payment clearance, loading authorization…).
-- `/activity` — the activity log; nearly every store action writes an entry here.
-- `/reports` — recharts-based reporting.
-- `/settings` — pricing rules, lookup tables, and "Reset demo data."
+- `/`: **Dashboard** (`pages/Dashboard.tsx`): role-aware overview and work queue.
+- `/quotations`, `/quotations/new`, `/quotations/:id`: quotation list, the builder, and detail (with PI document preview + PDF export).
+- `/orders`, `/orders/:id`: sales order list and the lifecycle detail with the stage stepper.
+- `/payments`: the finance payments page.
+- `/invoices/:id`: commercial invoice detail (with CI document preview + PDF export).
+- `/customers`: customer master; contacts are editable here and reflected app-wide.
+- `/documents`: document center (PI, CI, POs, packing lists, remittances, etc.).
+- `/approvals`: approvals inbox (PI approval, discount approval, payment clearance, loading authorization…).
+- `/activity`: the activity log; nearly every store action writes an entry here.
+- `/reports`: recharts-based reporting.
+- `/settings`: pricing rules, lookup tables, and "Reset demo data."
 
 **Placeholder (locked) routes**, rendered by `PhasePlaceholder` and marked with a lock icon in the sidebar, represent modules scoped for later phases: `/inquiries`, `/technical`, `/production`, `/packing`, `/shipments`. Any unknown path falls back to the Dashboard.
 

@@ -3,12 +3,12 @@
 // The quotation is authored as a tree (FORTUNE_NET_TWINE_System_Simulation.md §3.2):
 //
 //   batch (ASSEMBLED | NORMAL | LACING)
-//     └─ item        — a composed specification string from the Item Selection modal
-//          └─ spec   — an N-code from the specification master; THIS is the priced row
+//     └─ item        a composed specification string from the Item Selection modal
+//          └─ spec   an N-code from the specification master; THIS is the priced row
 //
-// Everything downstream of the quotation screen — sales orders, commercial invoices, reports, the
-// PI document — reads a flat QuotationLineItem[]. Rather than teach all of them about batches, the
-// tree is flattened on save. `batches` is what you edit; `items` is what everyone else reads.
+// Everything downstream of the quotation screen reads a flat QuotationLineItem[]: sales orders,
+// commercial invoices, reports and the PI document. Rather than teach all of them about batches,
+// the tree is flattened on save. `batches` is what you edit; `items` is what everyone else reads.
 
 import type {
   BatchItem,
@@ -48,7 +48,7 @@ export function emptyPricing(givenPriceKg = 0): LinePricing {
 }
 
 /**
- * True when nothing has been changed from the defaults — drives whether a spec row shows the
+ * True when nothing has been changed from the defaults. Drives whether a spec row shows the
  * "Add Pricing" button or the applied-rules read-out.
  */
 export function isPricingUntouched(p: LinePricing): boolean {

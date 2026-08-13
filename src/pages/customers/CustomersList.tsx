@@ -248,7 +248,7 @@ export function CustomersList() {
               <KeyValue label="Default payment terms" value={selected.defaultPaymentTerms} />
               <KeyValue label="Default currency" value={selected.defaultCurrency} />
               <KeyValue label="Customer since" value={formatDate(selected.since)} />
-              <KeyValue label="Agent" value={selected.agent ?? "—"} />
+              <KeyValue label="Agent" value={selected.agent ?? "-"} />
               <KeyValue
                 label="Issuing entity"
                 value={

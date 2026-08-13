@@ -4,9 +4,9 @@ import type { Role } from "./types";
  * Who may do what.
  *
  * A note on what this is and is not. This gives the system IDENTITY (which person is acting) and
- * AUTHORISATION (what that person is allowed to do). It does not give it AUTHENTICATION — there is
- * no server to prove someone is who they claim to be, so signing in here is a choice of identity,
- * not a security boundary. Anyone who can open the app can pick any user.
+ * AUTHORISATION (what that person is allowed to do). It does not give it AUTHENTICATION, because
+ * there is no server to prove someone is who they claim to be, so signing in here is a choice of
+ * identity, not a security boundary. Anyone who can open the app can pick any user.
  *
  * That is worth stating plainly rather than dressing up, because the distinction decides what this
  * is good for. It is enough to stop the wrong person approving something by accident, to record

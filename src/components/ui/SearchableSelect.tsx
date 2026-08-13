@@ -9,9 +9,9 @@ export interface SearchableSelectOption {
 }
 
 // A type-to-filter combobox for selects backed by large option lists (customers, spec-builder
-// categories, etc.) — a plain <select> becomes unwieldy once there are dozens/hundreds of options.
-// Falls back to matching the visual style of the app's existing inputs (paper-200 border, manifest
-// focus ring) rather than introducing a new look.
+// categories, etc.), because a plain <select> becomes unwieldy once there are dozens or hundreds of
+// options. Falls back to matching the visual style of the app's existing inputs (paper-200 border,
+// manifest focus ring) rather than introducing a new look.
 export function SearchableSelect({
   value,
   options,

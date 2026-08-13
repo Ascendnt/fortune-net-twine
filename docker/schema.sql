@@ -1,7 +1,7 @@
--- Fortune Net & Twine Export Sales ERP — Phase 1 starter schema
+-- Fortune Net & Twine Export Sales ERP: Phase 1 starter schema
 -- Maps directly onto the TypeScript types in src/lib/types.ts so the Phase 0
 -- mock data can be seeded in with minimal transformation.
--- This is a STARTING POINT for discovery, not a final schema — business rules
+-- This is a STARTING POINT for discovery, not a final schema. Business rules
 -- (approval thresholds, configurable payment terms, etc.) still need client sign-off.
 
 create extension if not exists "uuid-ossp";
@@ -116,7 +116,7 @@ create table sales_orders (
   updated_at        timestamptz not null default now()
 );
 
--- One row per lifecycle stage per order — mirrors ORDER_STAGES in the prototype.
+-- One row per lifecycle stage per order, mirroring ORDER_STAGES in the prototype.
 create table order_stage_records (
   id                uuid primary key default uuid_generate_v4(),
   sales_order_id    text not null references sales_orders(id) on delete cascade,

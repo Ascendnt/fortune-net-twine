@@ -26,7 +26,7 @@ export const DOCUMENT_CATEGORIES: { id: OrderDocumentCategory; label: string }[]
 
 /** Human-readable size. Kept exact at the boundaries so 1024 bytes reads as 1 KB, not 1024 B. */
 export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (!Number.isFinite(bytes) || bytes < 0) return "-";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -49,7 +49,7 @@ export function validateUpload(args: {
   if (args.sizeBytes > MAX_UPLOAD_BYTES) {
     return `${args.name} is ${formatBytes(args.sizeBytes)}. The limit is ${formatBytes(
       MAX_UPLOAD_BYTES
-    )} per file — try a compressed copy or a lower-resolution scan.`;
+    )} per file. Try a compressed copy or a lower-resolution scan.`;
   }
   if (args.existingTotalBytes + args.sizeBytes > MAX_TOTAL_UPLOAD_BYTES) {
     return `This order is already holding ${formatBytes(

@@ -96,7 +96,7 @@ export function QuotationDetail() {
   /**
    * Whether a revision may safely send the order back to quotation-only.
    *
-   * Nothing has been lost if nothing has been paid — the order is just the figures, raised again
+   * Nothing has been lost if nothing has been paid. The order is just the figures, raised again
    * once the revision is accepted. Once money has actually arrived, deleting the order would delete
    * the record of that money with it, so the order is left alone instead. Mirrors the same check
    * `createRevision` makes in the store; kept here too so the warning describes what will actually
@@ -186,7 +186,7 @@ export function QuotationDetail() {
         breadcrumb={["Fortune Net & Twine ERP", "Quotations", piRef(q.id, q.revisionNo)]}
         eyebrow={revisionLabel(q.revisionNo)}
         title={piRef(q.id, q.revisionNo)}
-        description={`${customer?.name ?? q.consignee} · ${customer?.country ?? "—"}`}
+        description={`${customer?.name ?? q.consignee} · ${customer?.country ?? "-"}`}
         actions={
           <div className="flex items-center gap-2">
             <Badge status={q.status} />
@@ -262,7 +262,7 @@ export function QuotationDetail() {
           </Button>
         )}
         {/* No revising a finished order. Once the goods have shipped, been paid for and the order
-            closed, there is nothing left for a new version of the quotation to change — it would
+            closed, there is nothing left for a new version of the quotation to change. It would
             only put a document on file that contradicts what actually happened. */}
         {!orderCompleted && (
           <Button
@@ -522,14 +522,14 @@ export function QuotationDetail() {
             {orderRevertible ? (
               <p className="leading-snug">
                 Nothing has been paid against {linkedOrder.id} yet, so creating this revision sends it back to
-                quotation-only — {linkedOrder.id} is deleted and this quotation's Sales Order link is cleared. Once the
+                quotation-only. {linkedOrder.id} is deleted and this quotation's Sales Order link is cleared. Once the
                 revised terms are accepted, convert it to a sales order again.
               </p>
             ) : (
               <ul className="ml-5 list-disc space-y-0.5 leading-snug">
                 <li>Money has already moved on this order, so it is kept rather than deleted.</li>
                 <li>The order value follows this quotation once the revised figures are saved.</li>
-                <li>Deposit and balance are restated to match — anything already verified is left alone.</li>
+                <li>Deposit and balance are restated to match. Anything already verified is left alone.</li>
                 <li>Approval resets, and the customer's acceptance is cleared: they agreed to the current version, not this one.</li>
                 {orderPastDeposit && (
                   <li className="font-semibold">
@@ -635,11 +635,11 @@ export function QuotationDetail() {
           )}
           <p className="text-xs text-paper-500">
             Editing in place leaves no trace of what the figures used to be. If the customer needs to see what changed,
-            create a revision instead — it keeps the old version and issues the document as{" "}
+            create a revision instead. It keeps the old version and issues the document as{" "}
             {piRef(q.id, q.revisionNo + 1)}.{" "}
             {orderRevertible
               ? `Nothing has been paid against ${linkedOrder?.id} yet, so a revision sends it back to quotation-only rather than updating it in place.`
-              : `${linkedOrder?.id} stays linked either way — money has already moved on it.`}
+              : `${linkedOrder?.id} stays linked either way, because money has already moved on it.`}
           </p>
         </div>
       </Modal>
@@ -742,7 +742,7 @@ export function QuotationDetail() {
         <p className="text-sm text-paper-600">
           What's on screen now is captured into the {revisionLabel(q.revisionNo).toLowerCase()} first, so nothing is
           lost. The quotation then goes back to being{" "}
-          <span className="font-semibold">{revisionLabel(restoreTarget ?? 0).toLowerCase()}</span> — the same number the
+          <span className="font-semibold">{revisionLabel(restoreTarget ?? 0).toLowerCase()}</span>, the same number the
           customer already has for this content, rather than a new one. The restore is recorded in the Activity Logs
           with your name against it. Approval resets, so the restored version has to be approved again.
         </p>
