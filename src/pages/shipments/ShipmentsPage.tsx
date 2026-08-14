@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Ship, Plus, Search } from "lucide-react";
-import { HowToUse } from "@/components/ui/HowToUse";
 import clsx from "clsx";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -140,18 +139,6 @@ export function ShipmentsPage() {
             Book shipment
           </Button>
         }
-      />
-
-      <HowToUse
-        id="shipments-v3"
-        steps={[
-          "Press Book shipment, top right. It lists every P.I. whose inspection the customer has confirmed.",
-          "Open the container from the table and fill in the vessel, container, bill of lading and ports. ETD and ETA can be set now or once the line confirms them.",
-          "Press Mark departed when the container sails. That stamps the B/L and container onto the commercial invoice.",
-          "Watch the Outstanding column. Shipping is not blocked on payment, so a container can sail against a balance, but somebody has to be chasing it.",
-          "Use the Unpaid filter to see, in one place, every shipment that has left with money still owed.",
-        ]}
-        note="Weight comes from the closed packing lists on the order, so it is what was actually packed rather than what was quoted."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">

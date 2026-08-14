@@ -7,7 +7,6 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/Feedback";
-import { HowToUse } from "@/components/ui/HowToUse";
 import { useStore } from "@/lib/store";
 import { formatDate } from "@/lib/format";
 import { NON_NEGATIVE_INT, toNonNegative } from "@/lib/num";
@@ -119,18 +118,6 @@ export function ProductionPage() {
         eyebrow="Factory Floor"
         title="Production"
         description="What is on the machines, line by line, and how much of each order is finished."
-      />
-
-      <HowToUse
-        id="production"
-        steps={[
-          "Find the order you are working on. Use the search box or the filter buttons if the list is long.",
-          "If it says \"No production lines yet\", press Generate production lines. This copies the items from the order so you do not have to type them.",
-          "Press Start on a line when that item goes on the machine.",
-          "As pieces come off, type the number into Completed. If any are scrapped, type that number into Rejected.",
-          "When the order is finished, press Complete production. It then moves to Packing automatically.",
-        ]}
-        note="You can close an order short if some pieces were never made. It will ask you to confirm, and the shortfall stays on the record."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">

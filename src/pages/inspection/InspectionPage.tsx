@@ -4,7 +4,6 @@ import { ClipboardCheck, Search } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/Feedback";
-import { HowToUse } from "@/components/ui/HowToUse";
 import { useStore } from "@/lib/store";
 import { formatDate } from "@/lib/format";
 import { settleInspection, weightVerdict } from "@/lib/inspectionPricing";
@@ -71,20 +70,6 @@ export function InspectionPage() {
         eyebrow="Pre-Shipment Confirmation"
         title="Inspection Reports"
         description="Confirm the weights of what is packed, send the listing to the customer, and release the container once they agree."
-      />
-
-      <HowToUse
-        id="inspection-v4"
-        steps={[
-          "A report opens by itself when a packing list is closed. You do not create one by hand.",
-          "Open a report from the table. It lists every bale in the container with the weights recorded at packing; check them against the scale and correct anything that is out.",
-          "Watch the weight panel. It compares the computed weight the order was priced from against what the goods actually weigh, the same way the printed report states it.",
-          "Press Preview to see the document, and Print or send it to the customer so they can counter-check the listing.",
-          "Press Sent to customer once it has gone, so it is clear who is being waited on.",
-          "When the customer agrees the load can ship, press Customer confirmed. Every order on the report is settled against its own measured weight and its balance is restated.",
-          "If they come back with a query, press Hold and record what they said. The container is blocked until it is resolved.",
-        ]}
-        note="This is not a quality check. It is the shipping listing the customer signs off, and the weights on it are what the balance is invoiced against."
       />
 
       <div className="mb-5 grid grid-cols-3 gap-4">

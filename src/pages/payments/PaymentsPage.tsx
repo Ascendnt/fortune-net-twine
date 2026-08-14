@@ -9,7 +9,6 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Feedback";
-import { HowToUse } from "@/components/ui/HowToUse";
 import { useStore } from "@/lib/store";
 import { formatMoney, formatDate } from "@/lib/format";
 import {
@@ -241,20 +240,6 @@ export function PaymentsPage() {
             </Button>
           </div>
         }
-      />
-
-      <HowToUse
-        id="payments"
-        steps={[
-          "Find the payment using the search box or the status buttons.",
-          "Record Payment raises a new line. Whoever raises it is recorded, and it waits for approval before anything else can happen to it.",
-          "In the Approval column, press Approve. If the payment was routed to a colleague who is away, only Management can sign in their place, and the system asks why so both names are kept.",
-          "Once approved and the money has arrived, press Verify. The order it belongs to is then allowed to move forward.",
-          "Wrong status? Use the dropdown beside Verify to set the correct one. Anything can be corrected, including undoing a verification.",
-          "Use the pencil to change amounts, dates, bank reference or remarks. Use the bin to remove a payment recorded in error.",
-          "Export CSV downloads whatever is currently on screen, including your filters, for Excel.",
-        ]}
-        note="Anyone can raise a payment. Management, Finance and the System Administrator can approve one, and a payment must be approved before it can be verified. Approving in place of a named colleague is Management only."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">

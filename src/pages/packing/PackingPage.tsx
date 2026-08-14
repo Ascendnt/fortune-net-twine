@@ -6,7 +6,6 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/Feedback";
-import { HowToUse } from "@/components/ui/HowToUse";
 import { useStore } from "@/lib/store";
 import { formatDate, piRef } from "@/lib/format";
 import { listOrders, reconcileOrder, sectionTotals } from "@/lib/packing";
@@ -256,20 +255,6 @@ export function PackingPage() {
             Create packing list
           </Button>
         }
-      />
-
-      <HowToUse
-        id="packing-v4"
-        steps={[
-          "Press Create packing list, top right. Pick the company whose container you are filling.",
-          "Tick the P.I.s going in it. One waiting on its deposit is shown but cannot be ticked, with the reason beside it.",
-          "Say how each P.I. is going out. They can differ: one P.I. can go in full in the same container that takes another's second partial.",
-          "The list opens with one section per P.I. Add more sections in whatever shape the plant sent you, by container or by bundle, and put the container number on each.",
-          "Inside a section, press Add Item to pull a line off that P.I., or Add blank row to type one in by hand.",
-          "Set the pieces on each row. Net weight follows from the P.I.'s weight per piece, so it is not typed twice.",
-          "Watch the Order check panel, then press Submit. Each P.I. is checked against its own scope, so none can close short on a full or final shipment.",
-        ]}
-        note="Made a mistake after closing? Open the list and press Reopen, correct it, and close again."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-3">
