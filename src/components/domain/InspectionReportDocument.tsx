@@ -126,7 +126,11 @@ export function InspectionReportDocument({
               const sub = settleInspection(mine.flatMap((g) => g.bales));
               return (
                 <div key={salesOrderId || "unassigned"} className="mt-5 break-inside-avoid">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 bg-pine-800 px-2.5 py-1.5 text-white">
+                  {/* Pine-700, the same navy the PI's table header is set in. The darker pine-800
+                      this used to carry read as black on paper and made the set look like it came
+                      from two companies. The column header below steps one shade lighter so the
+                      two bars stay distinguishable. */}
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 bg-pine-700 px-2.5 py-1.5 text-white">
                     <p className="font-mono text-[11px] font-bold tracking-wide">
                       {ref ? `P.I. No. ${ref.piRef}` : "Additional packages"}
                     </p>
@@ -135,7 +139,7 @@ export function InspectionReportDocument({
 
                   <table className="w-full table-fixed border-collapse text-[11px]">
                     <thead>
-                      <tr className="bg-pine-700 text-left font-mono text-[9.5px] font-semibold uppercase tracking-wide text-white">
+                      <tr className="bg-pine-600 text-left font-mono text-[9.5px] font-semibold uppercase tracking-wide text-white">
                         <th className="w-16 py-1.5 pl-2 pr-4">Quantity</th>
                         <th className="py-1.5 px-2">Specification</th>
                         <th className="w-20 py-1.5 px-2 text-right">Bale No.</th>

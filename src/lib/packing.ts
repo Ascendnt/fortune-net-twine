@@ -163,6 +163,42 @@ export function reconcileOrder(
   return rows;
 }
 
+/**
+ * The weight of one piece of whatever a packing row is packing, taken from the order it packs
+ * against.
+ *
+ * The net weight on a row is not a number anybody should be typing. The specification carries a
+ * weight per piece, the row says how many pieces are in the bale, and the product of the two is the
+ * net weight by definition. Typing it invites a figure that disagrees with the P.I. the customer is
+ * holding.
+ *
+ * `undefined` when the row matches nothing on the order, which happens on a blank row typed in from
+ * the plant's paperwork. There is nothing to compute from in that case, so the caller leaves the
+ * field editable rather than showing a confident zero.
+ *
+ * Matched on `itemId` first and item code second, the same rule `reconcileOrder` and
+ * `buildInspectionLines` use, so all three agree on which ordered line a row belongs to.
+ */
+export function perPieceWeightFor(
+  line: Pick<PackingLine, "itemId" | "itemCode">,
+  orderItems: QuotationLineItem[]
+): number | undefined {
+  const source = line.itemId
+    ? orderItems.find((li) => li.id === line.itemId)
+    : orderItems.find((li) => li.itemCode === line.itemCode);
+  if (!source || source.qtyPcs <= 0) return undefined;
+  return source.weightKg / source.qtyPcs;
+}
+
+/** That weight for a whole row, rounded the way weights are recorded. */
+export function netWeightFor(
+  line: Pick<PackingLine, "itemId" | "itemCode" | "qtyPcs">,
+  orderItems: QuotationLineItem[]
+): number | undefined {
+  const perPiece = perPieceWeightFor(line, orderItems);
+  return perPiece === undefined ? undefined : Math.round(perPiece * line.qtyPcs * 100) / 100;
+}
+
 export interface PackingVerdict {
   ok: boolean;
   /** A sentence to put in front of the user, whether or not it is ok. */
@@ -365,7 +401,7 @@ export function lineTotals(lines: PackingLine[]): { netKg: number; grossKg: numb
  */
 export function migratePackingList(list: PackingList): PackingList {
   const orders = listOrders(list);
-  const sections =
+  const sections: PackingSection[] =
     list.sections?.length || !list.cartons?.length
       ? (list.sections ?? [])
       : [
@@ -383,5 +419,14 @@ export function migratePackingList(list: PackingList): PackingList {
             })),
           },
         ];
-  return { ...list, orders, sections };
+  // A section written before it carried a P.I. takes the one its rows already agree on, and the
+  // load's only order where it has no rows to go on. Anything genuinely mixed is left unset rather
+  // than guessed at, and the editor asks.
+  const withOrders = sections.map((s) => {
+    if (s.salesOrderId) return s;
+    const fromLines = [...new Set(s.lines.map((l) => l.salesOrderId).filter(Boolean))];
+    const only = orders.length === 1 ? orders[0].salesOrderId : undefined;
+    return { ...s, salesOrderId: fromLines.length === 1 ? fromLines[0] : only };
+  });
+  return { ...list, orders, sections: withOrders };
 }

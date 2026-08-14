@@ -14,8 +14,11 @@ import { PaymentsPage } from "@/pages/payments/PaymentsPage";
 import { InvoiceDetail } from "@/pages/invoices/InvoiceDetail";
 import { CustomersList } from "@/pages/customers/CustomersList";
 import { PackingPage } from "@/pages/packing/PackingPage";
+import { PackingListDetail } from "@/pages/packing/PackingListDetail";
 import { InspectionPage } from "@/pages/inspection/InspectionPage";
+import { InspectionReportDetail } from "@/pages/inspection/InspectionReportDetail";
 import { ShipmentsPage } from "@/pages/shipments/ShipmentsPage";
+import { ShipmentDetail } from "@/pages/shipments/ShipmentDetail";
 import { ApprovalsInbox } from "@/pages/approvals/ApprovalsInbox";
 import { ActivityLog } from "@/pages/activity/ActivityLog";
 import { ReportsPage } from "@/pages/reports/ReportsPage";
@@ -49,8 +52,11 @@ export default function App() {
           <Route path="/inquiries" element={<InquiriesPage />} />
           <Route path="/technical" element={<TechnicalAssessmentsPage />} />
           <Route path="/packing" element={<PackingPage />} />
+          <Route path="/packing/:id" element={<PackingListDetail />} />
           <Route path="/inspection" element={<InspectionPage />} />
+          <Route path="/inspection/:id" element={<InspectionReportDetail />} />
           <Route path="/shipments" element={<ShipmentsPage />} />
+          <Route path="/shipments/:id" element={<ShipmentDetail />} />
 
           <Route path="*" element={<Dashboard />} />
         </Route>

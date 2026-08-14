@@ -3,7 +3,9 @@ import {
   linesForOrder,
   listOrders,
   migratePackingList,
+  netWeightFor,
   nextPackingListId,
+  perPieceWeightFor,
   piRefLine,
   reconcileOrder,
   scopeLabel,
@@ -427,6 +429,36 @@ describe("sectionTotals", () => {
   });
 });
 
+describe("perPieceWeightFor / netWeightFor", () => {
+  // 10 pieces quoted at 100 kg between them, so one piece is 10 kg.
+  const items = [orderItem()];
+
+  it("divides the ordered line's weight back down to one piece", () => {
+    expect(perPieceWeightFor({ itemId: "LI-1", itemCode: "N-1596" }, items)).toBe(10);
+  });
+
+  it("matches on item code when the row was typed in by hand", () => {
+    expect(perPieceWeightFor({ itemId: undefined, itemCode: "N-1596" }, items)).toBe(10);
+  });
+
+  it("gives no answer for a row that matches nothing on the order", () => {
+    expect(perPieceWeightFor({ itemId: undefined, itemCode: "NOT-ORDERED" }, items)).toBeUndefined();
+  });
+
+  it("gives no answer rather than dividing by a zero quantity", () => {
+    expect(perPieceWeightFor({ itemId: "LI-1", itemCode: "N-1596" }, [orderItem({ qtyPcs: 0 })])).toBeUndefined();
+  });
+
+  it("multiplies back up by the pieces on the row", () => {
+    expect(netWeightFor({ itemId: "LI-1", itemCode: "N-1596", qtyPcs: 3 }, items)).toBe(30);
+  });
+
+  it("rounds to the two decimals weights are recorded in", () => {
+    const odd = [orderItem({ qtyPcs: 3, weightKg: 100 })];
+    expect(netWeightFor({ itemId: "LI-1", itemCode: "N-1596", qtyPcs: 1 }, odd)).toBe(33.33);
+  });
+});
+
 describe("migratePackingList", () => {
   it("folds an old carton list into one section rather than discarding it", () => {
     const legacy = {
@@ -460,8 +492,41 @@ describe("migratePackingList", () => {
     ]);
   });
 
-  it("leaves a list that is already in the current shape alone", () => {
+  it("leaves the orders and rows of a current-shape list alone", () => {
     const l = list([{ itemCode: "A", qtyPcs: 1 }]);
-    expect(migratePackingList(l)).toEqual(l);
+    const migrated = migratePackingList(l);
+    expect(migrated.orders).toEqual(l.orders);
+    expect(migrated.sections[0].lines).toEqual(l.sections[0].lines);
+  });
+
+  it("gives a section written before it carried a P.I. the one its rows agree on", () => {
+    const l = list([{ itemCode: "A", qtyPcs: 1, salesOrderId: "SO-2" }], {
+      orders: [
+        { salesOrderId: "SO-1", piRef: "PI-1", scope: "full" },
+        { salesOrderId: "SO-2", piRef: "PI-2", scope: "full" },
+      ],
+    });
+    expect(migratePackingList(l).sections[0].salesOrderId).toBe("SO-2");
+  });
+
+  it("leaves a genuinely mixed section unset rather than guessing which P.I. it is", () => {
+    const l = list(
+      [
+        { itemCode: "A", qtyPcs: 1, salesOrderId: "SO-1" },
+        { itemCode: "B", qtyPcs: 1, salesOrderId: "SO-2" },
+      ],
+      {
+        orders: [
+          { salesOrderId: "SO-1", piRef: "PI-1", scope: "full" },
+          { salesOrderId: "SO-2", piRef: "PI-2", scope: "full" },
+        ],
+      }
+    );
+    expect(migratePackingList(l).sections[0].salesOrderId).toBeUndefined();
+  });
+
+  it("falls back to the load's only order for a section with no rows to go on", () => {
+    const l = list([], { sections: [{ id: "S1", title: "Container 1", lines: [] }] });
+    expect(migratePackingList(l).sections[0].salesOrderId).toBe("SO-1");
   });
 });

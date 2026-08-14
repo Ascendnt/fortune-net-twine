@@ -153,7 +153,9 @@ export function PackingListDocument({
             const bt = lineTotals(blockLines);
             return (
               <div key={ref.salesOrderId} className="mt-5 break-inside-avoid">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 bg-pine-800 px-2.5 py-1.5 text-white">
+                {/* Pine-700: the navy the PI's table header is set in. Pine-800 read as black on
+                    paper, which is not a colour this document set uses anywhere. */}
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 bg-pine-700 px-2.5 py-1.5 text-white">
                   <p className="font-mono text-[11px] font-bold tracking-wide">
                     P.I. No. {ref.piRef}
                     <span className="font-normal text-pine-100"> · {scopeLabel(ref.scope, ref.partialNo)}</span>
@@ -183,8 +185,9 @@ export function PackingListDocument({
                   <span className="font-mono">
                     {bt.bales} {bt.bales === 1 ? "bale" : "bales"}
                   </span>
+                  {/* Net only. The plant weighs the goods, not the bale and its strapping, so a
+                      gross figure here was a second number nobody had actually measured. */}
                   <span className="font-mono">Net {bt.netKg.toFixed(2)} KG</span>
-                  <span className="font-mono">Gross {bt.grossKg.toFixed(2)} KG</span>
                 </div>
               </div>
             );
@@ -192,10 +195,10 @@ export function PackingListDocument({
 
           {unattributed.length > 0 && (
             <div className="mt-5 break-inside-avoid">
-              <div className="bg-paper-700 px-2.5 py-1.5">
+              <div className="bg-pine-700 px-2.5 py-1.5">
                 <p className="font-mono text-[11px] font-bold tracking-wide text-white">
                   Additional packages
-                  <span className="font-normal text-paper-200"> · not booked against a P.I.</span>
+                  <span className="font-normal text-pine-100"> · not booked against a P.I.</span>
                 </p>
               </div>
               <LineTable title="" containerNo={list.containerNo} lines={unattributed} />
@@ -206,9 +209,7 @@ export function PackingListDocument({
             <span>Total packages:</span>
             <span className="font-mono">{totals.pieces}</span>
             <span>Total net weight:</span>
-            <span className="font-mono">{totals.netKg.toFixed(2)} KG</span>
-            <span>Total gross weight:</span>
-            <span className="font-mono text-[13px] text-pine-800">{totals.grossKg.toFixed(2)} KG</span>
+            <span className="font-mono text-[13px] text-pine-800">{totals.netKg.toFixed(2)} KG</span>
           </div>
 
           {list.remarks && (
@@ -263,7 +264,7 @@ function LineTable({
             </td>
           </tr>
         )}
-        <tr className="bg-pine-700 text-left font-mono text-[9.5px] font-semibold uppercase tracking-wide text-white">
+        <tr className="bg-pine-600 text-left font-mono text-[9.5px] font-semibold uppercase tracking-wide text-white">
           {/* Left-aligned with its own gutter. Right-aligning a two-character number in a narrow
               column pushed it against the specification, so the two read as one string. The empty
               space belongs between them, not before the qty. */}
@@ -310,9 +311,7 @@ function LineTable({
           <td className="py-1 px-2 text-paper-500">{totals.pieces === 1 ? "pc." : "pcs."}</td>
           <td className="py-1 px-2 text-right font-mono">{totals.bales}</td>
           <td className="py-1 px-2 text-right text-paper-500">{totals.bales === 1 ? "bale" : "bales"}</td>
-          <td className="py-1 px-2 text-right font-mono text-paper-400">
-            {totals.grossKg > 0 ? `${totals.grossKg.toFixed(2)} gross` : ""}
-          </td>
+          <td className="py-1 px-2" />
           <td className="py-1 px-2 text-right font-mono">{totals.netKg.toFixed(2)}</td>
         </tr>
       </tfoot>

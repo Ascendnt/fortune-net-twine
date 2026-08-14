@@ -58,27 +58,34 @@ export function InvoiceDocumentPreview({ inv, customer }: { inv: CommercialInvoi
               <th className="py-1.5 pr-2">Item</th>
               <th className="py-1.5 pr-2">Description</th>
               <th className="py-1.5 pr-2 text-right">Shipped Qty</th>
-              <th className="py-1.5 pr-2 text-right">Weight</th>
+              <th className="py-1.5 pr-2 text-right">Weight/PC</th>
               <th className="py-1.5 pr-2 text-right">Unit Price</th>
               <th className="py-1.5 pl-2 text-right">Amount</th>
             </tr>
           </thead>
           <tbody>
-            {inv.items.map((li) => (
+            {inv.items.map((li) => {
+              const shipped = li.shippedQtyPcs ?? li.qtyPcs;
+              // `weightKg` on an invoice line is Weight/PC x shipped pieces (see how the store
+              // builds it when the invoice is raised), so dividing it back out returns the figure
+              // the specification was entered with. The real total is on the Shipped Weight row.
+              const weightPerPc = shipped > 0 ? li.weightKg / shipped : li.weightKg;
+              return (
               <tr key={li.id} className="break-inside-avoid border-b border-paper-100">
                 <td className="py-1.5 pr-2 align-top font-mono text-[11px] text-paper-500">{li.itemCode}</td>
                 <td className="py-1.5 pr-2 align-top font-medium">{li.description}</td>
                 <td className="py-1.5 pr-2 text-right align-top font-mono">
-                  {li.shippedQtyPcs ?? li.qtyPcs} {li.unit}
+                  {shipped} {li.unit}
                   {li.shippedQtyPcs !== undefined && li.shippedQtyPcs !== li.qtyPcs && (
                     <span className="block text-[10px] font-sans text-paper-400">of {li.qtyPcs} quoted</span>
                   )}
                 </td>
-                <td className="py-1.5 pr-2 text-right align-top font-mono">{formatWeight(li.weightKg)}</td>
+                <td className="py-1.5 pr-2 text-right align-top font-mono">{formatWeight(weightPerPc)}</td>
                 <td className="py-1.5 pr-2 text-right align-top font-mono">{formatMoney(li.unitPrice, inv.currency)}</td>
                 <td className="py-1.5 pl-2 text-right align-top font-mono font-semibold">{formatMoney(li.totalPrice, inv.currency)}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 

@@ -641,9 +641,7 @@ export function ReportsPage() {
       >
         {soaRow && (
           <div className="space-y-2 text-sm">
-            <p className="text-xs text-paper-500">
-              {soaRow.customer} · {soaRow.country}
-            </p>
+            <p className="text-xs text-paper-500">{soaRow.customer}</p>
             <div className="space-y-1">
               {[
                 ["0–30 days", soaRow.d0_30],

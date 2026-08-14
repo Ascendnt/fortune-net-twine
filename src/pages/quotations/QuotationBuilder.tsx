@@ -544,7 +544,7 @@ export function QuotationBuilder({ existing }: { existing?: Quotation }) {
                     clearable
                     onChange={handleCustomerChange}
                     placeholder="Select a customer…"
-                    options={customers.map((c) => ({ value: c.id, label: c.name, sublabel: c.country }))}
+                    options={customers.map((c) => ({ value: c.id, label: c.name }))}
                   />
                 </Field>
               </div>

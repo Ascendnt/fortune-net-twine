@@ -1,25 +1,25 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { Ship, Plus, Anchor, Search } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Ship, Plus, Search } from "lucide-react";
 import { HowToUse } from "@/components/ui/HowToUse";
 import clsx from "clsx";
 import { PageHeader, StatCard } from "@/components/ui/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/Feedback";
 import { useStore } from "@/lib/store";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, piRef } from "@/lib/format";
 import { ledgerForOrder } from "@/lib/paymentLedger";
-import { coversOrder } from "@/lib/packing";
-import type { ShipmentStatus } from "@/lib/types";
+import { STATUS_TONE } from "./status";
 
-// Shipment closes the loop. Booking pulls the gross weight from what was actually packed, and
-// departure writes the bill of lading and container numbers onto the commercial invoice, which is
-// the point at which those numbers first exist.
-
-const input =
-  "w-full rounded-lg border border-paper-200 bg-white px-3 py-2 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100";
-const label = "mb-1 block text-xs font-medium text-paper-600";
+// Shipment closes the loop. Booking pulls the weight from what was actually packed, and departure
+// writes the bill of lading and container numbers onto the commercial invoice, which is the point at
+// which those numbers first exist.
+//
+// This screen is the index and the money watch: which containers exist, and which of them have left
+// with a balance still owed. One container is worked on at /shipments/:id.
 
 type ShipmentFilter = "all" | "booked" | "departed" | "unpaid" | "paid";
 
@@ -31,27 +31,20 @@ const FILTERS: { id: ShipmentFilter; label: string }[] = [
   { id: "paid", label: "Paid in full" },
 ];
 
-const STATUS_TONE: Record<ShipmentStatus, string> = {
-  booked: "bg-manifest-100 text-manifest-800",
-  loaded: "bg-amber-100 text-amber-800",
-  departed: "bg-pine-100 text-pine-800",
-  arrived: "bg-pine-100 text-pine-800",
-};
-
 export function ShipmentsPage() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ShipmentFilter>("all");
+  /** Open when somebody is booking a container, listing the P.I.s cleared to go. */
+  const [booking, setBooking] = useState(false);
   const {
     shipments,
     salesOrders,
+    quotations,
     customers,
-    packingLists,
     inspections,
-    invoices,
     payments,
     createShipment,
-    updateShipment,
-    departShipment,
     pushToast,
   } = useStore();
 
@@ -81,18 +74,19 @@ export function ShipmentsPage() {
     return customers.find((c) => c.id === so?.customerId)?.name ?? "-";
   };
 
+  /** The P.I. reference as the customer knows it, revision suffix and all. */
+  const refForOrder = (soId: string) => {
+    const order = salesOrders.find((o) => o.id === soId);
+    const q = order?.quotationId ? quotations.find((x) => x.id === order.quotationId) : undefined;
+    return q ? piRef(q.id, q.revisionNo) : (order?.quotationId ?? soId);
+  };
+
   /**
    * What is still owed on an order, across every payment line raised against it.
    *
-   * Shipping is not blocked on it. A container that misses its sailing costs more than the risk on
-   * a customer who has always paid, and that call belongs to the sales team, not to a rule in a
-   * form. What the system owes them is the number, in front of them, at the moment they book,
-   * rather than leaving it to be discovered on a statement weeks later.
-   *
-   * Goes through the same ledger the order page reads rather than summing each line's own
-   * shortfall: summed per line, an overpaid deposit and a short balance on the same order would not
-   * net against each other, and this screen would show money owed that the order page already shows
-   * as settled.
+   * Goes through the same ledger the order page reads rather than summing each line's own shortfall:
+   * summed per line, an overpaid deposit and a short balance on the same order would not net against
+   * each other, and this screen would show money owed that the order page already shows as settled.
    */
   const outstandingOn = (soId: string) => {
     const so = salesOrders.find((s) => s.id === soId);
@@ -122,7 +116,7 @@ export function ShipmentsPage() {
     if (filter === "departed" && s.status !== "departed" && s.status !== "arrived") return false;
     if (query) {
       const haystack =
-        `${s.id} ${s.salesOrderId} ${customerName(s.salesOrderId)} ${s.vessel} ${s.billOfLadingNo}`.toLowerCase();
+        `${s.id} ${s.salesOrderId} ${refForOrder(s.salesOrderId)} ${customerName(s.salesOrderId)} ${s.vessel} ${s.billOfLadingNo}`.toLowerCase();
       if (!haystack.includes(query.toLowerCase())) return false;
     }
     return true;
@@ -135,24 +129,35 @@ export function ShipmentsPage() {
         eyebrow="Export Logistics"
         title="Shipments"
         description="Container booking, bill of lading and departure, and what is still owed on goods already gone."
+        actions={
+          <Button
+            variant="primary"
+            icon={<Plus className="h-4 w-4" />}
+            disabled={bookable.length === 0}
+            title={bookable.length === 0 ? "Nothing has passed inspection yet" : undefined}
+            onClick={() => setBooking(true)}
+          >
+            Book shipment
+          </Button>
+        }
       />
 
       <HowToUse
-        id="shipments-v2"
+        id="shipments-v3"
         steps={[
-          "An order appears under Released and awaiting booking once its inspection has passed. Press Book shipment.",
-          "Fill in the vessel, container, bill of lading and ports. ETD and ETA can be set now or once the line confirms them.",
+          "Press Book shipment, top right. It lists every P.I. whose inspection the customer has confirmed.",
+          "Open the container from the table and fill in the vessel, container, bill of lading and ports. ETD and ETA can be set now or once the line confirms them.",
           "Press Mark departed when the container sails. That stamps the B/L and container onto the commercial invoice.",
           "Watch the Outstanding column. Shipping is not blocked on payment, so a container can sail against a balance, but somebody has to be chasing it.",
           "Use the Unpaid filter to see, in one place, every shipment that has left with money still owed.",
         ]}
-        note="Gross weight comes from the closed packing lists on the order, so it is what was actually packed rather than what was quoted."
+        note="Weight comes from the closed packing lists on the order, so it is what was actually packed rather than what was quoted."
       />
 
       <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Booked, not sailed" value={String(stats.booked)} tone="amber" />
         <StatCard label="In transit" value={String(stats.inTransit)} tone="pine" />
-        <StatCard label="Gross weight shipped" value={`${stats.gross.toFixed(2)} KG`} />
+        <StatCard label="Weight shipped" value={`${stats.gross.toFixed(2)} KG`} />
         <StatCard
           label="Shipped but unpaid"
           value={formatMoney(totalOutstanding)}
@@ -161,8 +166,8 @@ export function ShipmentsPage() {
       </div>
 
       {/* The monitoring half of this screen. Goods leave before the money always arrives, and the
-          sales team needs one place that says which containers are out with a balance against
-          them, rather than reconstructing it from statements weeks later. */}
+          sales team needs one place that says which containers are out with a balance against them,
+          rather than reconstructing it from statements weeks later. */}
       {unpaidShipped.length > 0 && (
         <Card className="mb-4 border-alert-200 bg-alert-50/40">
           <CardHeader
@@ -177,11 +182,8 @@ export function ShipmentsPage() {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs"
               >
                 <div className="min-w-0">
-                  <Link
-                    to={`/orders/${s.salesOrderId}`}
-                    className="font-mono font-semibold text-manifest-600 hover:underline"
-                  >
-                    {s.salesOrderId}
+                  <Link to={`/shipments/${s.id}`} className="font-mono font-semibold text-manifest-600 hover:underline">
+                    {refForOrder(s.salesOrderId)}
                   </Link>
                   <span className="ml-2 text-paper-700">{customerName(s.salesOrderId)}</span>
                   <p className="text-[11px] text-paper-400">
@@ -203,13 +205,49 @@ export function ShipmentsPage() {
         </Card>
       )}
 
+      {/* Orders that have passed inspection but are waiting on the balance. Without this the screen
+          is silent about them, and the only clue that anything is pending is a container that never
+          appears. */}
+      {awaitingPayment.length > 0 && (
+        <Card className="mb-4 border-amber-200 bg-amber-50/40">
+          <CardHeader
+            title="Passed inspection, waiting on final payment"
+            eyebrow="Not yet bookable"
+            subtitle="The goods are cleared. The container can be booked once the balance is verified."
+          />
+          <div className="space-y-2">
+            {awaitingPayment.map((so) => (
+              <div
+                key={so.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs"
+              >
+                <div>
+                  <Link to={`/orders/${so.id}`} className="font-mono font-semibold text-manifest-600 hover:underline">
+                    {refForOrder(so.id)}
+                  </Link>
+                  <span className="ml-2 text-paper-700">{customerName(so.id)}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono font-semibold text-amber-800">
+                    {formatMoney(outstandingOn(so.id), currencyOf(so.id))} outstanding
+                  </span>
+                  <Link to={`/orders/${so.id}`} className="font-medium text-manifest-600 hover:underline">
+                    Record payment
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-xs">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-paper-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search shipment, order, customer, vessel or B/L…"
+            placeholder="Search shipment, P.I., customer, vessel or B/L…"
             className="w-full rounded-lg border border-paper-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-manifest-400 focus:outline-none focus:ring-2 focus:ring-manifest-100"
           />
         </div>
@@ -231,71 +269,6 @@ export function ShipmentsPage() {
         </div>
       </div>
 
-      {/* Orders that have passed inspection but are waiting on the balance. Without this the
-          screen is silent about them, and the only clue that anything is pending is a container
-          that never appears. */}
-      {awaitingPayment.length > 0 && (
-        <Card className="mb-4 border-amber-200 bg-amber-50/40">
-          <CardHeader
-            title="Passed inspection, waiting on final payment"
-            eyebrow="Not yet bookable"
-            subtitle="The goods are cleared. The container can be booked once the balance is verified."
-          />
-          <div className="space-y-2">
-            {awaitingPayment.map((so) => (
-              <div
-                key={so.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs"
-              >
-                <div>
-                  <Link to={`/orders/${so.id}`} className="font-mono font-semibold text-manifest-600 hover:underline">
-                    {so.id}
-                  </Link>
-                  <span className="ml-2 text-paper-700">{customerName(so.id)}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-semibold text-amber-800">
-                    {formatMoney(outstandingOn(so.id), currencyOf(so.id))} outstanding
-                  </span>
-                  <Link to={`/orders/${so.id}`} className="font-medium text-manifest-600 hover:underline">
-                    Record payment
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {bookable.length > 0 && (
-        <Card className="mb-4 border-manifest-200 bg-manifest-50/40">
-          <CardHeader title="Released and awaiting booking" eyebrow="Passed inspection" />
-          <div className="space-y-2">
-            {bookable.map((so) => (
-              <div key={so.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
-                <div>
-                  <Link to={`/orders/${so.id}`} className="font-mono text-xs font-semibold text-manifest-600 hover:underline">
-                    {so.id}
-                  </Link>
-                  <span className="ml-2 text-xs text-paper-600">{customerName(so.id)}</span>
-                </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={<Plus className="h-3.5 w-3.5" />}
-                  onClick={() => {
-                    const id = createShipment(so.id);
-                    pushToast({ tone: "success", title: "Shipment booked", description: id });
-                  }}
-                >
-                  Book shipment
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
       {visible.length === 0 ? (
         <EmptyState
           icon={<Ship className="h-5 w-5" />}
@@ -307,158 +280,94 @@ export function ShipmentsPage() {
           }
         />
       ) : (
-        <div className="space-y-4">
-          {visible.map((s) => {
-            const list = packingLists.find((p) => coversOrder(p, s.salesOrderId));
-            const invoice = invoices.find((i) => i.salesOrderId === s.salesOrderId);
-            const locked = s.status === "departed" || s.status === "arrived";
-            const ready = Boolean(s.vessel.trim() && s.containerNo.trim() && s.billOfLadingNo.trim());
-
-            return (
-              <Card key={s.id}>
-                <CardHeader
-                  title={
-                    <span className="flex items-center gap-2">
-                      <span className="font-mono">{s.id}</span>
-                      <Link to={`/orders/${s.salesOrderId}`} className="font-mono text-sm text-manifest-600 hover:underline">
-                        {s.salesOrderId}
-                      </Link>
-                      <span className="text-sm font-normal text-paper-500">{customerName(s.salesOrderId)}</span>
-                    </span>
-                  }
-                  eyebrow={`Booked ${formatDate(s.bookedDate)}${list ? ` · from ${list.id}` : ""}`}
-                  action={
-                    <div className="flex items-center gap-2">
-                      <span className={clsx("rounded-full px-2.5 py-1 text-[11px] font-medium", STATUS_TONE[s.status])}>
-                        {s.status}
-                      </span>
-                      {!locked && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          icon={<Anchor className="h-3.5 w-3.5" />}
-                          disabled={!ready}
-                          title={ready ? undefined : "Vessel, container and B/L are required before departure"}
-                          onClick={() => {
-                            departShipment(s.id);
-                            pushToast({
-                              tone: "success",
-                              title: "Shipment departed",
-                              description: invoice
-                                ? `B/L and container written to ${invoice.id}.`
-                                : `${s.salesOrderId} moved to document release.`,
-                            });
-                          }}
-                        >
-                          Mark departed
-                        </Button>
-                      )}
-                    </div>
-                  }
-                />
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div>
-                    <label className={label}>Vessel and voyage</label>
-                    <input
-                      value={s.vessel}
-                      disabled={locked}
-                      onChange={(e) => updateShipment(s.id, { vessel: e.target.value })}
-                      placeholder="MV Pacific Trader V.221E"
-                      className={clsx(input, locked && "bg-paper-50 text-paper-500")}
-                    />
-                  </div>
-                  <div>
-                    <label className={label}>Container no.</label>
-                    <input
-                      value={s.containerNo}
-                      disabled={locked}
-                      onChange={(e) => updateShipment(s.id, { containerNo: e.target.value })}
-                      placeholder="TCLU 4821960"
-                      className={clsx(input, locked && "bg-paper-50 text-paper-500")}
-                    />
-                  </div>
-                  <div>
-                    <label className={label}>Bill of lading no.</label>
-                    <input
-                      value={s.billOfLadingNo}
-                      disabled={locked}
-                      onChange={(e) => updateShipment(s.id, { billOfLadingNo: e.target.value })}
-                      placeholder="MNLJKT-2026-0447"
-                      className={clsx(input, locked && "bg-paper-50 text-paper-500")}
-                    />
-                  </div>
-                  <div>
-                    <label className={label}>Port of loading</label>
-                    <input
-                      value={s.portOfLoading}
-                      disabled={locked}
-                      onChange={(e) => updateShipment(s.id, { portOfLoading: e.target.value })}
-                      className={clsx(input, locked && "bg-paper-50 text-paper-500")}
-                    />
-                  </div>
-                  <div>
-                    <label className={label}>Port of discharge</label>
-                    <input
-                      value={s.portOfDischarge}
-                      disabled={locked}
-                      onChange={(e) => updateShipment(s.id, { portOfDischarge: e.target.value })}
-                      className={clsx(input, locked && "bg-paper-50 text-paper-500")}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className={label}>ETD</label>
-                      <input
-                        type="date"
-                        value={s.etd ?? ""}
-                        disabled={locked}
-                        onChange={(e) => updateShipment(s.id, { etd: e.target.value })}
-                        className={clsx(input, locked && "bg-paper-50 text-paper-500")}
-                      />
-                    </div>
-                    <div>
-                      <label className={label}>ETA</label>
-                      <input
-                        type="date"
-                        value={s.eta ?? ""}
-                        disabled={locked}
-                        onChange={(e) => updateShipment(s.id, { eta: e.target.value })}
-                        className={clsx(input, locked && "bg-paper-50 text-paper-500")}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-paper-100 pt-3 text-xs">
-                  <span className="text-paper-500">
-                    Gross weight from packing:{" "}
-                    <span className="font-mono font-semibold text-pine-800">{s.grossWeightKg.toFixed(2)} KG</span>
-                  </span>
+        <Table>
+          <THead>
+            <TH>Shipment</TH>
+            <TH>P.I. No.</TH>
+            <TH>Customer</TH>
+            <TH>Vessel</TH>
+            <TH>Container</TH>
+            <TH>ETD</TH>
+            <TH>Weight KG</TH>
+            <TH>Outstanding</TH>
+            <TH>Status</TH>
+          </THead>
+          <tbody>
+            {visible.map((s) => {
+              const owed = outstandingOn(s.salesOrderId);
+              return (
+                <TR key={s.id} onClick={() => navigate(`/shipments/${s.id}`)}>
+                  <TD className="font-mono font-semibold text-pine-800">{s.id}</TD>
+                  <TD className="font-mono text-xs text-paper-700">{refForOrder(s.salesOrderId)}</TD>
+                  <TD className="font-medium">{customerName(s.salesOrderId)}</TD>
+                  <TD className="text-xs text-paper-600">{s.vessel || <span className="text-paper-300">-</span>}</TD>
+                  <TD className="font-mono text-xs">
+                    {s.containerNo || <span className="text-paper-300">-</span>}
+                  </TD>
+                  <TD className="font-mono text-xs">{s.etd ? formatDate(s.etd) : <span className="text-paper-300">-</span>}</TD>
+                  <TD className="font-mono">{s.grossWeightKg.toFixed(2)}</TD>
                   {/* Stated, not enforced. The container can still sail; somebody just has to know
-                      what is still owed while it does. */}
-                  {outstandingOn(s.salesOrderId) > 0 ? (
-                    <span className="rounded-md bg-alert-50 px-2 py-1 text-alert-700">
-                      Outstanding:{" "}
-                      <span className="font-mono font-semibold">
-                        {formatMoney(outstandingOn(s.salesOrderId), currencyOf(s.salesOrderId))}
-                      </span>{" "}
-                      · sales to follow up
+                      what is owed while it does. */}
+                  <TD className={clsx("font-mono", owed > 0 ? "font-semibold text-alert-700" : "text-pine-700")}>
+                    {owed > 0 ? formatMoney(owed, currencyOf(s.salesOrderId)) : "Paid"}
+                  </TD>
+                  <TD>
+                    <span className={clsx("rounded-full px-2 py-0.5 text-[11px] font-medium", STATUS_TONE[s.status])}>
+                      {s.status}
                     </span>
-                  ) : (
-                    <span className="rounded-md bg-pine-50 px-2 py-1 text-pine-700">Paid in full</span>
-                  )}
-                  {invoice && (
-                    <Link to={`/invoices/${invoice.id}`} className="font-mono text-manifest-600 hover:underline">
-                      {invoice.id}
-                    </Link>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                  </TD>
+                </TR>
+              );
+            })}
+          </tbody>
+        </Table>
       )}
+
+      <Modal
+        open={booking}
+        onClose={() => setBooking(false)}
+        title="Which P.I. is being shipped?"
+        subtitle={`${bookable.length} released by the customer and not yet booked`}
+        width="max-w-2xl"
+        footer={
+          <Button variant="secondary" size="sm" onClick={() => setBooking(false)}>
+            Cancel
+          </Button>
+        }
+      >
+        <div className="space-y-2">
+          <p className="text-xs text-paper-500">
+            Only P.I.s whose inspection report the customer has confirmed are offered. Booking pulls the weight from
+            what was actually packed.
+          </p>
+          {bookable.length === 0 && (
+            <p className="px-3 py-6 text-center text-xs text-paper-400">
+              Nothing is waiting to be booked. A P.I. appears here once its inspection is confirmed.
+            </p>
+          )}
+          {bookable.map((so) => (
+            <button
+              key={so.id}
+              onClick={() => {
+                const shipmentId = createShipment(so.id);
+                pushToast({ tone: "success", title: "Shipment booked", description: shipmentId });
+                setBooking(false);
+                navigate(`/shipments/${shipmentId}`);
+              }}
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-paper-200 px-3 py-2.5 text-left hover:border-pine-600 hover:bg-pine-50/50"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-paper-800">
+                  <span className="font-mono text-pine-800">{refForOrder(so.id)}</span>
+                  <span className="ml-2 font-mono text-[11px] text-paper-400">{so.id}</span>
+                </span>
+                <span className="block text-[11px] text-paper-500">{customerName(so.id)}</span>
+              </span>
+              <span className="shrink-0 text-[11px] font-medium text-manifest-600">Book →</span>
+            </button>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 }

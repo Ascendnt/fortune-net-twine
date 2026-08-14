@@ -661,6 +661,15 @@ export interface PackingSection {
    * told apart. The list-level `containerNo` remains as the default for a single-container load.
    */
   containerNo?: string;
+  /**
+   * Which P.I. on the load this block packs against.
+   *
+   * The P.I. is a property of the block, not of each row inside it: the printed sheet is one block
+   * per P.I., and a column repeating the same answer down thirty rows was thirty chances to pick
+   * the wrong one. Setting it stamps `salesOrderId` onto every row in the section, so everything
+   * downstream still reads the row, which is what reconciliation counts.
+   */
+  salesOrderId?: string;
   lines: PackingLine[];
 }
 

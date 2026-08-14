@@ -122,8 +122,12 @@ interface StoreState {
   orderDocuments: OrderDocument[];
   addOrderDocument: (doc: Omit<OrderDocument, "id" | "uploadedBy" | "uploadedDate">) => void;
   removeOrderDocument: (id: string) => void;
-  addPackingSection: (listId: string, title: string) => void;
-  updatePackingSection: (listId: string, sectionId: string, patch: Partial<Pick<PackingSection, "title" | "containerNo">>) => void;
+  addPackingSection: (listId: string, title: string, salesOrderId?: string) => void;
+  updatePackingSection: (
+    listId: string,
+    sectionId: string,
+    patch: Partial<Pick<PackingSection, "title" | "containerNo" | "salesOrderId">>
+  ) => void;
   removePackingSection: (listId: string, sectionId: string) => void;
   addPackingLine: (listId: string, sectionId: string, line: Omit<PackingLine, "id">) => void;
   updatePackingLine: (listId: string, sectionId: string, lineId: string, patch: Partial<PackingLine>) => void;
@@ -1670,13 +1674,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           packedBy: currentUser,
           // Opened with the chosen items already on it. A list that starts empty makes the user
           // re-pick what they just picked, which is where rows get missed.
-          sections: [
-            {
-              id: nextId("SEC"),
-              title: "Section 1",
-              lines: lines.map((l) => ({ ...l, id: nextId("PKL") })),
-            },
-          ],
+          //
+          // One section per P.I. rather than one section holding everything. That is the shape the
+          // printed sheet renders anyway, and now that a section carries the P.I. it is also the
+          // shape the editor needs: rows land already attributed to the order they came from.
+          sections: refs.map((ref) => ({
+            id: nextId("SEC"),
+            title: refs.length > 1 ? `P.I. ${ref.piRef}` : "Section 1",
+            salesOrderId: ref.salesOrderId,
+            lines: lines
+              .filter((l) => l.salesOrderId === ref.salesOrderId)
+              .map((l) => ({ ...l, id: nextId("PKL") })),
+          })),
         },
         ...prev,
       ]);
@@ -1806,7 +1815,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     [orderDocuments, logActivity]
   );
 
-  const addPackingSection = useCallback((listId: string, title: string) => {
+  const addPackingSection = useCallback((listId: string, title: string, salesOrderId?: string) => {
     setPackingLists((prev) =>
       prev.map((p) =>
         p.id !== listId
@@ -1815,20 +1824,51 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
               ...p,
               sections: [
                 ...p.sections,
-                { id: nextId("SEC"), title: title.trim() || `Section ${p.sections.length + 1}`, lines: [] },
+                {
+                  id: nextId("SEC"),
+                  title: title.trim() || `Section ${p.sections.length + 1}`,
+                  // A section belonging to no P.I. reconciles against nothing, so a new one starts
+                  // on the first order of the load and can be moved from there.
+                  salesOrderId: salesOrderId ?? listOrders(p)[0]?.salesOrderId,
+                  lines: [],
+                },
               ],
             }
       )
     );
   }, []);
 
+  /**
+   * Changing a section's P.I. re-stamps every row inside it.
+   *
+   * The row is still what reconciliation counts, so the section's value has to be pushed down to
+   * the rows or the two would disagree the moment somebody moved a block from one P.I. to another.
+   */
   const updatePackingSection = useCallback(
-    (listId: string, sectionId: string, patch: Partial<Pick<PackingSection, "title" | "containerNo">>) => {
+    (
+      listId: string,
+      sectionId: string,
+      patch: Partial<Pick<PackingSection, "title" | "containerNo" | "salesOrderId">>
+    ) => {
       setPackingLists((prev) =>
         prev.map((p) =>
           p.id !== listId
             ? p
-            : { ...p, sections: p.sections.map((s) => (s.id === sectionId ? { ...s, ...patch } : s)) }
+            : {
+                ...p,
+                sections: p.sections.map((s) =>
+                  s.id !== sectionId
+                    ? s
+                    : {
+                        ...s,
+                        ...patch,
+                        lines:
+                          patch.salesOrderId === undefined
+                            ? s.lines
+                            : s.lines.map((l) => ({ ...l, salesOrderId: patch.salesOrderId })),
+                      }
+                ),
+              }
         )
       );
     },

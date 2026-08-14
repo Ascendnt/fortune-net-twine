@@ -164,10 +164,9 @@ export function QuotationsList() {
               return (
                 <TR key={q.id} onClick={() => navigate(`/quotations/${q.id}`)}>
                   <TD className="font-mono font-semibold text-pine-800">{piRef(q.id, q.revisionNo)}</TD>
-                  <TD>
-                    <p className="font-medium">{customer?.name ?? q.consignee}</p>
-                    <p className="text-xs text-paper-400">{customer?.country}</p>
-                  </TD>
+                  {/* Name only. The country used to sit under it, which doubled the height of
+                      every row to say something nobody acts on from this screen. */}
+                  <TD className="font-medium">{customer?.name ?? q.consignee}</TD>
                   <TD className="font-mono text-xs">{formatDate(q.issueDate)}</TD>
                   <TD className="font-mono text-xs">
                     {q.validityDate ? (

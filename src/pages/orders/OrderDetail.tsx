@@ -261,7 +261,7 @@ export function OrderDetail() {
             reference: p.id,
             date: p.finalizedDate ?? p.createdDate,
             status: p.finalizedDate ? "Closed" : "Open",
-            href: "/packing" as string | undefined,
+            href: `/packing/${p.id}` as string | undefined,
           };
         })),
     {
@@ -277,7 +277,7 @@ export function OrderDetail() {
             : orderInspection.result === "confirmed"
               ? "Confirmed for shipment"
               : "Held by the customer",
-      href: orderInspection ? "/inspection" : undefined,
+      href: orderInspection ? `/inspection/${orderInspection.id}` : undefined,
     },
     {
       label: "Commercial Invoice",
@@ -338,7 +338,7 @@ export function OrderDetail() {
         breadcrumb={["Fortune Net & Twine ERP", "Sales Orders", order.id]}
         eyebrow={`Owned by ${currentStageMeta.role}`}
         title={order.id}
-        description={`${customer?.name} · ${order.country} · ${
+        description={`${customer?.name} · ${
           order.quotationId
             ? // The revision matters: an order raised from PI-33007 and later revised is resting on
               // PI-33007-R1, and the customer's copy says so.
@@ -367,7 +367,7 @@ export function OrderDetail() {
           {orderLists.map((p) => (
             <Link
               key={p.id}
-              to="/packing"
+              to={`/packing/${p.id}`}
               className={`rounded-full border px-2.5 py-1 font-medium transition-colors ${
                 p.finalizedDate
                   ? "border-pine-200 bg-pine-50 text-pine-800 hover:border-pine-400"

@@ -21,7 +21,7 @@ export function TH({ children, className }: { children: React.ReactNode; classNa
   return (
     <th
       className={clsx(
-        "px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-paper-500",
+        "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-paper-500",
         className
       )}
     >
@@ -59,7 +59,7 @@ export function TD({
   ...rest
 }: React.TdHTMLAttributes<HTMLTableCellElement> & { children: React.ReactNode; className?: string }) {
   return (
-    <td className={clsx("px-4 py-3 align-middle text-paper-800", className)} {...rest}>
+    <td className={clsx("px-3 py-2 align-middle text-paper-800", className)} {...rest}>
       {children}
     </td>
   );

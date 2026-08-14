@@ -186,7 +186,7 @@ export function QuotationDetail() {
         breadcrumb={["Fortune Net & Twine ERP", "Quotations", piRef(q.id, q.revisionNo)]}
         eyebrow={revisionLabel(q.revisionNo)}
         title={piRef(q.id, q.revisionNo)}
-        description={`${customer?.name ?? q.consignee} · ${customer?.country ?? "-"}`}
+        description={customer?.name ?? q.consignee}
         actions={
           <div className="flex items-center gap-2">
             <Badge status={q.status} />

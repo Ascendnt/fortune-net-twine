@@ -18,7 +18,15 @@ type PrintRow =
       key: string;
       no: number;
       label: string;
-      weightKg: number;
+      /**
+       * The weight of ONE piece, as it was entered against the specification.
+       *
+       * Not the line's weight subtotal. `weightKg` on a line is Weight/PC x Qty, which is what the
+       * roll-up needs and what Total Weight is built from, but printing it in a per-piece column
+       * showed a net quoted at 673.60 kg as 1347.20 because two of them were ordered. The column
+       * states the catalog figure; the footer states the shipment.
+       */
+      weightPerPc: number;
       qty: number | string;
       unitPrice: number | null;
       amount: number;
@@ -40,7 +48,9 @@ function buildRows(q: Quotation): PrintRow[] {
             key: line.id,
             no: (no += 1),
             label: `${line.code} ${line.description}`,
-            weightKg: lacingWeight(line),
+            // Lacing twine is bought by the kilo, not by the piece, so its KGS figure is already
+            // the per-unit weight and there is nothing to divide out.
+            weightPerPc: lacingWeight(line),
             qty: line.kind === "twine" ? line.kgs : "-",
             unitPrice: line.kind === "twine" ? line.rate : null,
             amount: lacingAmount(line),
@@ -70,7 +80,7 @@ function buildRows(q: Quotation): PrintRow[] {
             key: spec.id,
             no: (no += 1),
             label: `${spec.specCode} ${spec.description}`,
-            weightKg: spec.weightKg,
+            weightPerPc: spec.weightPerPc,
             qty: spec.qtyPcs,
             unitPrice: spec.unitPrice,
             amount: spec.amount,
@@ -94,7 +104,9 @@ function buildRows(q: Quotation): PrintRow[] {
       key: li.id,
       no: (no += 1),
       label: `${li.itemCode} ${li.description}`,
-      weightKg: li.weightKg,
+      // A flat line carries only the subtotal, so the per-piece figure is recovered from it. A
+      // zero quantity leaves the stored weight as it stands rather than dividing by nothing.
+      weightPerPc: li.qtyPcs > 0 ? li.weightKg / li.qtyPcs : li.weightKg,
       qty: li.qtyPcs,
       unitPrice: li.unitPrice,
       amount: li.totalPrice,
@@ -156,7 +168,7 @@ export function PIDocumentPreview({
           photographed the empty space either side and scaled that dead margin into the page. */}
       <div
         id={domId}
-        className="relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden bg-white p-8 font-sans text-[13px] text-paper-900 print:min-w-0 print:max-w-none print:w-full print:p-0"
+        className="print-color-exact relative mx-auto min-w-[640px] max-w-[820px] overflow-hidden bg-white p-8 font-sans text-[13px] text-paper-900 print:min-w-0 print:max-w-none print:w-full print:p-0"
       >
         <div className="mesh-lattice pointer-events-none absolute inset-0 opacity-40 print:hidden" />
         <div className="relative">
@@ -213,7 +225,7 @@ export function PIDocumentPreview({
               <tr className="bg-pine-700 text-left font-mono text-[10px] font-semibold uppercase tracking-wide text-white">
                 <th className="w-10 py-1.5 pl-2 text-center">Item No.</th>
                 <th className="py-1.5 px-2">Description</th>
-                <th className="w-14 py-1.5 px-2 text-right">Weight</th>
+                <th className="w-16 py-1.5 px-2 text-right">Weight/PC</th>
                 <th className="w-12 py-1.5 px-2 text-right">Qty</th>
                 <th className="w-20 py-1.5 px-2 text-right">U/P</th>
                 <th className="w-24 py-1.5 px-2 text-right">Amount</th>
@@ -271,7 +283,7 @@ export function PIDocumentPreview({
                     >
                       {row.label}
                     </td>
-                    <td className="py-1 px-2 text-right font-mono">{row.weightKg.toFixed(2)}</td>
+                    <td className="py-1 px-2 text-right font-mono">{row.weightPerPc.toFixed(2)}</td>
                     <td className="py-1 px-2 text-right font-mono">{row.qty}</td>
                     <td className="py-1 px-2 text-right font-mono">
                       {row.unitPrice === null ? "-" : formatMoney(row.unitPrice, q.currency)}

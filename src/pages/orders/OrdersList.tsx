@@ -82,10 +82,7 @@ export function OrdersList() {
               return (
                 <TR key={o.id} onClick={() => navigate(`/orders/${o.id}`)}>
                   <TD className="font-mono font-semibold text-pine-800">{o.id}</TD>
-                  <TD>
-                    <p className="font-medium">{customer?.name}</p>
-                    <p className="text-xs text-paper-400">{o.country}</p>
-                  </TD>
+                  <TD className="font-medium">{customer?.name}</TD>
                   <TD className="font-mono text-xs">{formatDate(o.orderDate)}</TD>
                   <TD className="font-mono font-medium">{formatMoney(o.orderValue, o.currency)}</TD>
                   <TD>
