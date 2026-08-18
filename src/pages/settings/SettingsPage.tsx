@@ -5,11 +5,23 @@ import { Card, CardHeader, KeyValue } from "@/components/ui/Card";
 import { Table, THead, TH, TR, TD } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Tabs } from "@/components/ui/Tabs";
 import { ProcessDiscoveryNote } from "@/components/domain/ProcessDiscoveryNote";
+import { RolesPermissionsPanel } from "./panels/RolesPermissionsPanel";
+import { ApprovalWorkflowPanel } from "./panels/ApprovalWorkflowPanel";
+import { UsersPanel } from "./panels/UsersPanel";
 import { useStore } from "@/lib/store";
-import { ROLES } from "@/lib/mockData";
 import type { PricingRule, PricingRuleBasis } from "@/lib/types";
 import { toNonNegative } from "@/lib/num";
+
+const SETTINGS_TABS = [
+  { id: "profile", label: "Company Profile" },
+  { id: "users", label: "Users" },
+  { id: "roles", label: "Roles & Permissions" },
+  { id: "approvals", label: "Approval Workflow" },
+  { id: "pricing", label: "Pricing Rules" },
+  { id: "maintenance", label: "Maintenance" },
+];
 
 const BASIS_LABEL: Record<PricingRuleBasis, string> = {
   percent_of_base: "% of base",
@@ -43,6 +55,7 @@ export function SettingsPage() {
     pushToast,
   } = useStore();
   const sortedRules = [...pricingRules].sort((a, b) => a.sequence - b.sequence);
+  const [activeTab, setActiveTab] = useState("profile");
   const [confirmReset, setConfirmReset] = useState(false);
   const [newRule, setNewRule] = useState<PricingRule | null>(null);
   const [confirmDeleteRule, setConfirmDeleteRule] = useState<PricingRule | null>(null);
@@ -89,7 +102,11 @@ export function SettingsPage() {
         description="Company profile, roles, and the pricing rules and rate tables behind quotations."
       />
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="mb-5">
+        <Tabs tabs={SETTINGS_TABS} active={activeTab} onChange={setActiveTab} />
+      </div>
+
+      {activeTab === "profile" && (
         <Card>
           <CardHeader
             title="Company Profile"
@@ -103,25 +120,16 @@ export function SettingsPage() {
           <KeyValue label="Default Incoterm" value="FOB Manila" />
           <KeyValue label="Base currency" value="USD" />
         </Card>
+      )}
 
-        <Card>
-          <CardHeader title="Roles" eyebrow="Access" />
-          <div className="space-y-2">
-            {ROLES.map((r) => (
-              <div key={r.id} className="flex items-start justify-between gap-3 rounded-lg bg-paper-50 px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-paper-800">{r.label}</p>
-                  <p className="text-xs text-paper-400">{r.description}</p>
-                </div>
-                <span className="whitespace-nowrap rounded-full bg-white px-2 py-0.5 text-[11px] text-paper-400 border border-paper-200">
-                  {r.department}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+      {activeTab === "users" && <UsersPanel />}
 
+      {activeTab === "roles" && <RolesPermissionsPanel />}
+
+      {activeTab === "approvals" && <ApprovalWorkflowPanel />}
+
+      {activeTab === "pricing" && (
+      <>
       <div className="mt-5">
         <Card>
           <CardHeader
@@ -161,7 +169,7 @@ export function SettingsPage() {
                   <TD>
                     {r.basis === "lookup_table" ? (
                       <span className="text-xs text-paper-500">
-                        {lookupTables.find((t) => t.id === r.lookupTableId)?.name ?? "-"}
+                        {lookupTables.find((t) => t.id === r.lookupTableId)?.name ?? "—"}
                         <span className="ml-1 text-[10px] uppercase text-paper-400">
                           ({lookupTables.find((t) => t.id === r.lookupTableId)?.valueKind === "percent" ? "%" : "USD"})
                         </span>
@@ -419,7 +427,11 @@ export function SettingsPage() {
           </Card>
         ))}
       </div>
+      </>
+      )}
 
+      {activeTab === "maintenance" && (
+      <>
       <div className="mt-5">
         <Card>
           <CardHeader
@@ -464,11 +476,13 @@ export function SettingsPage() {
           return to their seeded state.
         </p>
       </Modal>
+      </>
+      )}
 
       <div className="mt-5">
         <ProcessDiscoveryNote
           items={[
-            "Single sign-on and per-role permission enforcement are pending IT sign-off. The role switcher currently changes what is visible, not what is permitted.",
+            "Roles & Permissions and Approval Workflow are now real, editable panels here — but both still run on local component state. The backend schema exists (roles, permissions, approval_workflows, approval_steps), but Settings-facing API endpoints to persist changes haven't been built yet.",
             "Pricing rules and lookup tables are fully editable here, including adding and retiring whole rules and lookup rows, pending the factory confirming which adjustment types are actually in play.",
             "MD and DW lookup values are interpolated from the two figures the simulation observed live (122MD -> 0.1750, 50FL -> 0.5000); the factory's real rate card should replace them.",
             "Deposit %, approval thresholds, and discount limits are still per-quotation fields; centralizing their defaults here is pending discovery.",
