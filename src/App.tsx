@@ -24,11 +24,23 @@ import { ActivityLog } from "@/pages/activity/ActivityLog";
 import { ReportsPage } from "@/pages/reports/ReportsPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
 
+import { LoginPage } from "@/pages/auth/LoginPage";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { GuestRoute } from "@/components/GuestRoute";
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<AppShell />}>
+
+      <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
+
+      <Route element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }>
+        {/* <Route element={<AppShell />}> */}
           <Route path="/" element={<Dashboard />} />
 
           <Route path="/quotations" element={<QuotationsList />} />

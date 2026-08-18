@@ -19,7 +19,6 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Lock,
-  LogOut,
   X,
 } from "lucide-react";
 import fntLogo from "@/assets/fnt-logo.png";
@@ -30,14 +29,6 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   locked?: boolean;
-  /**
-   * Matches a `permissions.module` value from the backend catalog exactly
-   * (see RolePermissionSeeder.php). A user sees this item if they hold ANY
-   * permission — view or action — tagged with this module. Omit entirely
-   * (like Dashboard below) for items that should always be visible to any
-   * logged-in user, no permission required.
-   */
-  module?: string;
 }
 
 interface NavGroup {
@@ -48,47 +39,45 @@ interface NavGroup {
 const groups: NavGroup[] = [
   {
     label: "Overview",
-    items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard }], // no module = always visible
+    items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
     label: "Sales",
     items: [
-      { to: "/inquiries", label: "Customer Inquiries", icon: MessageSquareText, module: "Inquiries" },
-      { to: "/technical", label: "Technical Assessments", icon: FlaskConical, module: "Assessment" },
-      { to: "/quotations", label: "Quotations / PI", icon: FileSpreadsheet, module: "Quotation" },
-      { to: "/orders", label: "Sales Orders", icon: ClipboardList, module: "SalesOrder" },
+      { to: "/inquiries", label: "Customer Inquiries", icon: MessageSquareText },
+      { to: "/technical", label: "Technical Assessments", icon: FlaskConical },
+      { to: "/quotations", label: "Quotations / PI", icon: FileSpreadsheet },
+      { to: "/orders", label: "Sales Orders", icon: ClipboardList },
     ],
   },
   {
-    // Production intentionally excluded — module dropped from scope
-    // per team decision (see PROJECT_CONTEXT.md Section 2).
     label: "Operations",
     items: [
-      { to: "/packing", label: "Packing Lists", icon: PackageCheck, module: "Packing" },
-      { to: "/inspection", label: "Inspection Reports", icon: ClipboardCheck, module: "Inspection" },
-      { to: "/shipments", label: "Shipments", icon: Ship, module: "Shipment" },
+      { to: "/packing", label: "Packing Lists", icon: PackageCheck },
+      { to: "/inspection", label: "Inspection Reports", icon: ClipboardCheck },
+      { to: "/shipments", label: "Shipments", icon: Ship },
     ],
   },
   {
     label: "Finance",
     items: [
-      { to: "/payments", label: "Payments", icon: Wallet, module: "Payment" },
-      { to: "/reports", label: "Reports", icon: BarChart3, module: "Reports" },
+      { to: "/payments", label: "Payments", icon: Wallet },
+      { to: "/reports", label: "Reports", icon: BarChart3 },
     ],
   },
   {
     label: "Records",
     items: [
-      { to: "/customers", label: "Customers", icon: Users, module: "Customers" },
-      { to: "/approvals", label: "Approvals", icon: ShieldCheck, module: "Approval" },
-      { to: "/activity", label: "Activity Logs", icon: History, module: "ActivityLog" },
+      { to: "/customers", label: "Customers", icon: Users },
+      { to: "/approvals", label: "Approvals", icon: ShieldCheck },
+      { to: "/activity", label: "Activity Logs", icon: History },
     ],
   },
   {
     label: "System",
     items: [
-      { to: "/master-data", label: "Master Data", icon: Library, module: "Catalog" },
-      { to: "/settings", label: "Settings", icon: Settings, module: "Tenancy" },
+      { to: "/master-data", label: "Master Data", icon: Library },
+      { to: "/settings", label: "Settings", icon: Settings },
     ],
   },
 ];
@@ -105,17 +94,6 @@ export function Sidebar({
   onMobileClose: () => void;
 }) {
   const showFull = mobileOpen || !collapsed;
-  const { user, logout, canAccessModule } = useAuth();
-
-  // Filter to what this user can actually see, then drop any group left
-  // with zero items — a "Sales" heading over an empty list would look
-  // broken, not just restricted.
-  const visibleGroups = groups
-    .map((g) => ({
-      ...g,
-      items: g.items.filter((item) => !item.module || canAccessModule(item.module)),
-    }))
-    .filter((g) => g.items.length > 0);
 
   return (
     <>
@@ -166,7 +144,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2.5 py-3">
-        {visibleGroups.map((g) => (
+        {groups.map((g) => (
           <div key={g.label} className="mb-4">
             {showFull && (
               <p className="mb-1.5 px-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-pine-400">
@@ -197,58 +175,7 @@ export function Sidebar({
             </div>
           </div>
         ))}
-        {visibleGroups.length === 1 && showFull && (
-          // Only Dashboard visible — a brand-new role with nothing granted
-          // yet. Say so plainly rather than leaving an unexplained gap.
-          <p className="px-2.5 text-[11px] leading-relaxed text-pine-500">
-            No other modules are granted to your role yet. Ask an administrator to grant access under
-            Settings → Roles &amp; Permissions.
-          </p>
-        )}
       </nav>
-
-      {user && (
-        <div
-          className={clsx(
-            "border-t border-pine-800/60 px-2.5 py-3",
-            showFull ? "" : "flex justify-center"
-          )}
-        >
-          {showFull ? (
-            <div className="flex items-center gap-2 rounded-lg px-1.5 py-1">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pine-800 text-xs font-semibold text-pine-100">
-                {user.name
-                  .split(" ")
-                  .map((part) => part[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1 leading-tight">
-                <p className="truncate text-[12.5px] font-medium text-white">{user.name}</p>
-                <p className="truncate text-[11px] text-pine-400">{user.email}</p>
-              </div>
-              <button
-                onClick={logout}
-                className="shrink-0 rounded-md p-1.5 text-pine-300 hover:bg-pine-900 hover:text-white"
-                aria-label="Log out"
-                title="Log out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={logout}
-              className="rounded-md p-2 text-pine-300 hover:bg-pine-900 hover:text-white"
-              aria-label="Log out"
-              title={`Log out (${user.name})`}
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      )}
 
       <button
         onClick={onToggle}
